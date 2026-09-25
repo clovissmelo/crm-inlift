@@ -609,6 +609,116 @@ table.data-table th {
   gap: 0.3rem;
 }
 
+.sp-date-picker {
+  position: relative;
+}
+
+.sp-date-picker-field {
+  min-width: min(100%, 16rem);
+}
+
+.sp-date-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+
+.sp-date-picker-icon {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.sp-date-picker-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  width: min(18.5rem, 92vw);
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.sp-date-picker-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.sp-date-picker-month {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  flex: 1;
+  text-align: center;
+}
+
+.sp-date-picker-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.15rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.sp-date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.15rem;
+}
+
+.sp-date-picker-day {
+  aspect-ratio: 1;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.sp-date-picker-day:hover:not(:disabled) {
+  background: #262626;
+}
+
+.sp-date-picker-day.is-outside {
+  color: var(--muted);
+  opacity: 0.65;
+}
+
+.sp-date-picker-day.is-today:not(.is-selected) {
+  border: 1px solid #00adee;
+}
+
+.sp-date-picker-day.is-selected {
+  background: #00adee;
+  color: #0a0a0a;
+  font-weight: 600;
+}
+
+.sp-date-picker-day.is-disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+}
+
+.sp-date-picker-popover-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
 .agendamentos-toolbar {
   display: flex;
   flex-wrap: wrap;

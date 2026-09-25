@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CadastroModal } from "@/components/cadastro-ui";
+import { defaultMeetingDateYmd, meetingDefaultTitle, SpDatePicker } from "@/components/sp-date-picker";
+import { formatYmdInSp } from "@/lib/calendar-range";
 import { spLocalDateTimeToIso } from "@/lib/datetime";
 import { MEETING_STATUS_LABELS, type MeetingStatus } from "@/lib/meeting-constants";
 import type { Product, User } from "@/lib/types";
@@ -67,6 +70,8 @@ export function MeetingFormModal({
   const [loading, setLoading] = useState(false);
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const [resolvedContacts, setResolvedContacts] = useState(contacts);
+  const [titleTouched, setTitleTouched] = useState(false);
+  const minDateYmd = formatYmdInSp();
 
   useEffect(() => {
     if (!open) return;
@@ -85,11 +90,13 @@ export function MeetingFormModal({
   const selectedContact = resolvedContacts.find((c) => String(c.id) === contactId);
 
   const resetCreateDefaults = useCallback(() => {
-    setTitle(`Reunião — ${clientName}`);
-    setProductId(defaultProductId ? String(defaultProductId) : "");
+    const pid = defaultProductId ? String(defaultProductId) : "";
+    setProductId(pid);
+    setTitleTouched(false);
+    setTitle(meetingDefaultTitle(pid, clientName, products));
     setContactId(defaultContactId ? String(defaultContactId) : resolvedContacts[0]?.id ? String(resolvedContacts[0].id) : "");
     setBdrUserId(defaultBdrUserId ? String(defaultBdrUserId) : bdrs[0]?.id ? String(bdrs[0].id) : "");
-    setDate("");
+    setDate(defaultMeetingDateYmd());
     setTime("");
     setDuration(30);
     setStatus("scheduled");
@@ -105,7 +112,12 @@ export function MeetingFormModal({
     setInterestNotes("");
     setNextStep("");
     setError(null);
-  }, [bdrs, clientName, resolvedContacts, defaultBdrUserId, defaultContactId, defaultProductId]);
+  }, [bdrs, clientName, products, resolvedContacts, defaultBdrUserId, defaultContactId, defaultProductId]);
+
+  useEffect(() => {
+    if (!open || meetingId || titleTouched) return;
+    setTitle(meetingDefaultTitle(productId, clientName, products));
+  }, [open, meetingId, titleTouched, productId, clientName, products]);
 
   useEffect(() => {
     if (!open) return;
@@ -236,6 +248,10 @@ export function MeetingFormModal({
       setError("Informe data e horário (fuso America/Sao_Paulo).");
       return;
     }
+    if (!meetingId && date < minDateYmd) {
+      setError("Selecione uma data a partir de hoje.");
+      return;
+    }
     if (!internal.length) {
       setError("Inclua ao menos um participante interno.");
       return;
@@ -318,18 +334,7 @@ export function MeetingFormModal({
     window.location.reload();
   }
 
-  if (!open) return null;
-
-  return (
-    <div className="panel" style={{ marginBottom: "1rem", borderColor: "#525252" }}>
-      <h3 style={{ marginTop: 0 }}>{meetingId ? "Editar reunião" : "Agendar reunião"} — {clientName}</h3>
-      {googleStatus ? (
-        <p className="muted" style={{ marginTop: 0 }}>
-          {googleStatus.connected
-            ? "Google Agenda conectado — o convite será sincronizado ao salvar."
-            : googleStatus.message ?? "Google Agenda não conectado — a reunião será salva apenas no FUNON."}
-        </p>
-      ) : null}
+  const formBody = (
       <form onSubmit={submit}>
         {error ? <div className="alert alert-error">{error}</div> : null}
         {conflicts.length ? (
@@ -351,12 +356,29 @@ export function MeetingFormModal({
 
         <div className="field">
           <label className="label">Título</label>
-          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} required />
+          <input
+            className="input"
+            value={title}
+            onChange={(e) => {
+              setTitleTouched(true);
+              setTitle(e.target.value);
+            }}
+            required
+          />
         </div>
         <div className="filters-row">
           <div className="field">
             <label className="label">Produto</label>
-            <select className="select" value={productId} onChange={(e) => setProductId(e.target.value)}>
+            <select
+              className="select"
+              value={productId}
+              onChange={(e) => {
+                setProductId(e.target.value);
+                if (!meetingId && !titleTouched) {
+                  setTitle(meetingDefaultTitle(e.target.value, clientName, products));
+                }
+              }}
+            >
               <option value="">—</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -389,9 +411,9 @@ export function MeetingFormModal({
           </div>
         </div>
         <div className="filters-row">
-          <div className="field">
+          <div className="field sp-date-picker-field">
             <label className="label">Data (SP)</label>
-            <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <SpDatePicker value={date} onChange={setDate} minYmd={meetingId ? undefined : minDateYmd} />
           </div>
           <div className="field">
             <label className="label">Início (SP)</label>
@@ -520,6 +542,20 @@ export function MeetingFormModal({
           </button>
         </div>
       </form>
-    </div>
+  );
+
+  if (!open) return null;
+
+  return (
+    <CadastroModal open={open} title={`${meetingId ? "Editar reunião" : "Agendar reunião"} — ${clientName}`} onClose={onClose} wide>
+      {googleStatus ? (
+        <p className="muted" style={{ marginTop: 0 }}>
+          {googleStatus.connected
+            ? "Google Agenda conectado — o convite será sincronizado ao salvar."
+            : googleStatus.message ?? "Google Agenda não conectado — a reunião será salva apenas no FUNON."}
+        </p>
+      ) : null}
+      {formBody}
+    </CadastroModal>
   );
 }
