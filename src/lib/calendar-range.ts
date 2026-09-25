@@ -58,6 +58,11 @@ export function weekDaysFromAnchor(anchorYmd: string) {
   return Array.from({ length: 7 }, (_, i) => addDaysYmd(monday, i));
 }
 
+/** Segunda a sexta (semana comercial) */
+export function workWeekDaysFromAnchor(anchorYmd: string) {
+  return weekDaysFromAnchor(anchorYmd).slice(0, 5);
+}
+
 export function monthGridDays(anchorYmd: string) {
   const { year, month } = parseYmd(anchorYmd);
   const first = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -73,9 +78,9 @@ export function calendarRangeToUtcIso(kind: CalendarRangeKind, anchorYmd: string
     return { from: spDayStartUtcIso(d), to: spDayEndUtcIso(d) };
   }
   if (kind === "week") {
-    const days = weekDaysFromAnchor(anchorYmd);
+    const days = workWeekDaysFromAnchor(anchorYmd);
     const start = dateAtSpNoon(days[0]!);
-    const end = dateAtSpNoon(days[6]!);
+    const end = dateAtSpNoon(days[4]!);
     return { from: spDayStartUtcIso(start), to: spDayEndUtcIso(end) };
   }
   const { year, month } = parseYmd(anchorYmd);
@@ -100,9 +105,9 @@ export function formatCalendarNavTitle(kind: CalendarRangeKind, anchorYmd: strin
     }).format(anchorDate);
   }
   if (kind === "week") {
-    const days = weekDaysFromAnchor(anchorYmd);
+    const days = workWeekDaysFromAnchor(anchorYmd);
     const start = dateAtSpNoon(days[0]!);
-    const end = dateAtSpNoon(days[6]!);
+    const end = dateAtSpNoon(days[4]!);
     const fmt = new Intl.DateTimeFormat("pt-BR", { timeZone: TZ, day: "numeric", month: "short" });
     const y = new Intl.DateTimeFormat("pt-BR", { timeZone: TZ, year: "numeric" }).format(anchorDate);
     return `${fmt.format(start)} – ${fmt.format(end)}, ${y}`;

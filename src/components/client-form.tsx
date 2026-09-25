@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { LeadQualificationPicker } from "@/components/lead-qualification-picker";
+import type { LeadQualification } from "@/lib/lead-qualification";
 import type { Product, User } from "@/lib/types";
 
 export function ClientForm({ products, bdrs, clientId }: { products: Product[]; bdrs: User[]; clientId?: number }) {
@@ -20,7 +22,8 @@ export function ClientForm({ products, bdrs, clientId }: { products: Product[]; 
     instagram: "",
     notes: "",
     bdr_user_id: "",
-    product_ids: [] as number[]
+    product_ids: [] as number[],
+    lead_qualification: "cold" as LeadQualification
   });
 
   function toggleProduct(id: number) {
@@ -71,6 +74,13 @@ export function ClientForm({ products, bdrs, clientId }: { products: Product[]; 
       <div className="field">
         <label className="label">Nome fantasia</label>
         <input className="input" value={form.trade_name} onChange={(e) => setForm((f) => ({ ...f, trade_name: e.target.value }))} />
+      </div>
+      <div className="field">
+        <label className="label">Qualificação do lead</label>
+        <LeadQualificationPicker
+          value={form.lead_qualification}
+          onChange={(lead_qualification) => setForm((f) => ({ ...f, lead_qualification }))}
+        />
       </div>
       <div className="field">
         <label className="label">Segmento</label>

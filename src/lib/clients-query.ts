@@ -1,5 +1,6 @@
 import { all } from "@/lib/db";
 import { isMobileBr, phoneDigits } from "@/lib/format";
+import { parseLeadQualification, type LeadQualification } from "@/lib/lead-qualification";
 import type { ClientListItem } from "@/lib/types";
 
 export type ProspeccaoQueueStatus = "" | "atrasado" | "retorno_hoje" | "novo" | "em_andamento";
@@ -13,6 +14,7 @@ export type ClientFilters = {
   phone_availability?: "mobile" | "landline" | "none" | "";
   queue_status?: ProspeccaoQueueStatus;
   without_approach?: boolean;
+  lead_qualification?: LeadQualification | "";
   search?: string;
   limit?: number;
   offset?: number;
@@ -48,6 +50,10 @@ function buildClientFilterSql(filters: ClientFilters) {
   if (filters.without_approach) {
     where.push(`NOT EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = clients.id)`);
   }
+  if (filters.lead_qualification) {
+    where.push("clients.lead_qualification = @leadQualification");
+    params.leadQualification = filters.lead_qualification;
+  }
   if (filters.search) {
     where.push(
       `(clients.trade_name ILIKE @search OR clients.legal_name ILIKE @search OR clients.cnpj ILIKE @search)`
@@ -72,6 +78,7 @@ type RawClientRow = {
   uf: string | null;
   bdr_user_id: number | null;
   bdr_name: string | null;
+  lead_qualification: string;
   phones: string | null;
   whatsapps: string | null;
   has_verified: boolean;
@@ -105,6 +112,7 @@ function mapRow(row: RawClientRow): ClientListItem {
     uf: row.uf,
     bdr_user_id: row.bdr_user_id,
     bdr_name: row.bdr_name,
+    lead_qualification: parseLeadQualification(row.lead_qualification),
     has_mobile: hasMobile,
     has_landline: hasLandline,
     has_verified_phone: row.has_verified,
@@ -137,6 +145,7 @@ export async function queryClients(filters: ClientFilters) {
         clients.city,
         clients.uf,
         clients.bdr_user_id,
+        clients.lead_qualification,
         bdr.name AS bdr_name,
         string_agg(DISTINCT contacts.phone, ',') AS phones,
         string_agg(DISTINCT contacts.whatsapp, ',') AS whatsapps,

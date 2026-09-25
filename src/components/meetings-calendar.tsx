@@ -9,10 +9,8 @@ import {
   meetingMinutesFromMidnightSp,
   monthGridDays,
   type CalendarRangeKind,
-  weekDaysFromAnchor
+  workWeekDaysFromAnchor
 } from "@/lib/calendar-range";
-import { MEETING_STATUS_LABELS, type MeetingStatus } from "@/lib/meeting-constants";
-
 export type CalendarMeeting = {
   id: number;
   title: string;
@@ -82,7 +80,7 @@ function TimeGrid({
               const startMin = meetingMinutesFromMidnightSp(m.starts_at);
               const gridStartMin = HOUR_START * 60;
               const top = ((startMin - gridStartMin) / 60) * HOUR_HEIGHT;
-              const height = Math.max((m.duration_minutes / 60) * HOUR_HEIGHT - 2, 22);
+              const height = Math.max((m.duration_minutes / 60) * HOUR_HEIGHT - 2, 44);
               if (startMin < gridStartMin || startMin >= HOUR_END * 60 + 60) return null;
               return (
                 <button
@@ -100,10 +98,8 @@ function TimeGrid({
                       minute: "2-digit"
                     }).format(new Date(m.starts_at))}
                   </span>
-                  <span className="meetings-cal-event-title">{m.client_name}</span>
-                  <span className="meetings-cal-event-meta">
-                    {MEETING_STATUS_LABELS[m.status as MeetingStatus] ?? m.status}
-                  </span>
+                  <span className="meetings-cal-event-title">{m.title}</span>
+                  <span className="meetings-cal-event-meta">{m.client_name}</span>
                 </button>
               );
             })}
@@ -141,7 +137,7 @@ function MonthGrid({ items, anchorYmd, onSelect }: { items: CalendarMeeting[]; a
                     hour: "2-digit",
                     minute: "2-digit"
                   }).format(new Date(m.starts_at))}{" "}
-                  {m.client_name}
+                  {m.title}
                 </button>
               ))}
               {dayEvents.length > 4 ? <span className="muted meetings-cal-month-more">+{dayEvents.length - 4}</span> : null}
@@ -162,7 +158,7 @@ export function MeetingsCalendar({ items, rangeKind, anchorYmd, onSelect }: Prop
     );
   }
 
-  const days = rangeKind === "day" ? [anchorYmd] : weekDaysFromAnchor(anchorYmd);
+  const days = rangeKind === "day" ? [anchorYmd] : workWeekDaysFromAnchor(anchorYmd);
 
   return (
     <div className="meetings-cal-scroll">

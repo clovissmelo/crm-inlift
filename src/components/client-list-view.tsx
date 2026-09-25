@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { LeadQualificationBadge } from "@/components/lead-qualification-picker";
+import { LEAD_QUALIFICATION_LABELS, LEAD_QUALIFICATION_ORDER } from "@/lib/lead-qualification";
 import { formatCnpj } from "@/lib/format";
 import type { ClientListItem, Product, User } from "@/lib/types";
 
@@ -29,7 +31,8 @@ export function ClientListView({ title, initialItems, initialTotal, products, bd
     bdr_user_id: "",
     phone_availability: "",
     search: "",
-    without_approach: defaultFilters?.without_approach ? "1" : ""
+    without_approach: defaultFilters?.without_approach ? "1" : "",
+    lead_qualification: ""
   });
   const [offset, setOffset] = useState(0);
   const limit = 50;
@@ -114,6 +117,21 @@ export function ClientListView({ title, initialItems, initialTotal, products, bd
             <option value="none">Sem telefone</option>
           </select>
         </div>
+        <div className="field">
+          <label className="label">Qualificação</label>
+          <select
+            className="select"
+            value={filters.lead_qualification}
+            onChange={(e) => setFilters((f) => ({ ...f, lead_qualification: e.target.value }))}
+          >
+            <option value="">Todas</option>
+            {LEAD_QUALIFICATION_ORDER.map((q) => (
+              <option key={q} value={q}>
+                {LEAD_QUALIFICATION_LABELS[q]}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
@@ -126,6 +144,7 @@ export function ClientListView({ title, initialItems, initialTotal, products, bd
             <thead>
               <tr>
                 <th>Empresa</th>
+                <th>Qualificação</th>
                 <th>CNPJ</th>
                 <th>Cidade/UF</th>
                 <th>BDR</th>
@@ -142,6 +161,9 @@ export function ClientListView({ title, initialItems, initialTotal, products, bd
                         Verificado
                       </span>
                     ) : null}
+                  </td>
+                  <td>
+                    <LeadQualificationBadge value={item.lead_qualification} />
                   </td>
                   <td>{formatCnpj(item.cnpj)}</td>
                   <td>

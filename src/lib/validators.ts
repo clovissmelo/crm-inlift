@@ -51,7 +51,8 @@ export const clientSchema = z.object({
   instagram: z.string().trim().optional().nullable(),
   notes: z.string().trim().optional().nullable(),
   bdr_user_id: z.number().int().positive().optional().nullable(),
-  product_ids: z.array(z.number().int().positive()).optional()
+  product_ids: z.array(z.number().int().positive()).optional(),
+  lead_qualification: z.enum(["cold", "warm", "hot"]).optional()
 });
 
 export const approachCreateSchema = z.object({

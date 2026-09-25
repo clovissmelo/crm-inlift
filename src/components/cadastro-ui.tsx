@@ -85,7 +85,7 @@ export function CadastroModal({
             ×
           </button>
         </div>
-        <div className="cadastro-modal-body">{children}</div>
+        <div className="cadastro-modal-body ui-scroll ui-scroll-elevated">{children}</div>
       </div>
     </div>
   );

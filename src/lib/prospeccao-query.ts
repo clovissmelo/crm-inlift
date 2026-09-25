@@ -4,6 +4,7 @@ import { isMobileBr, phoneDigits } from "@/lib/format";
 import type { ClientListItem } from "@/lib/types";
 import { matchesPhoneFilter } from "@/lib/clients-query";
 import type { ClientFilters } from "@/lib/clients-query";
+import { parseLeadQualification } from "@/lib/lead-qualification";
 
 type RawRow = {
   id: number;
@@ -15,6 +16,7 @@ type RawRow = {
   uf: string | null;
   bdr_user_id: number | null;
   bdr_name: string | null;
+  lead_qualification: string;
   phones: string | null;
   whatsapps: string | null;
   primary_phone: string | null;
@@ -69,6 +71,10 @@ function buildFilters(filters: ClientFilters, todayStart: string, todayEnd: stri
   if (filters.search) {
     where.push(`(clients.trade_name ILIKE @search OR clients.legal_name ILIKE @search OR clients.cnpj ILIKE @search)`);
     params.search = `%${filters.search}%`;
+  }
+  if (filters.lead_qualification) {
+    where.push("clients.lead_qualification = @leadQualification");
+    params.leadQualification = filters.lead_qualification;
   }
   if (filters.queue_status === "atrasado") {
     where.push(`EXISTS (
@@ -131,6 +137,7 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
         clients.city,
         clients.uf,
         clients.bdr_user_id,
+        clients.lead_qualification,
         bdr.name AS bdr_name,
         string_agg(DISTINCT contacts.phone, ',') AS phones,
         string_agg(DISTINCT contacts.whatsapp, ',') AS whatsapps,
@@ -193,6 +200,7 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
       uf: row.uf,
       bdr_user_id: row.bdr_user_id,
       bdr_name: row.bdr_name,
+      lead_qualification: parseLeadQualification(row.lead_qualification),
       has_mobile: hasMobile,
       has_landline: hasLandline,
       has_verified_phone: row.has_verified,

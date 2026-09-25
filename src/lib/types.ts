@@ -1,3 +1,5 @@
+import type { LeadQualification } from "@/lib/lead-qualification";
+
 export type UserRole = "bdr" | "product_owner" | "manager" | "admin";
 export type UserStatus = "active" | "inactive";
 export type ContactVerification = "unverified" | "confirmed" | "invalid_number" | "wrong_contact";
@@ -34,6 +36,7 @@ export type ClientListItem = {
   uf: string | null;
   bdr_user_id: number | null;
   bdr_name: string | null;
+  lead_qualification: LeadQualification;
   has_mobile: boolean;
   has_landline: boolean;
   has_verified_phone: boolean;

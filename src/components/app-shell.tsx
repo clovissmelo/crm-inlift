@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import clsx from "clsx";
 import {
   Calendar,
@@ -11,12 +12,14 @@ import {
   Funnel,
   LayoutDashboard,
   List,
+  Menu,
   PhoneCall,
   Package,
   RotateCcw,
   Shield,
   Target,
-  Users
+  Users,
+  X
 } from "lucide-react";
 import { UserMenu } from "@/components/user-menu";
 import { isAdmin } from "@/lib/admin";
@@ -46,23 +49,40 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
 
   return (
     <div className="app-layout">
-      <aside className="sidebar">
-        <div className="brand">
-          <Link href="/dashboard" className="sidebar-brand-link" aria-label="CRM Inlift — início">
-            <Image
-              src="/inlift-logo.png"
-              alt="INLIFT GROUP"
-              width={152}
-              height={34}
-              className="sidebar-logo"
-              priority
-            />
-          </Link>
+      <aside className={clsx("sidebar", mobileNavOpen && "is-nav-open")}>
+        <div className="sidebar-header">
+          <div className="brand">
+            <Link href="/dashboard" className="sidebar-brand-link" aria-label="CRM Inlift — início">
+              <Image
+                src="/inlift-logo.png"
+                alt="INLIFT GROUP"
+                width={152}
+                height={34}
+                className="sidebar-logo"
+                priority
+              />
+            </Link>
+          </div>
+          <button
+            type="button"
+            className="sidebar-menu-toggle btn"
+            aria-expanded={mobileNavOpen}
+            aria-controls="app-sidebar-nav"
+            aria-label={mobileNavOpen ? "Fechar menu" : "Abrir menu"}
+            onClick={() => setMobileNavOpen((open) => !open)}
+          >
+            {mobileNavOpen ? <X size={22} aria-hidden /> : <Menu size={22} aria-hidden />}
+          </button>
         </div>
-        <nav className="nav-list">
+        <nav id="app-sidebar-nav" className="nav-list">
           {nav.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);

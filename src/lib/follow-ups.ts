@@ -19,6 +19,7 @@ export async function listFollowUps(options: {
   section: FollowUpSection;
   bdr_user_id?: number;
   product_id?: number;
+  lead_qualification?: "cold" | "warm" | "hot";
   period_from?: string | null;
   period_to?: string | null;
 }) {
@@ -34,6 +35,10 @@ export async function listFollowUps(options: {
   if (options.product_id) {
     where.push("f.product_id = @productId");
     params.productId = options.product_id;
+  }
+  if (options.lead_qualification) {
+    where.push("c.lead_qualification = @leadQualification");
+    params.leadQualification = options.lead_qualification;
   }
 
   if (options.section === "completed") {
@@ -63,6 +68,7 @@ export async function listFollowUps(options: {
     id: number;
     client_id: number;
     client_name: string;
+    lead_qualification: string;
     contact_name: string | null;
     product_name: string | null;
     scheduled_at: string;
@@ -78,6 +84,7 @@ export async function listFollowUps(options: {
         f.id,
         f.client_id,
         COALESCE(c.trade_name, c.legal_name, 'Cliente') AS client_name,
+        c.lead_qualification,
         ct.name AS contact_name,
         p.name AS product_name,
         f.scheduled_at,

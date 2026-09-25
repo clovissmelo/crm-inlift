@@ -1,5 +1,6 @@
 import { all, get, nowIso, run } from "@/lib/db";
 import { normalizeCnpj } from "@/lib/format";
+import { parseLeadQualification } from "@/lib/lead-qualification";
 
 export async function getClientDetail(id: number) {
   const client = await get<Record<string, unknown>>("SELECT * FROM clients WHERE id = @id", { id });
@@ -38,6 +39,7 @@ export async function createClient(input: {
   notes?: string | null;
   bdr_user_id?: number | null;
   product_ids?: number[];
+  lead_qualification?: "cold" | "warm" | "hot";
 }) {
   const cnpj = normalizeCnpj(input.cnpj ?? "");
   if (cnpj) {
@@ -49,10 +51,10 @@ export async function createClient(input: {
     `
       INSERT INTO clients (
         cnpj, legal_name, trade_name, segment, city, uf, address, website, instagram, notes,
-        bdr_user_id, created_at, updated_at
+        bdr_user_id, lead_qualification, created_at, updated_at
       ) VALUES (
         @cnpj, @legalName, @tradeName, @segment, @city, @uf, @address, @website, @instagram, @notes,
-        @bdrUserId, @createdAt, @updatedAt
+        @bdrUserId, @leadQualification, @createdAt, @updatedAt
       )
     `,
     {
@@ -67,6 +69,7 @@ export async function createClient(input: {
       instagram: input.instagram ?? null,
       notes: input.notes ?? null,
       bdrUserId: input.bdr_user_id ?? null,
+      leadQualification: parseLeadQualification(input.lead_qualification),
       createdAt: nowIso(),
       updatedAt: nowIso()
     }
@@ -100,6 +103,7 @@ export async function updateClient(
     notes?: string | null;
     bdr_user_id?: number | null;
     product_ids?: number[];
+    lead_qualification?: "cold" | "warm" | "hot";
   }
 ) {
   const cnpj = input.cnpj !== undefined ? normalizeCnpj(input.cnpj ?? "") : undefined;
@@ -122,6 +126,7 @@ export async function updateClient(
         instagram = COALESCE(@instagram, instagram),
         notes = COALESCE(@notes, notes),
         bdr_user_id = COALESCE(@bdrUserId, bdr_user_id),
+        lead_qualification = COALESCE(@leadQualification, lead_qualification),
         updated_at = @updatedAt
       WHERE id = @id
     `,
@@ -138,6 +143,7 @@ export async function updateClient(
       instagram: input.instagram ?? null,
       notes: input.notes ?? null,
       bdrUserId: input.bdr_user_id === undefined ? null : input.bdr_user_id,
+      leadQualification: input.lead_qualification ?? null,
       updatedAt: nowIso()
     }
   );

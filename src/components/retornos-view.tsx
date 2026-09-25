@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { LeadQualificationBadge } from "@/components/lead-qualification-picker";
 import { formatSpDateTime } from "@/lib/datetime";
+import { LEAD_QUALIFICATION_LABELS, LEAD_QUALIFICATION_ORDER, parseLeadQualification, type LeadQualification } from "@/lib/lead-qualification";
 import type { Product, User } from "@/lib/types";
 
 type FollowUpItem = {
   id: number;
   client_id: number;
   client_name: string;
+  lead_qualification: string;
   contact_name: string | null;
   product_name: string | null;
   scheduled_at: string;
@@ -30,6 +33,7 @@ export function RetornosView({ products, bdrs }: { products: Product[]; bdrs: Us
   } | null>(null);
   const [bdrUserId, setBdrUserId] = useState("");
   const [productId, setProductId] = useState("");
+  const [leadQualification, setLeadQualification] = useState<"" | LeadQualification>("");
   const [period, setPeriod] = useState("all");
 
   const load = useCallback(async () => {
@@ -37,11 +41,12 @@ export function RetornosView({ products, bdrs }: { products: Product[]; bdrs: Us
     const params = new URLSearchParams({ section, period });
     if (bdrUserId) params.set("bdr_user_id", bdrUserId);
     if (productId) params.set("product_id", productId);
+    if (leadQualification) params.set("lead_qualification", leadQualification);
     const res = await fetch(`/api/follow-ups?${params}`);
     const data = (await res.json()) as { items: FollowUpItem[] };
     setItems(data.items ?? []);
     setLoading(false);
-  }, [section, bdrUserId, productId, period]);
+  }, [section, bdrUserId, productId, leadQualification, period]);
 
   useEffect(() => {
     void load();
@@ -94,6 +99,17 @@ export function RetornosView({ products, bdrs }: { products: Product[]; bdrs: Us
           </select>
         </div>
         <div className="field">
+          <label className="label">Qualificação</label>
+          <select className="select" value={leadQualification} onChange={(e) => setLeadQualification(e.target.value as "" | LeadQualification)}>
+            <option value="">Todas</option>
+            {LEAD_QUALIFICATION_ORDER.map((q) => (
+              <option key={q} value={q}>
+                {LEAD_QUALIFICATION_LABELS[q]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
           <label className="label">Período</label>
           <select className="select" value={period} onChange={(e) => setPeriod(e.target.value)}>
             <option value="today">Hoje</option>
@@ -132,6 +148,7 @@ export function RetornosView({ products, bdrs }: { products: Product[]; bdrs: Us
           <thead>
             <tr>
               <th>Cliente</th>
+              <th>Qualificação</th>
               <th>Quando</th>
               <th>Contato</th>
               <th>Produto</th>
@@ -144,6 +161,9 @@ export function RetornosView({ products, bdrs }: { products: Product[]; bdrs: Us
               <tr key={item.id}>
                 <td>
                   <Link href={`/clientes/${item.client_id}?follow_up=${item.id}`}>{item.client_name}</Link>
+                </td>
+                <td>
+                  <LeadQualificationBadge value={parseLeadQualification(item.lead_qualification)} />
                 </td>
                 <td>
                   <button type="button" className="btn" style={{ padding: 0, border: "none", background: "none" }} onClick={() => void openDetail(item.id)}>

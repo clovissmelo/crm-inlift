@@ -60,6 +60,13 @@ export function ProspeccaoListView({
     setFilters((f) => ({ ...f, ...patch }));
   }
 
+  const productNameById = new Map(products.map((p) => [p.id, p.name]));
+
+  function productLabels(productIds: number[]) {
+    const names = productIds.map((id) => productNameById.get(id)).filter(Boolean) as string[];
+    return names.length ? names.join(", ") : "—";
+  }
+
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Leads para prospecção</h1>
@@ -121,6 +128,7 @@ export function ProspeccaoListView({
               <th>Empresa</th>
               <th>Cidade/UF</th>
               <th>BDR</th>
+              <th>Produtos</th>
               <th style={{ width: 120 }}>Contato</th>
             </tr>
           </thead>
@@ -140,6 +148,7 @@ export function ProspeccaoListView({
                   </td>
                   <td>{[item.city, item.uf].filter(Boolean).join(" / ") || "—"}</td>
                   <td>{item.bdr_name ?? "—"}</td>
+                  <td>{productLabels(item.product_ids)}</td>
                   <td>
                     <ClientContactShortcuts
                       clientName={displayName}

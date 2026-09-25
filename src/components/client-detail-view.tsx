@@ -11,7 +11,9 @@ import { MeetingFormModal } from "@/components/meeting-form-modal";
 import { ClientTimeline } from "@/components/client-timeline";
 import { ClientReconsultModal } from "@/components/client-reconsult-modal";
 import { formatSpDateTime } from "@/lib/datetime";
-import { formatCnpj } from "@/lib/format";
+import { externalWebHref, formatCnpj, instagramHref } from "@/lib/format";
+import { LeadQualificationPicker } from "@/components/lead-qualification-picker";
+import { parseLeadQualification, type LeadQualification } from "@/lib/lead-qualification";
 import { VERIFICATION_LABELS, type ContactVerification, type Product, type User } from "@/lib/types";
 
 export type ClientContact = {
@@ -38,6 +40,7 @@ type Client = {
   instagram: string | null;
   notes: string | null;
   bdr_user_id: number | null;
+  lead_qualification?: string | null;
 };
 
 function hasText(value: string | null | undefined) {
@@ -101,9 +104,14 @@ export function ClientDetailView({
   const [meetingProductId, setMeetingProductId] = useState<number | undefined>();
   const [reconsultOpen, setReconsultOpen] = useState(false);
   const [editEmpresa, setEditEmpresa] = useState(false);
-  const [editContacts, setEditContacts] = useState(false);
   const [addingContact, setAddingContact] = useState(false);
+  const [contactEditDraft, setContactEditDraft] = useState<ClientContact | null>(null);
+  const [savingContactEdit, setSavingContactEdit] = useState(false);
   const [savingClient, setSavingClient] = useState(false);
+  const [leadQualification, setLeadQualification] = useState<LeadQualification>(
+    parseLeadQualification(initialClient.lead_qualification)
+  );
+  const [savingQualification, setSavingQualification] = useState(false);
 
   const [clientDraft, setClientDraft] = useState({
     cnpj: initialClient.cnpj ?? "",
@@ -117,7 +125,8 @@ export function ClientDetailView({
     instagram: initialClient.instagram ?? "",
     notes: initialClient.notes ?? "",
     bdr_user_id: initialClient.bdr_user_id ? String(initialClient.bdr_user_id) : "",
-    product_ids: linkedProducts.map((p) => p.product_id)
+    product_ids: linkedProducts.map((p) => p.product_id),
+    lead_qualification: parseLeadQualification(initialClient.lead_qualification) as LeadQualification
   });
 
   const clientDisplayName = initialClient.trade_name || initialClient.legal_name || "Cliente";
@@ -141,6 +150,12 @@ export function ClientDetailView({
   useEffect(() => {
     setContacts(initialContacts);
   }, [initialContacts]);
+
+  useEffect(() => {
+    const q = parseLeadQualification(initialClient.lead_qualification);
+    setLeadQualification(q);
+    setClientDraft((d) => ({ ...d, lead_qualification: q }));
+  }, [initialClient.lead_qualification]);
 
   const [newContact, setNewContact] = useState({
     name: "",
@@ -190,9 +205,24 @@ export function ClientDetailView({
     });
     if (!res.ok) {
       setError("Erro ao salvar contato.");
-      return;
+      return false;
     }
+    setContacts((list) => list.map((c) => (c.id === contact.id ? contact : c)));
     router.refresh();
+    return true;
+  }
+
+  function openContactEdit(contact: ClientContact) {
+    setContactEditDraft({ ...contact });
+  }
+
+  async function submitContactEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!contactEditDraft) return;
+    setSavingContactEdit(true);
+    const ok = await saveContact(contactEditDraft);
+    setSavingContactEdit(false);
+    if (ok) setContactEditDraft(null);
   }
 
   async function saveClient(e: React.FormEvent) {
@@ -214,7 +244,8 @@ export function ClientDetailView({
         instagram: clientDraft.instagram || null,
         notes: clientDraft.notes || null,
         bdr_user_id: clientDraft.bdr_user_id ? Number(clientDraft.bdr_user_id) : null,
-        product_ids: clientDraft.product_ids
+        product_ids: clientDraft.product_ids,
+        lead_qualification: clientDraft.lead_qualification
       })
     });
     setSavingClient(false);
@@ -241,13 +272,34 @@ export function ClientDetailView({
       instagram: initialClient.instagram ?? "",
       notes: initialClient.notes ?? "",
       bdr_user_id: initialClient.bdr_user_id ? String(initialClient.bdr_user_id) : "",
-      product_ids: linkedProducts.map((p) => p.product_id)
+      product_ids: linkedProducts.map((p) => p.product_id),
+      lead_qualification: parseLeadQualification(initialClient.lead_qualification)
     });
   }
 
+  async function changeLeadQualification(next: LeadQualification) {
+    if (next === leadQualification || savingQualification) return;
+    setSavingQualification(true);
+    setError(null);
+    const prev = leadQualification;
+    setLeadQualification(next);
+    const res = await fetch(`/api/clients/${initialClient.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lead_qualification: next })
+    });
+    setSavingQualification(false);
+    if (!res.ok) {
+      setLeadQualification(prev);
+      setError("Erro ao atualizar qualificação.");
+      return;
+    }
+    router.refresh();
+  }
+
   function cancelContactsEdit() {
-    setEditContacts(false);
     setAddingContact(false);
+    setContactEditDraft(null);
     setContacts(initialContacts);
     setNewContact({ name: "", job_title: "", phone: "", whatsapp: "", email: "" });
   }
@@ -307,12 +359,22 @@ export function ClientDetailView({
   }
 
   const localLabel = [initialClient.city, initialClient.uf].filter(Boolean).join(" / ");
+  const websiteHref = externalWebHref(initialClient.website);
+  const instagramLink = instagramHref(initialClient.instagram);
   const productOptions =
     linkedProducts.length > 0 ? linkedProducts : allProducts.map((p) => ({ product_id: p.id, name: p.name }));
 
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>{clientDisplayName}</h1>
+      <div className="field" style={{ marginBottom: "1rem" }}>
+        <label className="label">Qualificação do lead</label>
+        <LeadQualificationPicker
+          value={leadQualification}
+          onChange={(q) => void changeLeadQualification(q)}
+          disabled={savingQualification}
+        />
+      </div>
 
       <div className="client-detail-actions">
         <div className="client-detail-actions-row">
@@ -464,14 +526,20 @@ export function ClientDetailView({
             {hasText(initialClient.segment) ? <InfoLine label="Segmento">{initialClient.segment}</InfoLine> : null}
             {hasText(localLabel) ? <InfoLine label="Local">{localLabel}</InfoLine> : null}
             {hasText(initialClient.address) ? <InfoLine label="Endereço">{initialClient.address}</InfoLine> : null}
-            {hasText(initialClient.website) ? (
+            {hasText(initialClient.website) && websiteHref ? (
               <InfoLine label="Site">
-                <a href={initialClient.website!.startsWith("http") ? initialClient.website! : `https://${initialClient.website}`} target="_blank" rel="noreferrer">
+                <a className="app-text-link" href={websiteHref} target="_blank" rel="noreferrer noopener">
                   {initialClient.website}
                 </a>
               </InfoLine>
             ) : null}
-            {hasText(initialClient.instagram) ? <InfoLine label="Instagram">{initialClient.instagram}</InfoLine> : null}
+            {hasText(initialClient.instagram) && instagramLink ? (
+              <InfoLine label="Instagram">
+                <a className="app-text-link" href={instagramLink} target="_blank" rel="noreferrer noopener">
+                  {initialClient.instagram}
+                </a>
+              </InfoLine>
+            ) : null}
             {bdr?.name ? <InfoLine label="BDR">{bdr.name}</InfoLine> : null}
             {linkedProducts.length > 0 ? (
               <InfoLine label="Produtos">{linkedProducts.map((p) => p.name).join(", ")}</InfoLine>
@@ -491,6 +559,16 @@ export function ClientDetailView({
             <div className="field">
               <label className="label">Nome fantasia</label>
               <input className="input" value={clientDraft.trade_name} onChange={(e) => setClientDraft((d) => ({ ...d, trade_name: e.target.value }))} />
+            </div>
+            <div className="field">
+              <label className="label">Qualificação do lead</label>
+              <LeadQualificationPicker
+                value={clientDraft.lead_qualification}
+                onChange={(lead_qualification) => {
+                  setClientDraft((d) => ({ ...d, lead_qualification }));
+                  setLeadQualification(lead_qualification);
+                }}
+              />
             </div>
             <div className="filters-row">
               <div className="field">
@@ -596,15 +674,10 @@ export function ClientDetailView({
         <div className="client-panel-head">
           <h3 style={{ margin: 0 }}>Contatos</h3>
           <div className="client-panel-head-actions">
-            {!editContacts && !addingContact ? (
-              <>
-                <button type="button" className="btn" onClick={() => setAddingContact(true)}>
-                  Novo
-                </button>
-                <button type="button" className="btn" onClick={() => setEditContacts(true)}>
-                  Editar
-                </button>
-              </>
+            {!addingContact ? (
+              <button type="button" className="btn" onClick={() => setAddingContact(true)}>
+                Novo
+              </button>
             ) : (
               <button type="button" className="btn" onClick={cancelContactsEdit}>
                 Cancelar
@@ -612,30 +685,45 @@ export function ClientDetailView({
             )}
           </div>
         </div>
-        {contacts.length === 0 && !editContacts && !addingContact ? (
+        {contacts.length === 0 && !addingContact ? (
           <p className="muted" style={{ marginTop: "0.75rem" }}>
             Nenhum contato cadastrado.
           </p>
         ) : null}
 
-        {!editContacts
-          ? contacts.map((contact) => <ContactReadOnly key={contact.id} contact={contact} />)
-          : null}
+        {contacts.map((contact) => (
+          <ContactReadOnly key={contact.id} contact={contact} onEdit={() => openContactEdit(contact)} />
+        ))}
 
-        {editContacts
-          ? contacts.map((contact) => (
+        <CadastroModal
+          open={contactEditDraft !== null}
+          title={contactEditDraft ? `Editar contato — ${contactEditDraft.name}` : "Editar contato"}
+          onClose={() => setContactEditDraft(null)}
+        >
+          {contactEditDraft ? (
+            <form onSubmit={(e) => void submitContactEdit(e)}>
               <ContactEditor
-                key={contact.id}
-                contact={contact}
-                onChange={(updated) => setContacts((list) => list.map((c) => (c.id === updated.id ? updated : c)))}
-                onSave={() => {
-                  const current = contacts.find((c) => c.id === contact.id) ?? contact;
-                  void saveContact(current);
+                contact={contactEditDraft}
+                onChange={setContactEditDraft}
+                onVerify={async (status) => {
+                  const updated = { ...contactEditDraft, verification_status: status };
+                  setContactEditDraft(updated);
+                  const ok = await saveContact(updated);
+                  if (ok) setContacts((list) => list.map((c) => (c.id === updated.id ? updated : c)));
                 }}
-                onVerify={(status) => void updateVerification(contact.id, status)}
+                hideSaveButton
               />
-            ))
-          : null}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "0.75rem" }}>
+                <button type="button" className="btn" onClick={() => setContactEditDraft(null)} disabled={savingContactEdit}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={savingContactEdit}>
+                  {savingContactEdit ? "Salvando…" : "Salvar contato"}
+                </button>
+              </div>
+            </form>
+          ) : null}
+        </CadastroModal>
 
         {addingContact ? (
           <form
@@ -689,7 +777,7 @@ export function ClientDetailView({
   );
 }
 
-function ContactReadOnly({ contact }: { contact: ClientContact }) {
+function ContactReadOnly({ contact, onEdit }: { contact: ClientContact; onEdit: () => void }) {
   const parts: string[] = [];
   if (hasText(contact.phone)) parts.push(contact.phone!);
   if (hasText(contact.whatsapp) && contact.whatsapp !== contact.phone) parts.push(`WhatsApp: ${contact.whatsapp}`);
@@ -697,25 +785,34 @@ function ContactReadOnly({ contact }: { contact: ClientContact }) {
 
   return (
     <div className="client-contact-readonly">
-      <div>
-        <strong>{contact.name}</strong>
-        {hasText(contact.job_title) ? <span className="muted"> · {contact.job_title}</span> : null}
-        {contact.verification_status === "confirmed" ? <span className="badge badge-verified" style={{ marginLeft: 8 }}>Verificado</span> : null}
-      </div>
-      {parts.length > 0 ? (
-        <div className="client-contact-readonly-meta">
-          {hasText(contact.phone) ? (
-            <span>
-              <Phone size={14} aria-hidden /> {contact.phone}
-            </span>
-          ) : null}
-          {hasText(contact.email) ? (
-            <span>
-              <Mail size={14} aria-hidden /> {contact.email}
+      <div className="client-contact-readonly-body">
+        <div>
+          <strong>{contact.name}</strong>
+          {hasText(contact.job_title) ? <span className="muted"> · {contact.job_title}</span> : null}
+          {contact.verification_status === "confirmed" ? (
+            <span className="badge badge-verified" style={{ marginLeft: 8 }}>
+              Verificado
             </span>
           ) : null}
         </div>
-      ) : null}
+        {parts.length > 0 ? (
+          <div className="client-contact-readonly-meta">
+            {hasText(contact.phone) ? (
+              <span>
+                <Phone size={14} aria-hidden /> {contact.phone}
+              </span>
+            ) : null}
+            {hasText(contact.email) ? (
+              <span>
+                <Mail size={14} aria-hidden /> {contact.email}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      <button type="button" className="btn client-contact-edit-btn" onClick={onEdit}>
+        Editar
+      </button>
     </div>
   );
 }
@@ -724,15 +821,17 @@ function ContactEditor({
   contact,
   onChange,
   onSave,
-  onVerify
+  onVerify,
+  hideSaveButton
 }: {
   contact: ClientContact;
   onChange: (c: ClientContact) => void;
-  onSave: () => void;
-  onVerify: (s: ContactVerification) => void;
+  onSave?: () => void;
+  onVerify: (s: ContactVerification) => void | Promise<void>;
+  hideSaveButton?: boolean;
 }) {
   return (
-    <div style={{ borderBottom: "1px solid var(--border)", padding: "0.75rem 0" }}>
+    <div>
       <div className="filters-row">
         <div className="field">
           <label className="label">Nome</label>
@@ -768,9 +867,11 @@ function ContactEditor({
           ))}
         </select>
       </div>
-      <button className="btn" type="button" onClick={onSave}>
-        Salvar contato
-      </button>
+      {!hideSaveButton && onSave ? (
+        <button className="btn" type="button" onClick={onSave}>
+          Salvar contato
+        </button>
+      ) : null}
     </div>
   );
 }

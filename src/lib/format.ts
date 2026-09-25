@@ -48,3 +48,22 @@ export function mailtoLink(email: string) {
   if (!trimmed) return null;
   return `mailto:${trimmed}`;
 }
+
+/** Site ou URL genérica para abrir em nova aba */
+export function externalWebHref(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed.replace(/^\/\//, "")}`;
+}
+
+/** Instagram: URL completa, link sem protocolo ou @usuario */
+export function instagramHref(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/instagram\.com/i.test(trimmed)) return externalWebHref(trimmed);
+  const handle = trimmed.replace(/^@/, "").split(/[/?#]/)[0]?.trim();
+  if (!handle) return null;
+  return `https://www.instagram.com/${handle}`;
+}

@@ -81,14 +81,21 @@ export function AgendamentosView({
   }, [load]);
 
   useEffect(() => {
-    if (!selectedId) {
+    setSelectedId(null);
+  }, [anchorYmd, rangeKind, scope, productId, bdrUserId, status, participantUserId]);
+
+  const visibleItems = [...items].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const selectedInPeriod = selectedId != null && visibleItems.some((m) => m.id === selectedId);
+
+  useEffect(() => {
+    if (!selectedInPeriod) {
       setDetail(null);
       return;
     }
     void fetch(`/api/meetings/${selectedId}`)
       .then((r) => r.json())
       .then((d) => setDetail(d as MeetingDetail));
-  }, [selectedId]);
+  }, [selectedId, selectedInPeriod]);
 
   async function retrySync() {
     if (!selectedId) return;
@@ -203,42 +210,23 @@ export function AgendamentosView({
 
       {loading ? <p className="muted">Carregando…</p> : null}
 
-      {viewMode === "list" ? (
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Data/hora</th>
-                <th>Cliente</th>
-                <th>Produto</th>
-                <th>Situação</th>
-                <th>BDR</th>
-                <th>Meet</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((m) => (
-                <tr key={m.id} style={{ cursor: "pointer" }} onClick={() => setSelectedId(m.id)}>
-                  <td>{formatSpDateTime(m.starts_at)}</td>
-                  <td>{m.client_name}</td>
-                  <td>{m.product_name ?? "—"}</td>
-                  <td>{MEETING_STATUS_LABELS[m.status as MeetingStatus] ?? m.status}</td>
-                  <td>{m.bdr_name}</td>
-                  <td>{m.meet_link ? <a href={m.meet_link} onClick={(e) => e.stopPropagation()}>Link</a> : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {items.length === 0 && !loading ? <p className="muted">Nenhum agendamento neste período.</p> : null}
-        </div>
-      ) : (
-        <>
-          {items.length === 0 && !loading ? <p className="muted">Nenhum agendamento neste período.</p> : null}
-          <MeetingsCalendar items={items} rangeKind={rangeKind} anchorYmd={anchorYmd} onSelect={setSelectedId} />
-        </>
-      )}
+      {viewMode === "calendar" ? (
+        <MeetingsCalendar items={visibleItems} rangeKind={rangeKind} anchorYmd={anchorYmd} onSelect={setSelectedId} />
+      ) : null}
 
-      {selectedId && detail ? (
+      <div className="agendamentos-period-list" style={{ marginTop: viewMode === "calendar" ? "1.25rem" : 0 }}>
+        {viewMode === "calendar" ? (
+          <h3 className="agendamentos-period-list-title">Agendamentos do período</h3>
+        ) : null}
+        <MeetingsPeriodTable
+          items={visibleItems}
+          loading={loading}
+          selectedId={selectedInPeriod ? selectedId : null}
+          onSelect={setSelectedId}
+        />
+      </div>
+
+      {selectedInPeriod && detail ? (
         <div className="panel" style={{ marginTop: "1rem" }}>
           <h3 style={{ marginTop: 0 }}>{String(detail.meeting.title)}</h3>
           <p>
@@ -291,7 +279,7 @@ export function AgendamentosView({
               onClick={() =>
                 setEditClient({
                   id: Number(detail.meeting.client_id),
-                  name: items.find((i) => i.id === selectedId)?.client_name ?? "Cliente"
+                  name: visibleItems.find((i) => i.id === selectedId)?.client_name ?? "Cliente"
                 })
               }
             >
@@ -318,6 +306,55 @@ export function AgendamentosView({
           meetingId={selectedId ?? undefined}
         />
       ) : null}
+    </div>
+  );
+}
+
+function MeetingsPeriodTable({
+  items,
+  loading,
+  selectedId,
+  onSelect
+}: {
+  items: MeetingItem[];
+  loading: boolean;
+  selectedId: number | null;
+  onSelect: (id: number) => void;
+}) {
+  return (
+    <div className="table-wrap">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Data/hora</th>
+            <th>Título</th>
+            <th>Cliente</th>
+            <th>Produto</th>
+            <th>Situação</th>
+            <th>BDR</th>
+            <th>Meet</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((m) => (
+            <tr
+              key={m.id}
+              className={selectedId === m.id ? "is-selected" : undefined}
+              style={{ cursor: "pointer" }}
+              onClick={() => onSelect(m.id)}
+            >
+              <td>{formatSpDateTime(m.starts_at)}</td>
+              <td>{m.title}</td>
+              <td>{m.client_name}</td>
+              <td>{m.product_name ?? "—"}</td>
+              <td>{MEETING_STATUS_LABELS[m.status as MeetingStatus] ?? m.status}</td>
+              <td>{m.bdr_name}</td>
+              <td>{m.meet_link ? <a href={m.meet_link} onClick={(e) => e.stopPropagation()}>Link</a> : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {items.length === 0 && !loading ? <p className="muted">Nenhum agendamento neste período.</p> : null}
     </div>
   );
 }

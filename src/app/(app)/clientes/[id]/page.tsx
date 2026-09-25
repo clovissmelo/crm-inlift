@@ -38,6 +38,7 @@ export default async function ClienteDetailPage({ params, searchParams }: Params
     instagram: string | null;
     notes: string | null;
     bdr_user_id: number | null;
+    lead_qualification: string | null;
   };
 
   return (

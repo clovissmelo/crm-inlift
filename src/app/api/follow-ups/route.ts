@@ -16,6 +16,10 @@ export async function GET(request: Request) {
     section,
     bdr_user_id: url.searchParams.get("bdr_user_id") ? Number(url.searchParams.get("bdr_user_id")) : undefined,
     product_id: url.searchParams.get("product_id") ? Number(url.searchParams.get("product_id")) : undefined,
+    lead_qualification: (() => {
+      const q = url.searchParams.get("lead_qualification");
+      return q === "cold" || q === "warm" || q === "hot" ? q : undefined;
+    })(),
     period_from: range.from,
     period_to: range.to
   });
