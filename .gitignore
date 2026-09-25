@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+.vercel
+
+.env
+.env.*
+!.env.example
+
+public/uploads/avatars/*
+!public/uploads/avatars/.gitkeep
+storage/proposals/*
+!storage/proposals/.gitkeep
+
+*.log
+.DS_Store
+Thumbs.db
