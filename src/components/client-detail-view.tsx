@@ -10,6 +10,7 @@ import { ClientContactShortcuts } from "@/components/client-contact-shortcuts";
 import { MeetingFormModal } from "@/components/meeting-form-modal";
 import { ClientTimeline } from "@/components/client-timeline";
 import { ClientReconsultModal } from "@/components/client-reconsult-modal";
+import { formatSpDateTime } from "@/lib/datetime";
 import { formatCnpj } from "@/lib/format";
 import { VERIFICATION_LABELS, type ContactVerification, type Product, type User } from "@/lib/types";
 
@@ -83,6 +84,7 @@ export function ClientDetailView({
     outcome: string;
     stage_name: string | null;
     owner_name: string | null;
+    created_at: string;
   }>;
   canReconsult?: boolean;
 }) {
@@ -576,6 +578,9 @@ export function ClientDetailView({
           <ul style={{ paddingLeft: "1.1rem", margin: "0.75rem 0 0" }}>
             {oppList.map((o) => (
               <li key={o.id} style={{ marginBottom: 8 }}>
+                <span className="muted" style={{ fontSize: "0.8125rem", marginRight: "0.35rem" }}>
+                  {formatSpDateTime(o.created_at)}
+                </span>
                 <Link href={`/oportunidades/${o.id}`}>
                   <strong>{o.title}</strong>
                 </Link>{" "}
