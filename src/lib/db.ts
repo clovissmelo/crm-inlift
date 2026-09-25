@@ -114,8 +114,13 @@ export async function run<T = { changes: number; lastInsertRowid?: number }>(que
   const sql = getSqlClient();
   let statement = query.trim();
   const isInsert = /^\s*insert\s+/i.test(statement);
+  /** Junction / composite-PK tables have no `id` column — auto RETURNING id breaks them. */
+  const insertWithoutIdColumn =
+    /^\s*insert\s+into\s+(user_roles|product_responsibles|client_products|meeting_internal_participants|bdr_transfer_log_clients|google_oauth_states)\b/i;
   if (isInsert && !/\breturning\b/i.test(statement)) {
-    statement = `${statement} RETURNING id`;
+    statement = insertWithoutIdColumn.test(statement)
+      ? `${statement} RETURNING 1 AS ok`
+      : `${statement} RETURNING id`;
   }
   const { text, values } = convertNamedQuery(statement, params);
   const rows = await sql.unsafe<Array<{ id?: number }>>(text, values);
