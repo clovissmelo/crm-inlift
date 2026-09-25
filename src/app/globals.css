@@ -245,17 +245,6 @@ table.data-table th {
   min-width: 160px;
 }
 
-.login-page {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-}
-
-.login-shell {
-  width: min(420px, 100%);
-}
-
 .alert {
   padding: 0.65rem 0.75rem;
   border-radius: 0.5rem;

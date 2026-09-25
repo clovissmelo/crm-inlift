@@ -30,39 +30,51 @@ export function LoginForm() {
   }
 
   return (
-    <form className="panel" onSubmit={onSubmit}>
-      <h1 style={{ marginTop: 0 }}>Entrar</h1>
-      <p className="muted">Acesso interno ao Funon</p>
-      {error ? <div className="alert alert-error">{error}</div> : null}
-      <div className="field">
-        <label className="label" htmlFor="email">
-          E-mail
+    <form className="login-form" onSubmit={onSubmit}>
+      <h1 className="login-title">
+        Acessar o sistema
+        <span className="login-title-dot" aria-hidden />
+      </h1>
+
+      {error ? <div className="login-error">{error}</div> : null}
+
+      <div className="login-field">
+        <label className="login-label" htmlFor="email">
+          Usuário
         </label>
         <input
           id="email"
-          className="input"
+          className="login-input"
           type="email"
           autoComplete="username"
+          placeholder=""
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
         />
       </div>
-      <div className="field">
-        <label className="label" htmlFor="password">
+
+      <div className="login-field">
+        <label className="login-label" htmlFor="password">
           Senha
         </label>
         <input
           id="password"
-          className="input"
+          className="login-input"
           type="password"
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
         />
+        <div className="login-forgot-row">
+          <button type="button" className="login-forgot" onClick={() => {}}>
+            Esqueci minha senha
+          </button>
+        </div>
       </div>
-      <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: "100%" }}>
+
+      <button className="login-submit" type="submit" disabled={loading}>
         {loading ? "Entrando…" : "Entrar"}
       </button>
     </form>

@@ -1,6 +1,8 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/login-form";
 import { getCurrentUser } from "@/lib/auth";
+import "./login.css";
 
 export const dynamic = "force-dynamic";
 
@@ -11,12 +13,16 @@ export default async function LoginPage() {
   return (
     <main className="login-page">
       <div className="login-shell">
-        <div className="brand" style={{ textAlign: "center", marginBottom: "0.25rem" }}>
-          FUNON
+        <div className="login-logo-wrap">
+          <Image
+            src="/inlift-logo.png"
+            alt="INLIFT GROUP"
+            width={200}
+            height={44}
+            className="login-logo"
+            priority
+          />
         </div>
-        <p className="muted" style={{ textAlign: "center", marginBottom: "1rem" }}>
-          Da prospecção ao fechamento
-        </p>
         <LoginForm />
       </div>
     </main>
