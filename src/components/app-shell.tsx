@@ -32,7 +32,17 @@ const nav: Array<{ href: Route; label: string; icon: typeof LayoutDashboard }> =
   { href: "/cadastros", label: "Cadastros", icon: Settings2 }
 ];
 
-export function AppShell({ user, children }: { user: User; children: React.ReactNode }) {
+export function AppShell({
+  user,
+  prospeccaoLeadsUpdatedAt,
+  prospeccaoLeadsUpdatedLabel,
+  children
+}: {
+  user: User;
+  prospeccaoLeadsUpdatedAt: string | null;
+  prospeccaoLeadsUpdatedLabel: string | null;
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
 
   return (
@@ -62,8 +72,21 @@ export function AppShell({ user, children }: { user: User; children: React.React
             );
           })}
         </nav>
-        <div className="muted" style={{ marginTop: "auto", fontSize: "0.75rem" }}>
-          <Users size={14} style={{ display: "inline", verticalAlign: "middle" }} /> CRM Inlift
+        <div className="sidebar-footer muted">
+          <div className="sidebar-footer-brand">
+            <Users size={14} aria-hidden />
+            <span>CRM Inlift</span>
+          </div>
+          <p className="sidebar-footer-meta">
+            {prospeccaoLeadsUpdatedLabel ? (
+              <>
+                Últ. leads prospecção:{" "}
+                <time dateTime={prospeccaoLeadsUpdatedAt ?? undefined}>{prospeccaoLeadsUpdatedLabel}</time>
+              </>
+            ) : (
+              "Nenhum lead carregado ainda"
+            )}
+          </p>
         </div>
       </aside>
       <div className="main-column">

@@ -63,6 +63,27 @@ a {
   object-fit: contain;
 }
 
+.sidebar-footer {
+  margin-top: auto;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  padding: 0.5rem 0.75rem 0.25rem;
+}
+
+.sidebar-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.sidebar-footer-meta {
+  margin: 0;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  opacity: 0.92;
+}
+
 .nav-list {
   display: flex;
   flex-direction: column;
@@ -254,6 +275,68 @@ table.data-table th {
 .filters-row .field {
   margin: 0;
   min-width: 160px;
+}
+
+.cadastro-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.cadastro-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.cadastro-modal-panel {
+  width: min(480px, 100%);
+  max-height: min(90vh, 720px);
+  overflow: auto;
+  background: var(--bg-elevated);
+  border-radius: 0.75rem;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+}
+
+.cadastro-modal-panel-wide {
+  width: min(640px, 100%);
+}
+
+.cadastro-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg-elevated);
+  z-index: 1;
+}
+
+.cadastro-modal-close {
+  min-width: 2.25rem;
+  padding: 0.35rem 0.55rem;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.cadastro-modal-body {
+  padding: 1.25rem;
+}
+
+.cadastro-list-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
 }
 
 .alert {
