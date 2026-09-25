@@ -542,6 +542,73 @@ table.data-table th {
   font-weight: 600;
 }
 
+.client-detail-actions {
+  margin-bottom: 1.25rem;
+}
+
+.client-detail-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.client-detail-actions-row + .client-detail-actions-row {
+  margin-top: 0.65rem;
+}
+
+.client-detail-actions-primary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.client-detail-reconsult {
+  margin-left: auto;
+}
+
+.client-detail-contact-row {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.client-detail-contact-label {
+  font-size: 0.8125rem;
+  margin-right: 0.35rem;
+}
+
+.client-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.client-contact-readonly {
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.client-contact-readonly:last-child {
+  border-bottom: none;
+}
+
+.client-contact-readonly-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.client-contact-readonly-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
 .agendamentos-toolbar {
   display: flex;
   flex-wrap: wrap;
