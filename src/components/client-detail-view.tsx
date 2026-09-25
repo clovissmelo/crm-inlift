@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Mail, Phone, RefreshCw } from "lucide-react";
+import { Mail, Phone, Plus, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { ApproachWorkflowModal } from "@/components/approach-workflow-modal";
@@ -98,7 +98,9 @@ export function ClientDetailView({
   const [meetingOpen, setMeetingOpen] = useState(!!openMeetingForm);
   const [meetingProductId, setMeetingProductId] = useState<number | undefined>();
   const [reconsultOpen, setReconsultOpen] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const [editEmpresa, setEditEmpresa] = useState(false);
+  const [editContacts, setEditContacts] = useState(false);
+  const [addingContact, setAddingContact] = useState(false);
   const [savingClient, setSavingClient] = useState(false);
 
   const [clientDraft, setClientDraft] = useState({
@@ -173,6 +175,7 @@ export function ClientDetailView({
       }
     ]);
     setNewContact({ name: "", job_title: "", phone: "", whatsapp: "", email: "" });
+    setAddingContact(false);
     router.refresh();
   }
 
@@ -218,12 +221,12 @@ export function ClientDetailView({
       setError(data.error ?? "Erro ao salvar empresa");
       return;
     }
-    setEditMode(false);
+    setEditEmpresa(false);
     router.refresh();
   }
 
-  function cancelEdit() {
-    setEditMode(false);
+  function cancelEmpresaEdit() {
+    setEditEmpresa(false);
     setClientDraft({
       cnpj: initialClient.cnpj ?? "",
       legal_name: initialClient.legal_name ?? "",
@@ -238,6 +241,19 @@ export function ClientDetailView({
       bdr_user_id: initialClient.bdr_user_id ? String(initialClient.bdr_user_id) : "",
       product_ids: linkedProducts.map((p) => p.product_id)
     });
+  }
+
+  function cancelContactsEdit() {
+    setEditContacts(false);
+    setAddingContact(false);
+    setContacts(initialContacts);
+    setNewContact({ name: "", job_title: "", phone: "", whatsapp: "", email: "" });
+  }
+
+  function openOppModal() {
+    setNewOppProductId(String(linkedProducts[0]?.product_id ?? ""));
+    setDupOpen(null);
+    setOppModalOpen(true);
   }
 
   async function createOpportunity(force = false) {
@@ -316,15 +332,7 @@ export function ClientDetailView({
             >
               Agendar reunião
             </button>
-            <button
-              className="btn btn-primary"
-              type="button"
-              onClick={() => {
-                setNewOppProductId(String(linkedProducts[0]?.product_id ?? ""));
-                setDupOpen(null);
-                setOppModalOpen(true);
-              }}
-            >
+            <button className="btn btn-primary" type="button" onClick={openOppModal}>
               Nova oportunidade
             </button>
           </div>
@@ -433,18 +441,18 @@ export function ClientDetailView({
       <div className="panel">
         <div className="client-panel-head">
           <h3 style={{ margin: 0 }}>Empresa</h3>
-          {!editMode ? (
-            <button type="button" className="btn" onClick={() => setEditMode(true)}>
+          {!editEmpresa ? (
+            <button type="button" className="btn" onClick={() => setEditEmpresa(true)}>
               Editar
             </button>
           ) : (
-            <button type="button" className="btn" onClick={cancelEdit}>
+            <button type="button" className="btn" onClick={cancelEmpresaEdit}>
               Cancelar
             </button>
           )}
         </div>
 
-        {!editMode ? (
+        {!editEmpresa ? (
           <div style={{ marginTop: "0.75rem" }}>
             {hasText(initialClient.cnpj) ? (
               <InfoLine label="CNPJ">{formatCnpj(initialClient.cnpj)}</InfoLine>
@@ -551,10 +559,21 @@ export function ClientDetailView({
       </div>
 
       <div className="panel">
-        <h3 style={{ marginTop: 0 }}>Oportunidades</h3>
-        {oppList.length === 0 ? <p className="muted">Nenhuma negociação registrada.</p> : null}
+        <div className="client-panel-head">
+          <h3 style={{ margin: 0 }}>Oportunidades</h3>
+          <button
+            type="button"
+            className="btn btn-icon-sm"
+            title="Nova oportunidade"
+            aria-label="Nova oportunidade"
+            onClick={openOppModal}
+          >
+            <Plus size={18} />
+          </button>
+        </div>
+        {oppList.length === 0 ? <p className="muted" style={{ marginTop: "0.75rem" }}>Nenhuma negociação registrada.</p> : null}
         {oppList.length > 0 ? (
-          <ul style={{ paddingLeft: "1.1rem", margin: 0 }}>
+          <ul style={{ paddingLeft: "1.1rem", margin: "0.75rem 0 0" }}>
             {oppList.map((o) => (
               <li key={o.id} style={{ marginBottom: 8 }}>
                 <Link href={`/oportunidades/${o.id}`}>
@@ -571,51 +590,35 @@ export function ClientDetailView({
       <div className="panel">
         <div className="client-panel-head">
           <h3 style={{ margin: 0 }}>Contatos</h3>
-          {editMode ? null : (
-            <button type="button" className="btn" onClick={() => setEditMode(true)}>
-              Editar
-            </button>
-          )}
+          <div className="client-panel-head-actions">
+            {!editContacts && !addingContact ? (
+              <>
+                <button type="button" className="btn" onClick={() => setAddingContact(true)}>
+                  Novo
+                </button>
+                <button type="button" className="btn" onClick={() => setEditContacts(true)}>
+                  Editar
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn" onClick={cancelContactsEdit}>
+                Cancelar
+              </button>
+            )}
+          </div>
         </div>
-        {contacts.length === 0 && !editMode ? <p className="muted">Nenhum contato cadastrado.</p> : null}
+        {contacts.length === 0 && !editContacts && !addingContact ? (
+          <p className="muted" style={{ marginTop: "0.75rem" }}>
+            Nenhum contato cadastrado.
+          </p>
+        ) : null}
 
-        {!editMode
-          ? contacts.map((contact) => (
-              <ContactReadOnly key={contact.id} contact={contact} />
-            ))
+        {!editContacts
+          ? contacts.map((contact) => <ContactReadOnly key={contact.id} contact={contact} />)
           : null}
 
-        {editMode ? (
-          <>
-            <form onSubmit={addContact} style={{ margin: "1rem 0", paddingBottom: "1rem", borderBottom: "1px solid var(--border)" }}>
-              <h4 style={{ marginTop: 0 }}>Adicionar contato</h4>
-              <div className="field">
-                <label className="label">Nome</label>
-                <input className="input" value={newContact.name} onChange={(e) => setNewContact((c) => ({ ...c, name: e.target.value }))} required />
-              </div>
-              <div className="field">
-                <label className="label">Cargo</label>
-                <input className="input" value={newContact.job_title} onChange={(e) => setNewContact((c) => ({ ...c, job_title: e.target.value }))} />
-              </div>
-              <div className="filters-row">
-                <div className="field">
-                  <label className="label">Telefone</label>
-                  <input className="input" value={newContact.phone} onChange={(e) => setNewContact((c) => ({ ...c, phone: e.target.value }))} />
-                </div>
-                <div className="field">
-                  <label className="label">WhatsApp</label>
-                  <input className="input" value={newContact.whatsapp} onChange={(e) => setNewContact((c) => ({ ...c, whatsapp: e.target.value }))} />
-                </div>
-              </div>
-              <div className="field">
-                <label className="label">E-mail</label>
-                <input className="input" type="email" value={newContact.email} onChange={(e) => setNewContact((c) => ({ ...c, email: e.target.value }))} />
-              </div>
-              <button className="btn" type="submit">
-                Salvar contato
-              </button>
-            </form>
-            {contacts.map((contact) => (
+        {editContacts
+          ? contacts.map((contact) => (
               <ContactEditor
                 key={contact.id}
                 contact={contact}
@@ -626,8 +629,50 @@ export function ClientDetailView({
                 }}
                 onVerify={(status) => void updateVerification(contact.id, status)}
               />
-            ))}
-          </>
+            ))
+          : null}
+
+        {addingContact ? (
+          <form
+            onSubmit={addContact}
+            style={{
+              marginTop: "0.75rem",
+              paddingTop: "0.75rem",
+              borderTop: contacts.length ? "1px solid var(--border)" : undefined
+            }}
+          >
+            <h4 style={{ marginTop: 0 }}>Novo contato</h4>
+            <div className="field">
+              <label className="label">Nome</label>
+              <input className="input" value={newContact.name} onChange={(e) => setNewContact((c) => ({ ...c, name: e.target.value }))} required />
+            </div>
+            <div className="field">
+              <label className="label">Cargo</label>
+              <input className="input" value={newContact.job_title} onChange={(e) => setNewContact((c) => ({ ...c, job_title: e.target.value }))} />
+            </div>
+            <div className="filters-row">
+              <div className="field">
+                <label className="label">Telefone</label>
+                <input className="input" value={newContact.phone} onChange={(e) => setNewContact((c) => ({ ...c, phone: e.target.value }))} />
+              </div>
+              <div className="field">
+                <label className="label">WhatsApp</label>
+                <input className="input" value={newContact.whatsapp} onChange={(e) => setNewContact((c) => ({ ...c, whatsapp: e.target.value }))} />
+              </div>
+            </div>
+            <div className="field">
+              <label className="label">E-mail</label>
+              <input className="input" type="email" value={newContact.email} onChange={(e) => setNewContact((c) => ({ ...c, email: e.target.value }))} />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-primary" type="submit">
+                Salvar contato
+              </button>
+              <button type="button" className="btn" onClick={() => setAddingContact(false)}>
+                Fechar
+              </button>
+            </div>
+          </form>
         ) : null}
       </div>
 

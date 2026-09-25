@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CadastroModal } from "@/components/cadastro-ui";
 import type { Product } from "@/lib/types";
 import type { ClientContact } from "@/components/client-detail-view";
 
@@ -72,8 +73,6 @@ export function ApproachWorkflowModal({
     })();
   }, [open, defaultChannel, defaultContactId, defaultProductId]);
 
-  if (!open) return null;
-
   const selectedResult = resultTypes.find((r) => String(r.id) === resultTypeId);
 
   async function submit(e: React.FormEvent) {
@@ -124,9 +123,10 @@ export function ApproachWorkflowModal({
     window.location.reload();
   }
 
+  if (!open) return null;
+
   return (
-    <div className="panel" style={{ marginBottom: "1rem", borderColor: "#525252" }}>
-      <h3 style={{ marginTop: 0 }}>Registrar abordagem — {clientName}</h3>
+    <CadastroModal open={open} title={`Registrar abordagem — ${clientName}`} onClose={onClose} wide>
       <form onSubmit={submit}>
         {error ? <div className="alert alert-error">{error}</div> : null}
         <div className="filters-row">
@@ -249,6 +249,6 @@ export function ApproachWorkflowModal({
           </button>
         </div>
       </form>
-    </div>
+    </CadastroModal>
   );
 }

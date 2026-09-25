@@ -585,6 +585,12 @@ table.data-table th {
   gap: 0.75rem;
 }
 
+.client-panel-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
 .client-contact-readonly {
   padding: 0.65rem 0;
   border-bottom: 1px solid var(--border);
