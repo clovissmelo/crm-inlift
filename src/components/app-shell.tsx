@@ -12,8 +12,8 @@ import {
   LayoutDashboard,
   List,
   PhoneCall,
+  Package,
   RotateCcw,
-  Settings2,
   Shield,
   Target,
   Users
@@ -24,14 +24,14 @@ import type { User } from "@/lib/types";
 
 const nav: Array<{ href: Route; label: string; icon: typeof LayoutDashboard }> = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/funil", label: "Funil", icon: Funnel },
   { href: "/prospeccao", label: "Leads para prospecção", icon: PhoneCall },
-  { href: "/clientes", label: "Lista de clientes", icon: List },
-  { href: "/organizacao-leads", label: "Organização de leads", icon: Filter },
-  { href: "/abordagens", label: "Abordagens", icon: Target },
   { href: "/retornos", label: "Retornos", icon: RotateCcw },
   { href: "/agendamentos", label: "Agendamentos", icon: Calendar },
-  { href: "/funil", label: "Funil", icon: Funnel },
-  { href: "/cadastros", label: "Cadastros", icon: Settings2 }
+  { href: "/organizacao-leads", label: "Organização de Leads", icon: Filter },
+  { href: "/clientes", label: "Clientes", icon: List },
+  { href: "/abordagens", label: "Abordagens", icon: Target },
+  { href: "/produtos", label: "Produtos", icon: Package }
 ];
 
 export function AppShell({

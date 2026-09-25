@@ -1,9 +1,5 @@
-import { ImportWizard } from "@/components/import-wizard";
-import { loadCatalog } from "@/lib/catalog";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function ImportacaoPage() {
-  const { products, bdrs } = await loadCatalog();
-  return <ImportWizard products={products} bdrs={bdrs} />;
+export default function CadastrosImportacaoLegacyPage() {
+  redirect("/admin/importacao");
 }

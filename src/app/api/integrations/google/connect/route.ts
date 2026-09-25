@@ -9,7 +9,7 @@ export async function GET() {
     redirect("/login");
   }
   if (!isGoogleOAuthConfigured()) {
-    redirect("/cadastros/integracoes?error=not_configured");
+    redirect("/admin/variaveis?error=not_configured");
   }
   const state = await createOAuthState(user.id);
   const url = buildGoogleAuthUrl(state);

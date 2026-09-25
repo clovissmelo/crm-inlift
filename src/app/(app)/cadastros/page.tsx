@@ -1,5 +1,5 @@
-import { CadastrosHub } from "@/components/cadastros-hub";
+import { redirect } from "next/navigation";
 
-export default function CadastrosPage() {
-  return <CadastrosHub />;
+export default function CadastrosLegacyPage() {
+  redirect("/dashboard");
 }

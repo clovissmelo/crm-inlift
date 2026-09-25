@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { Building2, Package, Users } from "lucide-react";
+import { FileSpreadsheet, Sparkles, SlidersHorizontal, Users } from "lucide-react";
 import type { Route } from "next";
 
 type HubItem = {
@@ -10,38 +10,44 @@ type HubItem = {
   description: string;
 };
 
-const CADASTROS_ITEMS: HubItem[] = [
+const ADMIN_ITEMS: HubItem[] = [
   {
-    href: "/cadastros/usuarios",
+    href: "/admin/usuarios",
     icon: Users,
     title: "Usuários",
     description: "Equipe, perfis de acesso e situação da conta."
   },
   {
-    href: "/cadastros/produtos",
-    icon: Package,
-    title: "Produtos",
-    description: "Linhas comerciais, proposta e responsáveis."
+    href: "/admin/variaveis",
+    icon: SlidersHorizontal,
+    title: "Variáveis para as APIs",
+    description: "Google Agenda, Places, integrações e chaves do projeto."
   },
   {
-    href: "/clientes/novo",
-    icon: Building2,
-    title: "Novo cliente",
-    description: "Incluir lead manualmente no CRM."
+    href: "/admin/novos-leads",
+    icon: Sparkles,
+    title: "Novos leads",
+    description: "Busca de leads novos com o motor de descoberta."
+  },
+  {
+    href: "/admin/importacao",
+    icon: FileSpreadsheet,
+    title: "Importação de planilhas",
+    description: "Carga em massa de clientes e contatos."
   }
 ];
 
-export function CadastrosHub() {
+export function AdminHub() {
   return (
     <div className="hub-page">
       <header className="hub-page-header">
-        <h1 style={{ margin: 0 }}>Cadastros</h1>
+        <h1 style={{ margin: 0 }}>Admin</h1>
         <p className="muted" style={{ margin: "0.5rem 0 0", maxWidth: "36rem" }}>
-          Estrutura base do CRM: pessoas, produtos e clientes. Integrações e importação em massa ficam em Admin.
+          Configurações avançadas, usuários, integrações e ferramentas de crescimento do funil.
         </p>
       </header>
       <ul className="hub-card-grid">
-        {CADASTROS_ITEMS.map((item) => {
+        {ADMIN_ITEMS.map((item) => {
           const Icon = item.icon;
           return (
             <li key={item.href}>

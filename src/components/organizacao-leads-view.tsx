@@ -104,7 +104,7 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
 
   return (
     <div>
-      <h1 style={{ marginTop: 0 }}>Organização de leads</h1>
+      <h1 style={{ marginTop: 0 }}>Organização de Leads</h1>
       <p className="muted">Filtre, selecione clientes e transfira a BDR responsável em lote.</p>
 
       <div className="filters-row">

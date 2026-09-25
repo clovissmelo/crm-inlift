@@ -15,7 +15,7 @@ export default async function ClientesPage() {
           Novo cliente
         </Link>
       </div>
-      <ClientListView title="Lista de clientes" initialItems={items} initialTotal={total} products={products} bdrs={bdrs} />
+      <ClientListView title="Clientes" initialItems={items} initialTotal={total} products={products} bdrs={bdrs} />
     </div>
   );
 }
