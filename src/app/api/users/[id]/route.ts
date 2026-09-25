@@ -1,6 +1,7 @@
+import { deleteBlockedMessage, requireAdminApi } from "@/lib/admin";
 import { hashPassword, jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { get, run } from "@/lib/db";
-import { getUserById, setUserRoles } from "@/lib/users";
+import { deleteUser, getUserById, setUserRoles } from "@/lib/users";
 import { userUpdateSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
@@ -40,4 +41,24 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const updated = await getUserById(userId);
   return Response.json({ user: updated });
+}
+
+export async function DELETE(_request: Request, { params }: Params) {
+  const user = await requireApiUser();
+  if (!user) return jsonUnauthorized();
+  const denied = requireAdminApi(user);
+  if (denied) return denied;
+  const { id } = await params;
+  const userId = Number(id);
+  if (userId === user.id) {
+    return Response.json({ error: "Você não pode excluir seu próprio usuário." }, { status: 400 });
+  }
+  const existing = await getUserById(userId);
+  if (!existing) return Response.json({ error: "Não encontrado" }, { status: 404 });
+  try {
+    await deleteUser(userId);
+  } catch (err) {
+    return Response.json({ error: deleteBlockedMessage(err) }, { status: 409 });
+  }
+  return Response.json({ ok: true });
 }

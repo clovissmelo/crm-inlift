@@ -53,6 +53,10 @@ export async function setUserRoles(userId: number, roles: UserRole[]) {
   }
 }
 
+export async function deleteUser(id: number) {
+  await run("DELETE FROM users WHERE id = @id", { id });
+}
+
 export async function replaceProductResponsibles(productId: number, userIds: number[]) {
   await run("DELETE FROM product_responsibles WHERE product_id = @productId", { productId });
   for (const userId of userIds) {

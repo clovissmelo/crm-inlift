@@ -1,5 +1,6 @@
+import { deleteBlockedMessage, requireAdminApi } from "@/lib/admin";
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
-import { nowIso, run } from "@/lib/db";
+import { get, nowIso, run } from "@/lib/db";
 import { messageScriptSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
@@ -29,5 +30,22 @@ export async function PATCH(request: Request, { params }: Params) {
       now: nowIso()
     }
   );
+  return Response.json({ ok: true });
+}
+
+export async function DELETE(_request: Request, { params }: Params) {
+  const user = await requireApiUser();
+  if (!user) return jsonUnauthorized();
+  const denied = requireAdminApi(user);
+  if (denied) return denied;
+  const { id } = await params;
+  const scriptId = Number(id);
+  const row = await get<{ id: number }>("SELECT id FROM message_scripts WHERE id = @id", { id: scriptId });
+  if (!row) return Response.json({ error: "Não encontrado" }, { status: 404 });
+  try {
+    await run("DELETE FROM message_scripts WHERE id = @id", { id: scriptId });
+  } catch (err) {
+    return Response.json({ error: deleteBlockedMessage(err) }, { status: 409 });
+  }
   return Response.json({ ok: true });
 }

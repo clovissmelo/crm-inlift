@@ -17,3 +17,12 @@ export function requireAdminApi(user: Pick<User, "roles"> | null): Response | nu
 }
 
 export const ADMIN_NAV_ROLES: UserRole[] = ["admin"];
+
+/** Mensagem amigável quando DELETE falha por FK (PostgreSQL 23503). */
+export function deleteBlockedMessage(err: unknown, fallback = "Não foi possível excluir.") {
+  const code = (err as { code?: string })?.code;
+  if (code === "23503") {
+    return "Não é possível excluir: existem registros vinculados no sistema.";
+  }
+  return fallback;
+}

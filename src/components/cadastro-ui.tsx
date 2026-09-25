@@ -26,6 +26,33 @@ export function CadastroPageHeader({
   );
 }
 
+export function CadastroRowActions({
+  onEdit,
+  onDelete,
+  canDelete
+}: {
+  onEdit: () => void;
+  onDelete?: () => void | Promise<void>;
+  canDelete?: boolean;
+}) {
+  return (
+    <div className="cadastro-list-actions">
+      <button type="button" className="btn" onClick={onEdit}>
+        Editar
+      </button>
+      {canDelete && onDelete ? (
+        <button type="button" className="btn btn-danger" onClick={() => void onDelete()}>
+          Excluir
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export async function requestCadastroDelete(itemLabel: string) {
+  return window.confirm(`Excluir “${itemLabel}”? Esta ação não pode ser desfeita.`);
+}
+
 export function CadastroModal({
   open,
   title,

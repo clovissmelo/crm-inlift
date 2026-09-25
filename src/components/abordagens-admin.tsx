@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CadastroModal, CadastroPageHeader } from "@/components/cadastro-ui";
+import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
 import { PLACEHOLDER_HELP } from "@/lib/message-templates";
 import type { Product } from "@/lib/types";
 
@@ -38,7 +38,7 @@ const emptyScriptForm = (): ScriptForm => ({
   status: "active"
 });
 
-export function AbordagensAdmin({ products }: { products: Product[] }) {
+export function AbordagensAdmin({ products, canDelete = false }: { products: Product[]; canDelete?: boolean }) {
   const [results, setResults] = useState<ResultRow[]>([]);
   const [scripts, setScripts] = useState<ScriptRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +152,32 @@ export function AbordagensAdmin({ products }: { products: Product[] }) {
     void load();
   }
 
+  async function removeResult(row: ResultRow) {
+    if (!(await requestCadastroDelete(row.name))) return;
+    setError(null);
+    const res = await fetch(`/api/approach-result-types/${row.id}`, { method: "DELETE" });
+    const data = (await res.json()) as { error?: string };
+    if (!res.ok) {
+      setError(data.error ?? "Erro ao excluir");
+      return;
+    }
+    if (resultEditingId === row.id) setResultModal(false);
+    void load();
+  }
+
+  async function removeScript(row: ScriptRow) {
+    if (!(await requestCadastroDelete(row.title))) return;
+    setError(null);
+    const res = await fetch(`/api/message-scripts/${row.id}`, { method: "DELETE" });
+    const data = (await res.json()) as { error?: string };
+    if (!res.ok) {
+      setError(data.error ?? "Erro ao excluir");
+      return;
+    }
+    if (scriptEditingId === row.id) setScriptModal(false);
+    void load();
+  }
+
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Abordagens</h1>
@@ -171,7 +197,7 @@ export function AbordagensAdmin({ products }: { products: Product[] }) {
               <th>Nome</th>
               <th>Situação</th>
               <th>Próxima ação</th>
-              <th style={{ width: 100 }} />
+              <th style={{ width: canDelete ? 180 : 100 }} />
             </tr>
           </thead>
           <tbody>
@@ -181,11 +207,11 @@ export function AbordagensAdmin({ products }: { products: Product[] }) {
                 <td>{r.status === "active" ? "Ativo" : "Inativo"}</td>
                 <td>{r.suggest_follow_up ? "Sugere follow-up" : "—"}</td>
                 <td>
-                  <div className="cadastro-list-actions">
-                    <button type="button" className="btn" onClick={() => openResultEdit(r)}>
-                      Editar
-                    </button>
-                  </div>
+                  <CadastroRowActions
+                    canDelete={canDelete}
+                    onEdit={() => openResultEdit(r)}
+                    onDelete={() => removeResult(r)}
+                  />
                 </td>
               </tr>
             ))}
@@ -204,7 +230,7 @@ export function AbordagensAdmin({ products }: { products: Product[] }) {
                 <th>Título</th>
                 <th>Tipo</th>
                 <th>Situação</th>
-                <th style={{ width: 100 }} />
+                <th style={{ width: canDelete ? 180 : 100 }} />
               </tr>
             </thead>
             <tbody>
@@ -214,11 +240,11 @@ export function AbordagensAdmin({ products }: { products: Product[] }) {
                   <td>{s.script_type === "call" ? "Ligação" : "WhatsApp"}</td>
                   <td>{s.status === "active" ? "Ativo" : "Inativo"}</td>
                   <td>
-                    <div className="cadastro-list-actions">
-                      <button type="button" className="btn" onClick={() => openScriptEdit(s)}>
-                        Editar
-                      </button>
-                    </div>
+                    <CadastroRowActions
+                      canDelete={canDelete}
+                      onEdit={() => openScriptEdit(s)}
+                      onDelete={() => removeScript(s)}
+                    />
                   </td>
                 </tr>
               ))}

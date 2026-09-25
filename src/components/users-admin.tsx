@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CadastroModal, CadastroPageHeader } from "@/components/cadastro-ui";
+import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
 import { ROLE_LABELS, type User, type UserRole } from "@/lib/types";
 
 const ALL_ROLES: UserRole[] = ["bdr", "product_owner", "manager", "admin"];
@@ -24,7 +24,7 @@ const emptyForm = (): UserForm => ({
   roles: ["bdr"]
 });
 
-export function UsersAdmin() {
+export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +119,19 @@ export function UsersAdmin() {
     void load();
   }
 
+  async function removeUser(target: User) {
+    if (!(await requestCadastroDelete(target.name))) return;
+    setError(null);
+    const res = await fetch(`/api/users/${target.id}`, { method: "DELETE" });
+    const data = (await res.json()) as { error?: string };
+    if (!res.ok) {
+      setError(data.error ?? "Erro ao excluir");
+      return;
+    }
+    if (editingId === target.id) closeModal();
+    void load();
+  }
+
   return (
     <div>
       <CadastroPageHeader title="Usuários" onNew={openCreate} newLabel="Novo usuário" />
@@ -136,7 +149,7 @@ export function UsersAdmin() {
                 <th>E-mail</th>
                 <th>Perfis</th>
                 <th>Situação</th>
-                <th style={{ width: 100 }} />
+                <th style={{ width: canDelete ? 180 : 100 }} />
               </tr>
             </thead>
             <tbody>
@@ -147,11 +160,11 @@ export function UsersAdmin() {
                   <td>{u.roles.map((r) => ROLE_LABELS[r]).join(", ") || "—"}</td>
                   <td>{u.status === "active" ? "Ativo" : "Inativo"}</td>
                   <td>
-                    <div className="cadastro-list-actions">
-                      <button type="button" className="btn" onClick={() => openEdit(u)}>
-                        Editar
-                      </button>
-                    </div>
+                    <CadastroRowActions
+                      canDelete={canDelete}
+                      onEdit={() => openEdit(u)}
+                      onDelete={() => removeUser(u)}
+                    />
                   </td>
                 </tr>
               ))}

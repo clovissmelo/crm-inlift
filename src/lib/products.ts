@@ -85,3 +85,7 @@ export async function saveProduct(input: {
   }
   return productId;
 }
+
+export async function deleteProduct(id: number) {
+  await run("DELETE FROM products WHERE id = @id", { id });
+}
