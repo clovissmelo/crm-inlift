@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
@@ -38,10 +39,16 @@ export function AppShell({ user, children }: { user: User; children: React.React
     <div className="app-layout">
       <aside className="sidebar">
         <div className="brand">
-          FUNON
-          <div className="muted" style={{ fontSize: "0.7rem", fontWeight: 400, letterSpacing: 0 }}>
-            Da prospecção ao fechamento
-          </div>
+          <Link href="/dashboard" className="sidebar-brand-link" aria-label="CRM Inlift — início">
+            <Image
+              src="/inlift-logo.png"
+              alt="INLIFT GROUP"
+              width={152}
+              height={34}
+              className="sidebar-logo"
+              priority
+            />
+          </Link>
         </div>
         <nav className="nav-list">
           {nav.map((item) => {
@@ -56,7 +63,7 @@ export function AppShell({ user, children }: { user: User; children: React.React
           })}
         </nav>
         <div className="muted" style={{ marginTop: "auto", fontSize: "0.75rem" }}>
-          <Users size={14} style={{ display: "inline", verticalAlign: "middle" }} /> Funon
+          <Users size={14} style={{ display: "inline", verticalAlign: "middle" }} /> CRM Inlift
         </div>
       </aside>
       <div className="main-column">

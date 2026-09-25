@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FUNON",
+  title: "CRM Inlift",
   description: "Da prospecção ao fechamento"
 };
 

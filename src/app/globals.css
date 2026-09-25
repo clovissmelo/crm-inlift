@@ -52,6 +52,17 @@ a {
   padding: 0.5rem 0.75rem;
 }
 
+.sidebar-brand-link {
+  display: block;
+  line-height: 0;
+}
+
+.sidebar-logo {
+  width: auto;
+  height: 2rem;
+  object-fit: contain;
+}
+
 .nav-list {
   display: flex;
   flex-direction: column;
