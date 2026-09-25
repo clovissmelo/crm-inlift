@@ -466,6 +466,38 @@ table.data-table th {
   position: relative;
 }
 
+.user-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.15rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-family: inherit;
+  border-radius: 0.35rem;
+}
+
+.user-menu-trigger:hover {
+  color: #f5f5f5;
+}
+
+.user-brand-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 999px;
+  background: #00adee;
+  flex-shrink: 0;
+}
+
+.profile-password-block {
+  padding-top: 0.25rem;
+  margin-bottom: 0.25rem;
+  border-top: 1px solid var(--border);
+}
+
 .user-menu-panel {
   position: absolute;
   right: 0;

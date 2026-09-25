@@ -24,21 +24,10 @@ export function UserMenu({ user }: { user: User }) {
     router.refresh();
   }
 
-  const initials = user.name
-    .split(" ")
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("");
-
   return (
     <div className="user-menu" ref={ref}>
-      <button type="button" className="btn" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        {user.photo_path ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={user.photo_path} alt="" className="avatar" width={36} height={36} />
-        ) : (
-          <span className="avatar">{initials}</span>
-        )}
+      <button type="button" className="user-menu-trigger" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className="user-brand-dot" aria-hidden />
         <span>{user.name.split(" ")[0]}</span>
       </button>
       {open ? (
