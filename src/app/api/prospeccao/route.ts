@@ -13,6 +13,7 @@ export async function GET(request: Request) {
     product_id: url.searchParams.get("product_id") ? Number(url.searchParams.get("product_id")) : undefined,
     bdr_user_id: url.searchParams.get("bdr_user_id") ? Number(url.searchParams.get("bdr_user_id")) : undefined,
     phone_availability: (url.searchParams.get("phone_availability") ?? "") as "" | "mobile" | "landline" | "none",
+    queue_status: (url.searchParams.get("queue_status") ?? "") as "" | "atrasado" | "retorno_hoje" | "novo" | "em_andamento",
     search: url.searchParams.get("search") ?? undefined,
     limit: url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : 50,
     offset: url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : 0

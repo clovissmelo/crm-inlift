@@ -339,6 +339,25 @@ table.data-table th {
   gap: 0.35rem;
 }
 
+.contact-shortcuts {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.btn-icon-sm {
+  padding: 0.35rem 0.45rem;
+  min-width: 2rem;
+  line-height: 0;
+}
+
+.btn-icon-sm.disabled,
+.btn.disabled {
+  opacity: 0.35;
+  pointer-events: none;
+  cursor: default;
+}
+
 .alert {
   padding: 0.65rem 0.75rem;
   border-radius: 0.5rem;

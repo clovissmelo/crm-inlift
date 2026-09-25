@@ -2,6 +2,8 @@ import { all } from "@/lib/db";
 import { isMobileBr, phoneDigits } from "@/lib/format";
 import type { ClientListItem } from "@/lib/types";
 
+export type ProspeccaoQueueStatus = "" | "atrasado" | "retorno_hoje" | "novo" | "em_andamento";
+
 export type ClientFilters = {
   city?: string;
   uf?: string;
@@ -9,6 +11,7 @@ export type ClientFilters = {
   product_id?: number;
   bdr_user_id?: number;
   phone_availability?: "mobile" | "landline" | "none" | "";
+  queue_status?: ProspeccaoQueueStatus;
   without_approach?: boolean;
   search?: string;
   limit?: number;
@@ -110,7 +113,7 @@ function mapRow(row: RawClientRow): ClientListItem {
   };
 }
 
-function matchesPhoneFilter(item: ClientListItem, availability: ClientFilters["phone_availability"]) {
+export function matchesPhoneFilter(item: ClientListItem, availability: ClientFilters["phone_availability"]) {
   if (!availability) return true;
   if (availability === "mobile") return item.has_mobile;
   if (availability === "landline") return item.has_landline && !item.has_mobile;

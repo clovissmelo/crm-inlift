@@ -49,7 +49,7 @@ async function main() {
     process.exit(1);
   }
 
-  await setUserRoles(userId, ["bdr", "product_owner", "manager"]);
+  await setUserRoles(userId, ["bdr", "product_owner", "manager", "admin"]);
   console.log(`Usuário administrador inicial criado: ${email}`);
   process.exit(0);
 }

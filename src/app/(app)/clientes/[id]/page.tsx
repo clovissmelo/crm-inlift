@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { ClientDetailView, type ClientContact } from "@/components/client-detail-view";
+import { isAdmin } from "@/lib/admin";
+import { requireUser } from "@/lib/auth";
 import { loadCatalog } from "@/lib/catalog";
 import { getClientDetail } from "@/lib/clients";
 import { listClientOpportunities } from "@/lib/opportunities";
@@ -14,6 +16,7 @@ export default async function ClienteDetailPage({ params, searchParams }: Params
   const clientId = Number(id);
   if (!Number.isFinite(clientId)) notFound();
 
+  const user = await requireUser();
   const detail = await getClientDetail(clientId);
   if (!detail) notFound();
 
@@ -49,6 +52,7 @@ export default async function ClienteDetailPage({ params, searchParams }: Params
       followUpId={Number.isFinite(followUpId) ? followUpId : undefined}
       openMeetingForm={openMeeting}
       opportunities={opportunities}
+      canReconsult={isAdmin(user)}
     />
   );
 }

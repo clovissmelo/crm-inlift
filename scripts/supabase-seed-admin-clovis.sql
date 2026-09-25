@@ -16,6 +16,6 @@ WITH ins AS (
 INSERT INTO user_roles (user_id, role)
 SELECT ins.id, r.role
 FROM ins
-CROSS JOIN (VALUES ('bdr'), ('product_owner'), ('manager')) AS r(role);
+CROSS JOIN (VALUES ('bdr'), ('product_owner'), ('manager'), ('admin')) AS r(role);
 
 SELECT id, email, name, status FROM users WHERE lower(email) = lower('clovis@inlift.com.br');

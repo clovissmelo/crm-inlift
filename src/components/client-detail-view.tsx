@@ -7,6 +7,7 @@ import { ApproachWorkflowModal } from "@/components/approach-workflow-modal";
 import { MeetingFormModal } from "@/components/meeting-form-modal";
 import { ClientTimeline } from "@/components/client-timeline";
 import { WhatsAppTemplateModal } from "@/components/whatsapp-template-modal";
+import { ClientReconsultModal } from "@/components/client-reconsult-modal";
 import { formatCnpj, mailtoLink, telLink } from "@/lib/format";
 import { VERIFICATION_LABELS, type ContactVerification, type Product, type User } from "@/lib/types";
 
@@ -46,7 +47,8 @@ export function ClientDetailView({
   allUsers,
   followUpId,
   openMeetingForm,
-  opportunities
+  opportunities,
+  canReconsult
 }: {
   initialClient: Client;
   initialContacts: ClientContact[];
@@ -67,6 +69,7 @@ export function ClientDetailView({
     stage_name: string | null;
     owner_name: string | null;
   }>;
+  canReconsult?: boolean;
 }) {
   const router = useRouter();
   const [contacts, setContacts] = useState<ClientContact[]>(initialContacts);
@@ -83,6 +86,7 @@ export function ClientDetailView({
   const [waPhone, setWaPhone] = useState("");
   const [waContactName, setWaContactName] = useState("");
   const [waProductId, setWaProductId] = useState<number | undefined>();
+  const [reconsultOpen, setReconsultOpen] = useState(false);
 
   const clientDisplayName = initialClient.trade_name || initialClient.legal_name || "Cliente";
   const primaryContact = contacts[0];
@@ -274,7 +278,19 @@ export function ClientDetailView({
         >
           Registrar e-mail
         </button>
+        {canReconsult ? (
+          <button className="btn" type="button" onClick={() => setReconsultOpen(true)}>
+            Reconsultar dados
+          </button>
+        ) : null}
       </div>
+
+      <ClientReconsultModal
+        open={reconsultOpen}
+        clientId={initialClient.id}
+        onClose={() => setReconsultOpen(false)}
+        onApplied={() => router.refresh()}
+      />
 
       <MeetingFormModal
         open={meetingOpen}

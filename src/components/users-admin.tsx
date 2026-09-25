@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { CadastroModal, CadastroPageHeader } from "@/components/cadastro-ui";
 import { ROLE_LABELS, type User, type UserRole } from "@/lib/types";
 
-const ALL_ROLES: UserRole[] = ["bdr", "product_owner", "manager"];
+const ALL_ROLES: UserRole[] = ["bdr", "product_owner", "manager", "admin"];
 
 type UserForm = {
   name: string;

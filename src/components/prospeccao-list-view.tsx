@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { ClientContactShortcuts } from "@/components/client-contact-shortcuts";
 import type { Product, User } from "@/lib/types";
 import type { ProspeccaoListItem } from "@/lib/prospeccao-query";
 
@@ -26,6 +27,7 @@ export function ProspeccaoListView({
     product_id: "",
     bdr_user_id: "",
     phone_availability: "",
+    queue_status: "",
     search: ""
   });
   const [offset, setOffset] = useState(0);
@@ -50,6 +52,14 @@ export function ProspeccaoListView({
     void load();
   }, [load]);
 
+  useEffect(() => {
+    setOffset(0);
+  }, [filters]);
+
+  function updateFilter(patch: Partial<typeof filters>) {
+    setFilters((f) => ({ ...f, ...patch }));
+  }
+
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Leads para prospecção</h1>
@@ -57,11 +67,21 @@ export function ProspeccaoListView({
       <div className="filters-row">
         <div className="field">
           <label className="label">Busca</label>
-          <input className="input" value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} />
+          <input className="input" value={filters.search} onChange={(e) => updateFilter({ search: e.target.value })} />
+        </div>
+        <div className="field">
+          <label className="label">Status</label>
+          <select className="select" value={filters.queue_status} onChange={(e) => updateFilter({ queue_status: e.target.value })}>
+            <option value="">Todos</option>
+            <option value="atrasado">Atrasado</option>
+            <option value="retorno_hoje">Retorno para hoje</option>
+            <option value="novo">Sem abordagem</option>
+            <option value="em_andamento">Com abordagem</option>
+          </select>
         </div>
         <div className="field">
           <label className="label">Produto</label>
-          <select className="select" value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}>
+          <select className="select" value={filters.product_id} onChange={(e) => updateFilter({ product_id: e.target.value })}>
             <option value="">Todos</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>
@@ -72,7 +92,7 @@ export function ProspeccaoListView({
         </div>
         <div className="field">
           <label className="label">BDR</label>
-          <select className="select" value={filters.bdr_user_id} onChange={(e) => setFilters((f) => ({ ...f, bdr_user_id: e.target.value }))}>
+          <select className="select" value={filters.bdr_user_id} onChange={(e) => updateFilter({ bdr_user_id: e.target.value })}>
             <option value="">Todas</option>
             {bdrs.map((b) => (
               <option key={b.id} value={b.id}>
@@ -83,7 +103,7 @@ export function ProspeccaoListView({
         </div>
         <div className="field">
           <label className="label">Telefone</label>
-          <select className="select" value={filters.phone_availability} onChange={(e) => setFilters((f) => ({ ...f, phone_availability: e.target.value }))}>
+          <select className="select" value={filters.phone_availability} onChange={(e) => updateFilter({ phone_availability: e.target.value })}>
             <option value="">Qualquer</option>
             <option value="mobile">Celular</option>
             <option value="landline">Fixo</option>
@@ -101,23 +121,39 @@ export function ProspeccaoListView({
               <th>Empresa</th>
               <th>Cidade/UF</th>
               <th>BDR</th>
+              <th style={{ width: 120 }}>Contato</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
-              <tr key={item.id}>
-                <td>
-                  {item.queue_label === "Atrasado" ? <span className="badge badge-overdue">Atrasado</span> : null}
-                  {item.queue_label === "Retorno para hoje" ? <span className="badge badge-today">Retorno para hoje</span> : null}
-                  {!item.queue_label ? <span className="muted">—</span> : null}
-                </td>
-                <td>
-                  <Link href={`/clientes/${item.id}`}>{item.trade_name || item.legal_name || `#${item.id}`}</Link>
-                </td>
-                <td>{[item.city, item.uf].filter(Boolean).join(" / ") || "—"}</td>
-                <td>{item.bdr_name ?? "—"}</td>
-              </tr>
-            ))}
+            {items.map((item) => {
+              const displayName = item.trade_name || item.legal_name || `#${item.id}`;
+              const productId = item.product_ids[0];
+              return (
+                <tr key={item.id}>
+                  <td>
+                    {item.queue_label === "Atrasado" ? <span className="badge badge-overdue">Atrasado</span> : null}
+                    {item.queue_label === "Retorno para hoje" ? <span className="badge badge-today">Retorno para hoje</span> : null}
+                    {!item.queue_label ? <span className="muted">—</span> : null}
+                  </td>
+                  <td>
+                    <Link href={`/clientes/${item.id}`}>{displayName}</Link>
+                  </td>
+                  <td>{[item.city, item.uf].filter(Boolean).join(" / ") || "—"}</td>
+                  <td>{item.bdr_name ?? "—"}</td>
+                  <td>
+                    <ClientContactShortcuts
+                      clientName={displayName}
+                      contactName={item.primary_contact_name}
+                      phone={item.primary_phone}
+                      whatsapp={item.primary_whatsapp}
+                      email={item.primary_email}
+                      productId={productId}
+                      size="sm"
+                    />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

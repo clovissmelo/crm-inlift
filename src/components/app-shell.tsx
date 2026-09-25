@@ -14,10 +14,12 @@ import {
   PhoneCall,
   RotateCcw,
   Settings2,
+  Shield,
   Target,
   Users
 } from "lucide-react";
 import { UserMenu } from "@/components/user-menu";
+import { isAdmin } from "@/lib/admin";
 import type { User } from "@/lib/types";
 
 const nav: Array<{ href: Route; label: string; icon: typeof LayoutDashboard }> = [
@@ -71,6 +73,15 @@ export function AppShell({
               </Link>
             );
           })}
+          {isAdmin(user) ? (
+            <Link
+              href="/admin"
+              className={clsx("nav-link", (pathname === "/admin" || pathname.startsWith("/admin/")) && "active")}
+            >
+              <Shield size={18} />
+              Admin
+            </Link>
+          ) : null}
         </nav>
         <div className="sidebar-footer muted">
           <div className="sidebar-footer-brand">

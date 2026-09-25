@@ -1,4 +1,4 @@
-export type UserRole = "bdr" | "product_owner" | "manager";
+export type UserRole = "bdr" | "product_owner" | "manager" | "admin";
 export type UserStatus = "active" | "inactive";
 export type ContactVerification = "unverified" | "confirmed" | "invalid_number" | "wrong_contact";
 export type ProductStatus = "active" | "inactive";
@@ -44,7 +44,8 @@ export type ClientListItem = {
 export const ROLE_LABELS: Record<UserRole, string> = {
   bdr: "BDR",
   product_owner: "Responsável por produto",
-  manager: "Gestor"
+  manager: "Gestor",
+  admin: "Administrador"
 };
 
 export const VERIFICATION_LABELS: Record<ContactVerification, string> = {

@@ -70,6 +70,12 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
 
   const selectedCount = selectAllResults ? total : selected.size;
   const targetBdrName = bdrs.find((b) => String(b.id) === toBdr)?.name ?? "";
+  const productNameById = new Map(products.map((p) => [p.id, p.name]));
+
+  function formatProducts(productIds: number[]) {
+    if (!productIds.length) return "—";
+    return productIds.map((id) => productNameById.get(id) ?? `#${id}`).join(", ");
+  }
 
   async function executeTransfer() {
     setMessage(null);
@@ -204,6 +210,10 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
                 </th>
                 <th>Empresa</th>
                 <th>CNPJ</th>
+                <th>Produto</th>
+                <th>Cidade</th>
+                <th>UF</th>
+                <th>Segmento</th>
                 <th>BDR</th>
               </tr>
             </thead>
@@ -220,6 +230,10 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
                   </td>
                   <td>{item.trade_name || item.legal_name}</td>
                   <td>{formatCnpj(item.cnpj)}</td>
+                  <td>{formatProducts(item.product_ids)}</td>
+                  <td>{item.city ?? "—"}</td>
+                  <td>{item.uf ?? "—"}</td>
+                  <td>{item.segment ?? "—"}</td>
                   <td>{item.bdr_name ?? "—"}</td>
                 </tr>
               ))}

@@ -11,7 +11,7 @@ export const userCreateSchema = z.object({
   email: z.string().trim().email("E-mail inválido"),
   phone: z.string().trim().optional().nullable(),
   status: z.enum(["active", "inactive"]),
-  roles: z.array(z.enum(["bdr", "product_owner", "manager"])).min(1, "Selecione ao menos um perfil"),
+  roles: z.array(z.enum(["bdr", "product_owner", "manager", "admin"])).min(1, "Selecione ao menos um perfil"),
   password: z.string().min(8, "Senha com no mínimo 8 caracteres")
 });
 
