@@ -1,9 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { MeetingsCalendar } from "@/components/meetings-calendar";
 import { MeetingFormModal } from "@/components/meeting-form-modal";
-import { formatSpDate, formatSpDateTime } from "@/lib/datetime";
+import {
+  formatCalendarNavTitle,
+  formatYmdInSp,
+  shiftCalendarAnchor,
+  type CalendarRangeKind
+} from "@/lib/calendar-range";
+import { formatSpDateTime } from "@/lib/datetime";
 import { MEETING_STATUS_LABELS, type MeetingStatus } from "@/lib/meeting-constants";
 import type { Product, User } from "@/lib/types";
 
@@ -41,10 +49,11 @@ export function AgendamentosView({
   currentUserId: number;
 }) {
   const [scope, setScope] = useState<"all" | "mine">("mine");
-  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("calendar");
+  const [rangeKind, setRangeKind] = useState<CalendarRangeKind>("week");
+  const [anchorYmd, setAnchorYmd] = useState(() => formatYmdInSp());
   const [items, setItems] = useState<MeetingItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState("30d");
   const [productId, setProductId] = useState("");
   const [bdrUserId, setBdrUserId] = useState("");
   const [status, setStatus] = useState("");
@@ -56,7 +65,7 @@ export function AgendamentosView({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({ scope, period });
+    const params = new URLSearchParams({ scope, range: rangeKind, date: anchorYmd });
     if (productId) params.set("product_id", productId);
     if (bdrUserId) params.set("bdr_user_id", bdrUserId);
     if (status) params.set("status", status);
@@ -65,7 +74,7 @@ export function AgendamentosView({
     const data = (await res.json()) as { items: MeetingItem[] };
     setItems(data.items ?? []);
     setLoading(false);
-  }, [scope, period, productId, bdrUserId, status, participantUserId]);
+  }, [scope, rangeKind, anchorYmd, productId, bdrUserId, status, participantUserId]);
 
   useEffect(() => {
     void load();
@@ -81,17 +90,6 @@ export function AgendamentosView({
       .then((d) => setDetail(d as MeetingDetail));
   }, [selectedId]);
 
-  const calendarBuckets = useMemo(() => {
-    const map = new Map<string, MeetingItem[]>();
-    for (const m of items) {
-      const key = formatSpDate(m.starts_at);
-      const list = map.get(key) ?? [];
-      list.push(m);
-      map.set(key, list);
-    }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [items]);
-
   async function retrySync() {
     if (!selectedId) return;
     setSyncing(true);
@@ -104,33 +102,59 @@ export function AgendamentosView({
     }
   }
 
+  const navTitle = formatCalendarNavTitle(rangeKind, anchorYmd);
+
   return (
-    <div>
+    <div className="agendamentos-page">
       <h1 style={{ marginTop: 0 }}>Agendamentos</h1>
-      <div className="filters-row">
-        <button type="button" className={scope === "all" ? "btn btn-primary" : "btn"} onClick={() => setScope("all")}>
-          Gerais
-        </button>
-        <button type="button" className={scope === "mine" ? "btn btn-primary" : "btn"} onClick={() => setScope("mine")}>
-          Meus agendamentos
-        </button>
-        <button type="button" className={viewMode === "list" ? "btn btn-primary" : "btn"} onClick={() => setViewMode("list")}>
-          Lista
-        </button>
-        <button type="button" className={viewMode === "calendar" ? "btn btn-primary" : "btn"} onClick={() => setViewMode("calendar")}>
-          Calendário
-        </button>
-      </div>
-      <div className="filters-row">
-        <div className="field">
-          <label className="label">Período</label>
-          <select className="select" value={period} onChange={(e) => setPeriod(e.target.value)}>
-            <option value="today">Hoje</option>
-            <option value="7d">7 dias</option>
-            <option value="30d">30 dias</option>
-            <option value="all">Tudo</option>
-          </select>
+
+      <div className="agendamentos-toolbar">
+        <div className="agendamentos-toolbar-group">
+          <button type="button" className={scope === "all" ? "btn btn-primary" : "btn"} onClick={() => setScope("all")}>
+            Gerais
+          </button>
+          <button type="button" className={scope === "mine" ? "btn btn-primary" : "btn"} onClick={() => setScope("mine")}>
+            Meus agendamentos
+          </button>
         </div>
+        <div className="agendamentos-toolbar-group">
+          <button type="button" className={viewMode === "calendar" ? "btn btn-primary" : "btn"} onClick={() => setViewMode("calendar")}>
+            Calendário
+          </button>
+          <button type="button" className={viewMode === "list" ? "btn btn-primary" : "btn"} onClick={() => setViewMode("list")}>
+            Lista
+          </button>
+        </div>
+      </div>
+
+      <div className="meetings-cal-nav">
+        <div className="meetings-cal-nav-actions">
+          <button type="button" className="btn btn-icon-sm" aria-label="Período anterior" onClick={() => setAnchorYmd((d) => shiftCalendarAnchor(rangeKind, d, -1))}>
+            <ChevronLeft size={18} />
+          </button>
+          <button type="button" className="btn btn-icon-sm" aria-label="Próximo período" onClick={() => setAnchorYmd((d) => shiftCalendarAnchor(rangeKind, d, 1))}>
+            <ChevronRight size={18} />
+          </button>
+          <button type="button" className="btn" onClick={() => setAnchorYmd(formatYmdInSp())}>
+            Hoje
+          </button>
+        </div>
+        <h2 className="meetings-cal-nav-title">{navTitle}</h2>
+        <div className="meetings-cal-range-toggle">
+          {(["day", "week", "month"] as const).map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              className={rangeKind === kind ? "btn btn-primary" : "btn"}
+              onClick={() => setRangeKind(kind)}
+            >
+              {kind === "day" ? "Dia" : kind === "week" ? "Semana" : "Mês"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="filters-row">
         <div className="field">
           <label className="label">Produto</label>
           <select className="select" value={productId} onChange={(e) => setProductId(e.target.value)}>
@@ -205,26 +229,13 @@ export function AgendamentosView({
               ))}
             </tbody>
           </table>
-          {items.length === 0 && !loading ? <p className="muted">Nenhum agendamento.</p> : null}
+          {items.length === 0 && !loading ? <p className="muted">Nenhum agendamento neste período.</p> : null}
         </div>
       ) : (
-        <div>
-          {calendarBuckets.map(([day, meetings]) => (
-            <div key={day} className="panel" style={{ marginBottom: 12 }}>
-              <h3 style={{ marginTop: 0 }}>{day}</h3>
-              <ul>
-                {meetings.map((m) => (
-                  <li key={m.id}>
-                    <button type="button" className="btn" style={{ textAlign: "left" }} onClick={() => setSelectedId(m.id)}>
-                      {formatSpDateTime(m.starts_at)} — {m.client_name} ({MEETING_STATUS_LABELS[m.status as MeetingStatus] ?? m.status})
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-          {calendarBuckets.length === 0 && !loading ? <p className="muted">Nenhum agendamento no período.</p> : null}
-        </div>
+        <>
+          {items.length === 0 && !loading ? <p className="muted">Nenhum agendamento neste período.</p> : null}
+          <MeetingsCalendar items={items} rangeKind={rangeKind} anchorYmd={anchorYmd} onSelect={setSelectedId} />
+        </>
       )}
 
       {selectedId && detail ? (

@@ -1,3 +1,4 @@
+import { calendarRangeToUtcIso, formatYmdInSp, type CalendarRangeKind } from "@/lib/calendar-range";
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { periodToRange, type DashboardPeriod } from "@/lib/datetime";
 import { createMeeting, findMeetingConflicts, listMeetings } from "@/lib/meetings";
@@ -9,8 +10,20 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const scope = url.searchParams.get("scope") === "mine" ? "mine" : "all";
-  const period = (url.searchParams.get("period") ?? "all") as DashboardPeriod;
-  const range = periodToRange(period);
+  const rangeKind = url.searchParams.get("range") as CalendarRangeKind | null;
+  const anchor = url.searchParams.get("date") ?? formatYmdInSp();
+  let from: string | null = null;
+  let to: string | null = null;
+  if (rangeKind === "day" || rangeKind === "week" || rangeKind === "month") {
+    const r = calendarRangeToUtcIso(rangeKind, anchor);
+    from = r.from;
+    to = r.to;
+  } else {
+    const period = (url.searchParams.get("period") ?? "all") as DashboardPeriod;
+    const range = periodToRange(period);
+    from = range.from;
+    to = range.to;
+  }
 
   const items = await listMeetings({
     scope,
@@ -21,8 +34,8 @@ export async function GET(request: Request) {
     participant_user_id: url.searchParams.get("participant_user_id")
       ? Number(url.searchParams.get("participant_user_id"))
       : undefined,
-    from: range.from,
-    to: range.to
+    from,
+    to
   });
 
   return Response.json({ items });

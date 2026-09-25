@@ -542,6 +542,242 @@ table.data-table th {
   font-weight: 600;
 }
 
+.agendamentos-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.agendamentos-toolbar-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.meetings-cal-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--bg-elevated);
+}
+
+.meetings-cal-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.meetings-cal-nav-title {
+  flex: 1;
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  min-width: 12rem;
+}
+
+.meetings-cal-range-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.meetings-cal-scroll {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: #111;
+}
+
+.meetings-cal-time-grid {
+  display: grid;
+  grid-template-columns: 3.25rem repeat(var(--cal-cols, 7), minmax(7rem, 1fr));
+  min-width: 640px;
+}
+
+.meetings-cal-corner {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #111;
+  border-bottom: 1px solid var(--border);
+}
+
+.meetings-cal-day-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.5rem 0.25rem;
+  border-bottom: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  background: #111;
+}
+
+.meetings-cal-day-head.is-today .meetings-cal-dom {
+  background: #00adee;
+  color: #0a0a0a;
+}
+
+.meetings-cal-dow {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.meetings-cal-dom {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.meetings-cal-hours {
+  border-right: 1px solid var(--border);
+}
+
+.meetings-cal-hour-label {
+  padding: 0 0.35rem;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  text-align: right;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  box-sizing: border-box;
+}
+
+.meetings-cal-day-col {
+  position: relative;
+  border-left: 1px solid var(--border);
+}
+
+.meetings-cal-hour-cell {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  box-sizing: border-box;
+}
+
+.meetings-cal-event {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  padding: 0.25rem 0.4rem;
+  border: none;
+  border-radius: 0.35rem;
+  background: rgba(0, 173, 238, 0.22);
+  border-left: 3px solid #00adee;
+  color: #f5f5f5;
+  font-size: 0.6875rem;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.meetings-cal-event:hover {
+  background: rgba(0, 173, 238, 0.35);
+}
+
+.meetings-cal-event.is-cancelled {
+  opacity: 0.55;
+  border-left-color: #737373;
+  background: rgba(115, 115, 115, 0.2);
+}
+
+.meetings-cal-event-title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.meetings-cal-event-meta {
+  color: var(--muted);
+  font-size: 0.625rem;
+}
+
+.meetings-cal-month {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  min-width: 560px;
+}
+
+.meetings-cal-month-weekday {
+  padding: 0.5rem;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.meetings-cal-month-cell {
+  min-height: 6.5rem;
+  padding: 0.35rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  vertical-align: top;
+}
+
+.meetings-cal-month-cell.is-outside {
+  opacity: 0.45;
+}
+
+.meetings-cal-month-cell.is-today .meetings-cal-month-dom {
+  background: #00adee;
+  color: #0a0a0a;
+}
+
+.meetings-cal-month-dom {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.meetings-cal-month-events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.meetings-cal-month-chip {
+  border: none;
+  border-radius: 0.25rem;
+  padding: 0.15rem 0.3rem;
+  background: rgba(0, 173, 238, 0.2);
+  color: #e5e5e5;
+  font-size: 0.625rem;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meetings-cal-month-more {
+  font-size: 0.625rem;
+  padding-left: 0.25rem;
+}
+
 .future-placeholder {
   max-width: 520px;
 }
