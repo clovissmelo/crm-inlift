@@ -10,8 +10,19 @@ declare global {
   var __crmInliftDbInitPromise: Promise<void> | undefined;
 }
 
+const LOCAL_DEV_DATABASE_URL = "postgres://postgres:postgres@127.0.0.1:5432/crm_inlift";
+
 function getDatabaseUrl() {
-  return process.env.DATABASE_URL || "postgres://postgres:postgres@127.0.0.1:5432/crm_inlift";
+  const url = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+  if (url) return url;
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "Conexão PostgreSQL não configurada. Defina POSTGRES_URL (Supabase/Vercel) ou DATABASE_URL no ambiente de produção."
+    );
+  }
+
+  return LOCAL_DEV_DATABASE_URL;
 }
 
 function getSqlClient() {

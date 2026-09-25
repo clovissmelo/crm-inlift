@@ -17,7 +17,10 @@ Etapas: cadastro de base, importação e organização de leads; **abordagens, r
 cp .env.example .env.local
 ```
 
-2. Ajuste `DATABASE_URL` para o seu PostgreSQL (ex.: banco `crm_inlift`).
+2. Configure a conexão PostgreSQL em `.env.local`:
+   - **`POSTGRES_URL`** — preferencial (mesma variável da integração Supabase + Vercel).
+   - **`DATABASE_URL`** — alternativa para desenvolvimento local (ex.: banco `crm_inlift` no PostgreSQL da máquina).
+   - Se nenhuma estiver definida, o app usa um Postgres local padrão **somente fora de produção**.
 
 3. Instale dependências:
 
@@ -103,4 +106,4 @@ Tokens ficam armazenados criptografados na tabela `google_calendar_connection`. 
 
 ## Produção
 
-Defina `SESSION_SECRET` e `DATABASE_URL` no ambiente. Use HTTPS para cookies seguros (`NODE_ENV=production`) e configure `GOOGLE_REDIRECT_URI` com HTTPS.
+Defina `SESSION_SECRET` e **`POSTGRES_URL`** (ou `DATABASE_URL`) no ambiente. Na Vercel com integração Supabase, `POSTGRES_URL` costuma ser preenchida automaticamente. Use HTTPS para cookies seguros (`NODE_ENV=production`) e configure `GOOGLE_REDIRECT_URI` com HTTPS.
