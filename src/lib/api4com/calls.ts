@@ -235,6 +235,32 @@ export async function listPendingCallsForUser(userId: number) {
   );
 }
 
+export async function dismissPendingCallResult(callId: number, userId: number) {
+  const row = await getCallById(callId);
+  if (!row || row.user_id !== userId) throw new Error("Chamada não encontrada");
+  if (!row.result_pending) return;
+  try {
+    const sessionRoot = row.dial_session_root_id ?? row.id;
+    await run(
+      `
+        UPDATE api4com_calls SET result_pending = false, updated_at = @now
+        WHERE user_id = @userId
+          AND COALESCE(dial_session_root_id, id) = @sessionRoot
+          AND approach_id IS NULL
+      `,
+      { userId, sessionRoot, now: nowIso() }
+    );
+  } catch {
+    await run(
+      `
+        UPDATE api4com_calls SET result_pending = false, updated_at = @now
+        WHERE id = @id AND user_id = @userId
+      `,
+      { id: callId, userId, now: nowIso() }
+    );
+  }
+}
+
 export async function deferCallResult(callId: number, userId: number) {
   const row = await getCallById(callId);
   if (!row || row.user_id !== userId) throw new Error("Chamada não encontrada");
@@ -255,18 +281,32 @@ export async function linkCallToApproach(callId: number, userId: number, approac
   const row = await getCallById(callId);
   if (!row || row.user_id !== userId) throw new Error("Chamada não encontrada");
   const sessionRoot = row.dial_session_root_id ?? row.id;
-  await run(
-    `
-      UPDATE api4com_calls SET
-        approach_id = @approachId,
-        result_pending = false,
-        updated_at = @now
-      WHERE user_id = @userId
-        AND COALESCE(dial_session_root_id, id) = @sessionRoot
-        AND approach_id IS NULL
-    `,
-    { userId, sessionRoot, approachId, now: nowIso() }
-  );
+  const now = nowIso();
+  try {
+    await run(
+      `
+        UPDATE api4com_calls SET
+          approach_id = @approachId,
+          result_pending = false,
+          updated_at = @now
+        WHERE user_id = @userId
+          AND COALESCE(dial_session_root_id, id) = @sessionRoot
+          AND approach_id IS NULL
+      `,
+      { userId, sessionRoot, approachId, now }
+    );
+  } catch {
+    await run(
+      `
+        UPDATE api4com_calls SET
+          approach_id = @approachId,
+          result_pending = false,
+          updated_at = @now
+        WHERE id = @id AND user_id = @userId
+      `,
+      { id: callId, userId, approachId, now }
+    );
+  }
 }
 
 export async function ensureDialSessionRoot(callId: number) {

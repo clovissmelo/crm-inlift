@@ -24,8 +24,8 @@ export async function POST(request: Request) {
   try {
     const result = await run(
       `
-        INSERT INTO approach_result_types (slug, name, status, suggest_follow_up, lead_qualification, collect_notes, created_at, updated_at)
-        VALUES (@slug, @name, @status, @suggestFollowUp, @leadQualification, @collectNotes, @now, @now)
+        INSERT INTO approach_result_types (slug, name, status, suggest_follow_up, lead_qualification, collect_notes, require_schedule_return, created_at, updated_at)
+        VALUES (@slug, @name, @status, @suggestFollowUp, @leadQualification, @collectNotes, @requireScheduleReturn, @now, @now)
       `,
       {
         slug: slug.trim(),
@@ -34,6 +34,7 @@ export async function POST(request: Request) {
         suggestFollowUp: parsed.data.suggest_follow_up ?? false,
         leadQualification: parsed.data.lead_qualification ?? null,
         collectNotes: parsed.data.collect_notes ?? true,
+        requireScheduleReturn: parsed.data.require_schedule_return ?? false,
         now: nowIso()
       }
     );

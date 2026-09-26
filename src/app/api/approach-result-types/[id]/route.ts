@@ -22,6 +22,7 @@ export async function PATCH(request: Request, { params }: Params) {
         suggest_follow_up = COALESCE(@suggestFollowUp, suggest_follow_up),
         lead_qualification = CASE WHEN @leadQualificationSet THEN @leadQualification ELSE lead_qualification END,
         collect_notes = COALESCE(@collectNotes, collect_notes),
+        require_schedule_return = COALESCE(@requireScheduleReturn, require_schedule_return),
         updated_at = @now
       WHERE id = @id
     `,
@@ -33,6 +34,7 @@ export async function PATCH(request: Request, { params }: Params) {
       leadQualificationSet: parsed.data.lead_qualification !== undefined,
       leadQualification: parsed.data.lead_qualification ?? null,
       collectNotes: parsed.data.collect_notes ?? null,
+      requireScheduleReturn: parsed.data.require_schedule_return ?? null,
       now: nowIso()
     }
   );

@@ -7,6 +7,7 @@ import { formatSpDateTime } from "@/lib/datetime";
 import type { Product } from "@/lib/types";
 import { formatPhoneDisplay } from "@/lib/format";
 import { inferApproachResultSlugFromCall } from "@/lib/api4com/infer-approach-result";
+import { confirmProceedIfClientHasAgenda } from "@/lib/client-agenda-warning";
 
 type CallDetail = {
   id: number;
@@ -33,6 +34,7 @@ type ResultType = {
   suggest_follow_up: boolean;
   lead_qualification: LeadQualification | null;
   collect_notes: boolean;
+  require_schedule_return: boolean;
 };
 
 type DialOption = {
@@ -80,8 +82,8 @@ export function Api4comCallResultModal({
   const [resultTypes, setResultTypes] = useState<ResultType[]>([]);
   const [resultTypeId, setResultTypeId] = useState("");
   const [productId, setProductId] = useState("");
-  const [phoneConfirm, setPhoneConfirm] = useState("");
   const [notes, setNotes] = useState("");
+  const [contextLoading, setContextLoading] = useState(false);
   const [nextType, setNextType] = useState<"none" | "schedule_return" | "schedule_meeting">("none");
   const [nextDate, setNextDate] = useState("");
   const [nextTime, setNextTime] = useState("");
@@ -104,21 +106,35 @@ export function Api4comCallResultModal({
 
   const showProductField = !singleClientProductId;
 
-  const loadContext = useCallback(async () => {
-    if (!callId) return;
-    setError(null);
-    const [ctxRes, rtRes] = await Promise.all([
-      fetch(`/api/api4com/calls/${callId}/dial-context`),
-      fetch("/api/approach-result-types")
-    ]);
-    const ctxData = (await ctxRes.json()) as DialContext & { error?: string };
-    if (!ctxRes.ok || !ctxData.call) {
-      setError(ctxData.error ?? "Chamada não encontrada");
-      setCtx(null);
-      return;
-    }
+  function parseResultTypes(rt: {
+    items?: Array<
+      ResultType & {
+        status?: string;
+        lead_qualification?: string | null;
+        slug?: string;
+        collect_notes?: boolean;
+        require_schedule_return?: boolean;
+      }
+    >;
+  }) {
+    return (rt.items ?? [])
+      .filter((i) => i.id && (!i.status || i.status === "active"))
+      .map((i) => ({
+        id: i.id,
+        slug: i.slug ?? "",
+        name: i.name,
+        suggest_follow_up: Boolean(i.suggest_follow_up),
+        lead_qualification:
+          i.lead_qualification === "warm" || i.lead_qualification === "hot" || i.lead_qualification === "cold"
+            ? i.lead_qualification
+            : null,
+        collect_notes: i.collect_notes !== false,
+        require_schedule_return: i.require_schedule_return === true
+      }));
+  }
+
+  function applyCallContext(ctxData: DialContext, activeResults: ResultType[]) {
     setCtx(ctxData);
-    setPhoneConfirm(ctxData.call.phone_dialed);
     const autoProduct =
       ctxData.call.product_id != null
         ? String(ctxData.call.product_id)
@@ -126,26 +142,6 @@ export function Api4comCallResultModal({
           ? String(ctxData.client_product_ids[0])
           : "";
     setProductId(autoProduct);
-
-    const rt = (await rtRes.json()) as {
-      items: Array<
-        ResultType & { status?: string; lead_qualification?: string | null; slug?: string; collect_notes?: boolean }
-      >;
-    };
-    const activeResults = rt.items
-      .filter((i) => i.id && (!i.status || i.status === "active"))
-      .map((i) => ({
-        id: i.id,
-        slug: i.slug ?? "",
-        name: i.name,
-        suggest_follow_up: i.suggest_follow_up,
-        lead_qualification:
-          i.lead_qualification === "warm" || i.lead_qualification === "hot" || i.lead_qualification === "cold"
-            ? i.lead_qualification
-            : null,
-        collect_notes: i.collect_notes !== false
-      }));
-    setResultTypes(activeResults);
 
     const inferredSlug = inferApproachResultSlugFromCall({
       hangup_cause_code: ctxData.call.hangup_cause_code ?? null,
@@ -163,22 +159,110 @@ export function Api4comCallResultModal({
     }
 
     setStep(ctxData.remaining.length > 0 ? "next_dial" : "result");
+  }
+
+  const loadContext = useCallback(async () => {
+    if (!callId) return;
+    setError(null);
+    setContextLoading(true);
+    try {
+      const [ctxRes, rtRes, basicRes] = await Promise.all([
+        fetch(`/api/api4com/calls/${callId}/dial-context`),
+        fetch("/api/approach-result-types"),
+        fetch(`/api/api4com/calls/${callId}`)
+      ]);
+
+      const rt = (await rtRes.json()) as { items?: ResultType[]; error?: string };
+      const activeResults = rtRes.ok ? parseResultTypes(rt) : [];
+      if (!rtRes.ok) {
+        setError(rt.error ?? "Não foi possível carregar resultados comerciais.");
+      }
+      setResultTypes(activeResults);
+
+      const ctxJson = (await ctxRes.json()) as DialContext & { error?: string };
+      let ctxData: DialContext | null = ctxRes.ok && ctxJson.call ? ctxJson : null;
+
+      if (!ctxData && basicRes.ok) {
+        const basic = (await basicRes.json()) as { call?: CallDetail };
+        if (basic.call) {
+          ctxData = {
+            call: basic.call,
+            session_root_id: basic.call.id,
+            remaining: [],
+            skipped: [],
+            session_calls: [],
+            client_product_ids: []
+          };
+        }
+      }
+
+      if (!ctxData?.call) {
+        setError(ctxJson.error ?? "Chamada não encontrada");
+        setCtx(null);
+        setStep("result");
+        return;
+      }
+
+      if (ctxData.client_product_ids.length === 0 && ctxData.call.client_id) {
+        const cpRes = await fetch(`/api/clients/${ctxData.call.client_id}`);
+        if (cpRes.ok) {
+          const cp = (await cpRes.json()) as { products?: Array<{ product_id: number }> };
+          ctxData = {
+            ...ctxData,
+            client_product_ids: cp.products?.map((p) => p.product_id) ?? []
+          };
+        }
+      }
+
+      applyCallContext(ctxData, activeResults);
+    } finally {
+      setContextLoading(false);
+    }
   }, [callId]);
 
   useEffect(() => {
     if (!open || !callId) return;
+    setCtx(null);
+    setResultTypes([]);
     setResultTypeId("");
     setResultLockedByIntegration(false);
     setNotes("");
     setNextType("none");
     setNextDate("");
     setNextTime("");
+    setStep("result");
     void loadContext();
   }, [open, callId, loadContext]);
 
   const selectedResult = resultTypes.find((r) => String(r.id) === resultTypeId);
   const showNotesField = selectedResult?.collect_notes !== false;
+  const requireReturn = selectedResult?.require_schedule_return === true;
   const nextDial = ctx?.remaining[0] ?? null;
+
+  useEffect(() => {
+    if (requireReturn) setNextType("schedule_return");
+  }, [requireReturn, resultTypeId]);
+
+  async function dismissPending() {
+    if (!callId) return;
+    if (
+      !window.confirm(
+        "Dispensar este registro pendente? A ligação permanece no histórico, mas deixa de exigir resultado comercial."
+      )
+    ) {
+      return;
+    }
+    setLoading(true);
+    const res = await fetch(`/api/api4com/calls/${callId}/dismiss`, { method: "POST" });
+    setLoading(false);
+    if (!res.ok) {
+      const data = (await res.json()) as { error?: string };
+      setError(data.error ?? "Não foi possível dispensar");
+      return;
+    }
+    onClose();
+    onCompleted();
+  }
 
   async function skipNextDial() {
     if (!callId || !nextDial || !call?.client_id) return;
@@ -254,6 +338,10 @@ export function Api4comCallResultModal({
       setError("Selecione o resultado comercial.");
       return;
     }
+    if (requireReturn && nextType !== "schedule_return") {
+      setError("Este resultado exige agendar retorno com data e hora.");
+      return;
+    }
     if (selectedResult?.suggest_follow_up && nextType === "none") {
       setError("Este resultado sugere agendar retorno, reunião ou outra próxima ação.");
       return;
@@ -261,10 +349,7 @@ export function Api4comCallResultModal({
     setLoading(true);
     setError(null);
 
-    let finalNotes = buildSessionNotes();
-    if (phoneConfirm.trim() && phoneConfirm.trim() !== call.phone_dialed) {
-      finalNotes = [`Número confirmado: ${phoneConfirm.trim()}`, finalNotes].filter(Boolean).join("\n");
-    }
+    const finalNotes = buildSessionNotes();
 
     const resolvedProductId = singleClientProductId ?? (productId ? Number(productId) : null);
 
@@ -272,6 +357,11 @@ export function Api4comCallResultModal({
     if (nextType === "schedule_return" || nextType === "schedule_meeting") {
       if (!nextDate || !nextTime) {
         setError("Informe data e hora.");
+        setLoading(false);
+        return;
+      }
+      const proceed = await confirmProceedIfClientHasAgenda(call.client_id);
+      if (!proceed) {
         setLoading(false);
         return;
       }
@@ -349,6 +439,7 @@ export function Api4comCallResultModal({
         </div>
       ) : null}
       {error ? <div className="alert alert-error">{error}</div> : null}
+      {contextLoading ? <p className="muted">Carregando dados da ligação…</p> : null}
 
       {step === "next_dial" && nextDial ? (
         <div>
@@ -380,12 +471,14 @@ export function Api4comCallResultModal({
         </div>
       ) : null}
 
-      {step === "result" ? (
+      {step === "result" && !contextLoading ? (
         <form onSubmit={submit}>
-          <div className="field">
-            <label className="label">Telefone (confirmar ou corrigir)</label>
-            <input className="input" value={phoneConfirm} onChange={(e) => setPhoneConfirm(e.target.value)} />
-          </div>
+          {!call?.client_id ? (
+            <div className="alert alert-error" style={{ marginBottom: 12 }}>
+              Esta ligação não está vinculada a um cliente no CRM. Você pode dispensar o registro pendente ou fechar e
+              ligar novamente pela ficha do lead.
+            </div>
+          ) : null}
           <div className="field">
             <label className="label">Resultado comercial *</label>
             <select
@@ -393,7 +486,7 @@ export function Api4comCallResultModal({
               value={resultTypeId}
               onChange={(e) => setResultTypeId(e.target.value)}
               required
-              disabled={resultLockedByIntegration}
+              disabled={resultLockedByIntegration || resultTypes.length === 0}
             >
               <option value="">Selecione…</option>
               {(resultLockedByIntegration && selectedResult
@@ -406,6 +499,12 @@ export function Api4comCallResultModal({
                 </option>
               ))}
             </select>
+            {resultTypes.length === 0 ? (
+              <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
+                Nenhum resultado comercial disponível. Recarregue a página ou peça ao admin para revisar Abordagens →
+                Resultados.
+              </p>
+            ) : null}
             {resultLockedByIntegration ? (
               <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
                 Preenchido automaticamente com base no desligamento da operadora
@@ -443,14 +542,20 @@ export function Api4comCallResultModal({
           ) : null}
           <div className="field">
             <label className="label">Próximo passo</label>
+            {requireReturn ? (
+              <p className="muted" style={{ fontSize: "0.75rem", margin: "0 0 6px" }}>
+                Este resultado exige agendar retorno.
+              </p>
+            ) : null}
             <select
               className="select"
               value={nextType}
               onChange={(e) => setNextType(e.target.value as "none" | "schedule_return" | "schedule_meeting")}
+              disabled={requireReturn}
             >
-              <option value="none">Nenhum</option>
+              {!requireReturn ? <option value="none">Nenhum</option> : null}
               <option value="schedule_return">Agendar retorno</option>
-              <option value="schedule_meeting">Agendar reunião</option>
+              {!requireReturn ? <option value="schedule_meeting">Agendar reunião</option> : null}
             </select>
           </div>
           {nextType === "schedule_return" || nextType === "schedule_meeting" ? (
@@ -468,7 +573,16 @@ export function Api4comCallResultModal({
             <button type="button" className="btn" onClick={onClose}>
               Fechar
             </button>
-            <button className="btn btn-primary" type="submit" disabled={loading || !call?.client_id}>
+            {!call?.client_id ? (
+              <button type="button" className="btn" disabled={loading} onClick={() => void dismissPending()}>
+                Dispensar registro
+              </button>
+            ) : null}
+            <button
+              className="btn btn-primary"
+              type="submit"
+              disabled={loading || !call?.client_id || resultTypes.length === 0}
+            >
               {loading ? "Salvando…" : "Salvar resultado"}
             </button>
           </div>

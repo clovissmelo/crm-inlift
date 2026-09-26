@@ -14,6 +14,7 @@ type ResultRow = {
   suggest_follow_up: boolean;
   lead_qualification: LeadQualification | null;
   collect_notes: boolean;
+  require_schedule_return: boolean;
 };
 type ScriptRow = {
   id: number;
@@ -39,6 +40,7 @@ type ResultForm = {
   suggest_follow_up: boolean;
   lead_qualification: LeadQualification | "";
   collect_notes: boolean;
+  require_schedule_return: boolean;
 };
 
 const emptyScriptForm = (): ScriptForm => ({
@@ -67,7 +69,8 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
     status: "active",
     suggest_follow_up: false,
     lead_qualification: "",
-    collect_notes: true
+    collect_notes: true,
+    require_schedule_return: false
   });
   const [resultSaving, setResultSaving] = useState(false);
 
@@ -112,7 +115,8 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
       status: "active",
       suggest_follow_up: false,
       lead_qualification: "",
-      collect_notes: true
+      collect_notes: true,
+      require_schedule_return: false
     });
     setError(null);
     setResultModal(true);
@@ -126,7 +130,8 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
       status: row.status as "active" | "inactive",
       suggest_follow_up: row.suggest_follow_up,
       lead_qualification: row.lead_qualification ?? "",
-      collect_notes: row.collect_notes !== false
+      collect_notes: row.collect_notes !== false,
+      require_schedule_return: row.require_schedule_return === true
     });
     setError(null);
     setResultModal(true);
@@ -174,7 +179,8 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
           status: resultForm.status,
           suggest_follow_up: resultForm.suggest_follow_up,
           lead_qualification: qualPayload,
-          collect_notes: resultForm.collect_notes
+          collect_notes: resultForm.collect_notes,
+          require_schedule_return: resultForm.require_schedule_return
         }
       : { ...resultForm, lead_qualification: qualPayload };
     const res = await fetch(url, {
@@ -236,6 +242,7 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
               <th>Situação</th>
               <th>Qualificação</th>
               <th>Observações</th>
+              <th>Retorno obrig.</th>
               <th>Próxima ação</th>
               <th style={{ width: canDelete ? 180 : 100 }} />
             </tr>
@@ -249,6 +256,7 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
                   {r.lead_qualification ? LEAD_QUALIFICATION_LABELS[r.lead_qualification] : "—"}
                 </td>
                 <td>{r.collect_notes !== false ? "Sim" : "Não"}</td>
+                <td>{r.require_schedule_return ? "Sim" : "—"}</td>
                 <td>{r.suggest_follow_up ? "Sugere follow-up" : "—"}</td>
                 <td>
                   <CadastroRowActions
@@ -414,6 +422,20 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
               onChange={(e) => setResultForm((f) => ({ ...f, collect_notes: e.target.checked }))}
             />
             Solicitar observações ao registrar
+          </label>
+          <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <input
+              type="checkbox"
+              checked={resultForm.require_schedule_return}
+              onChange={(e) =>
+                setResultForm((f) => ({
+                  ...f,
+                  require_schedule_return: e.target.checked,
+                  suggest_follow_up: e.target.checked ? true : f.suggest_follow_up
+                }))
+              }
+            />
+            Obrigar agendar retorno
           </label>
           <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
             <input type="checkbox" checked={resultForm.suggest_follow_up} onChange={(e) => setResultForm((f) => ({ ...f, suggest_follow_up: e.target.checked }))} />

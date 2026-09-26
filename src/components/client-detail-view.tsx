@@ -482,7 +482,7 @@ export function ClientDetailView({
             clientId={initialClient.id}
             contactId={primaryContact?.id}
             dialOptions={contactDialOptions}
-            size="md"
+            size="sm"
           />
         </div>
       </div>

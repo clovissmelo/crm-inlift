@@ -15,11 +15,19 @@ export async function POST(request: Request) {
   }
 
   const data = parsed.data;
-  const resultType = await get<{ suggest_follow_up: boolean; lead_qualification: string | null }>(
-    "SELECT suggest_follow_up, lead_qualification FROM approach_result_types WHERE id = @id AND status = 'active'",
+  const resultType = await get<{
+    suggest_follow_up: boolean;
+    lead_qualification: string | null;
+    require_schedule_return: boolean;
+  }>(
+    "SELECT suggest_follow_up, lead_qualification, require_schedule_return FROM approach_result_types WHERE id = @id AND status = 'active'",
     { id: data.result_type_id }
   );
   if (!resultType) return Response.json({ error: "Resultado inválido" }, { status: 400 });
+
+  if (resultType.require_schedule_return && data.next_action.type !== "schedule_return") {
+    return Response.json({ error: "Este resultado exige agendar retorno com data e hora." }, { status: 400 });
+  }
 
   if (resultType.suggest_follow_up && data.next_action.type === "none") {
     return Response.json(

@@ -4,8 +4,15 @@ import { useEffect, useState } from "react";
 import { CadastroModal } from "@/components/cadastro-ui";
 import type { Product } from "@/lib/types";
 import type { ClientContact } from "@/components/client-detail-view";
+import { confirmProceedIfClientHasAgenda } from "@/lib/client-agenda-warning";
 
-type ResultType = { id: number; name: string; suggest_follow_up: boolean; collect_notes?: boolean };
+type ResultType = {
+  id: number;
+  name: string;
+  suggest_follow_up: boolean;
+  collect_notes?: boolean;
+  require_schedule_return?: boolean;
+};
 type ClosureReason = { id: number; name: string; kind: "pause" | "close" };
 
 function spInputToIso(date: string, time: string) {
@@ -75,14 +82,30 @@ export function ApproachWorkflowModal({
 
   const selectedResult = resultTypes.find((r) => String(r.id) === resultTypeId);
   const showNotesField = selectedResult?.collect_notes !== false;
+  const requireReturn = selectedResult?.require_schedule_return === true;
+
+  useEffect(() => {
+    if (requireReturn) setNextType("schedule_return");
+  }, [requireReturn, resultTypeId]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
+    if (requireReturn && nextType !== "schedule_return") {
+      setError("Este resultado exige agendar retorno com data e hora.");
+      setLoading(false);
+      return;
+    }
+
     let next_action: Record<string, unknown> = { type: "none" };
     if (nextType === "schedule_return" || nextType === "schedule_meeting") {
+      const proceed = await confirmProceedIfClientHasAgenda(clientId);
+      if (!proceed) {
+        setLoading(false);
+        return;
+      }
       next_action = {
         type: nextType,
         scheduled_at: spInputToIso(nextDate, nextTime),
@@ -181,7 +204,7 @@ export function ApproachWorkflowModal({
         ) : null}
         <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <input type="checkbox" checked={usePast} onChange={(e) => setUsePast(e.target.checked)} />
-          Abordagem ocorreu fora do Funon (data anterior)
+          Data retroativa
         </label>
         {usePast ? (
           <div className="filters-row">
@@ -197,16 +220,27 @@ export function ApproachWorkflowModal({
         ) : null}
 
         <h4>Próxima ação</h4>
-        {selectedResult?.suggest_follow_up ? (
+        {requireReturn ? (
+          <p className="muted">Este resultado exige agendar retorno.</p>
+        ) : selectedResult?.suggest_follow_up ? (
           <p className="muted">Este resultado sugere definir um próximo passo.</p>
         ) : null}
         <div className="field">
-          <select className="select" value={nextType} onChange={(e) => setNextType(e.target.value as typeof nextType)}>
-            <option value="none">Nenhuma</option>
+          <select
+            className="select"
+            value={nextType}
+            onChange={(e) => setNextType(e.target.value as typeof nextType)}
+            disabled={requireReturn}
+          >
+            {!requireReturn ? <option value="none">Nenhuma</option> : null}
             <option value="schedule_return">Agendar retorno</option>
-            <option value="schedule_meeting">Agendar reunião</option>
-            <option value="pause">Pausar</option>
-            <option value="close">Encerrar</option>
+            {!requireReturn ? (
+              <>
+                <option value="schedule_meeting">Agendar reunião</option>
+                <option value="pause">Pausar</option>
+                <option value="close">Encerrar</option>
+              </>
+            ) : null}
           </select>
         </div>
         {nextType === "schedule_return" || nextType === "schedule_meeting" ? (

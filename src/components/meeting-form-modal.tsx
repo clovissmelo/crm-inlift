@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { confirmProceedIfClientHasAgenda } from "@/lib/client-agenda-warning";
 import { CadastroModal } from "@/components/cadastro-ui";
 import { defaultMeetingDateYmd, meetingDefaultTitle, SpDatePicker } from "@/components/sp-date-picker";
 import { formatYmdInSp } from "@/lib/calendar-range";
@@ -69,6 +70,7 @@ export function MeetingFormModal({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const agendaConfirmRef = useRef(false);
   const [resolvedContacts, setResolvedContacts] = useState(contacts);
   const [titleTouched, setTitleTouched] = useState(false);
   const minDateYmd = formatYmdInSp();
@@ -118,6 +120,19 @@ export function MeetingFormModal({
     if (!open || meetingId || titleTouched) return;
     setTitle(meetingDefaultTitle(productId, clientName, products));
   }, [open, meetingId, titleTouched, productId, clientName, products]);
+
+  useEffect(() => {
+    if (!open) {
+      agendaConfirmRef.current = false;
+      return;
+    }
+    if (meetingId || agendaConfirmRef.current) return;
+    agendaConfirmRef.current = true;
+    void (async () => {
+      const proceed = await confirmProceedIfClientHasAgenda(clientId);
+      if (!proceed) onClose();
+    })();
+  }, [open, meetingId, clientId, onClose]);
 
   useEffect(() => {
     if (!open) return;
