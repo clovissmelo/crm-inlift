@@ -17,12 +17,24 @@ export type User = {
   last_access_at: string | null;
 };
 
+export type Company = {
+  id: number;
+  name: string;
+  legal_name: string | null;
+  cnpj: string | null;
+  responsible_user_id: number | null;
+  responsible_name: string | null;
+  status: ProductStatus;
+};
+
 export type Product = {
   id: number;
   name: string;
   description: string | null;
   status: ProductStatus;
   uses_proposal: boolean;
+  company_id: number;
+  company_name: string | null;
   responsible_user_ids: number[];
 };
 

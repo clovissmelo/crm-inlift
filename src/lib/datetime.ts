@@ -64,6 +64,32 @@ export function formatSpDateTime(iso: string) {
   }).format(new Date(iso));
 }
 
+/** Primeiro e último dia do mês de `refYmd` (YYYY-MM-DD em SP) */
+export function monthBoundsYmd(refYmd?: string) {
+  const anchor = refYmd ?? formatYmdInSp(new Date());
+  const [y, m] = anchor.split("-").map(Number);
+  const from = `${y}-${String(m).padStart(2, "0")}-01`;
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const to = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return { from, to };
+}
+
+export function ymdRangeToClosedAtIso(fromYmd: string, toYmd: string) {
+  return {
+    from: spLocalDateTimeToIso(fromYmd, "00:00"),
+    to: spLocalDateTimeToIso(toYmd, "23:59")
+  };
+}
+
+function formatYmdInSp(date: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
 export function formatSpDate(iso: string) {
   return new Intl.DateTimeFormat("pt-BR", {
     timeZone: TZ,

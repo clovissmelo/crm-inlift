@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
 import { formatCnpj } from "@/lib/format";
 import type { ClientListItem, User } from "@/lib/types";
 
@@ -107,55 +108,33 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
       <h1 style={{ marginTop: 0 }}>Organização de Leads</h1>
       <p className="muted">Filtre, selecione clientes e transfira a BDR responsável em lote.</p>
 
-      <div className="filters-row">
-        <div className="field">
-          <label className="label">Cidade</label>
-          <input className="input" value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} />
-        </div>
-        <div className="field">
-          <label className="label">UF</label>
-          <input className="input" maxLength={2} value={filters.uf} onChange={(e) => setFilters((f) => ({ ...f, uf: e.target.value }))} />
-        </div>
-        <div className="field">
-          <label className="label">Segmento</label>
-          <input className="input" value={filters.segment} onChange={(e) => setFilters((f) => ({ ...f, segment: e.target.value }))} />
-        </div>
-        <div className="field">
-          <label className="label">Produto</label>
-          <select className="select" value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}>
-            <option value="">Todos</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">BDR atual</label>
-          <select className="select" value={filters.bdr_user_id} onChange={(e) => setFilters((f) => ({ ...f, bdr_user_id: e.target.value }))}>
-            <option value="">Todas</option>
-            {bdrs.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">Telefone</label>
-          <select
-            className="select"
-            value={filters.phone_availability}
-            onChange={(e) => setFilters((f) => ({ ...f, phone_availability: e.target.value }))}
-          >
-            <option value="">Qualquer</option>
-            <option value="mobile">Celular</option>
-            <option value="landline">Fixo</option>
-            <option value="none">Sem telefone</option>
-          </select>
-        </div>
-      </div>
+      <FilterBar>
+        <FilterInput label="Cidade" value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} placeholder="—" />
+        <FilterInput label="UF" maxLength={2} value={filters.uf} onChange={(e) => setFilters((f) => ({ ...f, uf: e.target.value }))} placeholder="—" />
+        <FilterInput label="Segmento" value={filters.segment} onChange={(e) => setFilters((f) => ({ ...f, segment: e.target.value }))} placeholder="—" />
+        <FilterSelect label="Produto" value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}>
+          <option value="">Todos</option>
+          {products.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="BDR atual" value={filters.bdr_user_id} onChange={(e) => setFilters((f) => ({ ...f, bdr_user_id: e.target.value }))}>
+          <option value="">Todas</option>
+          {bdrs.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="Telefone" value={filters.phone_availability} onChange={(e) => setFilters((f) => ({ ...f, phone_availability: e.target.value }))}>
+          <option value="">Qualquer</option>
+          <option value="mobile">Celular</option>
+          <option value="landline">Fixo</option>
+          <option value="none">Sem telefone</option>
+        </FilterSelect>
+      </FilterBar>
 
       <div className="panel" style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "end" }}>
         <div className="field" style={{ minWidth: 220 }}>

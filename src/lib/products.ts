@@ -8,7 +8,16 @@ export async function listProducts() {
     description: string | null;
     status: "active" | "inactive";
     uses_proposal: boolean;
-  }>("SELECT * FROM products ORDER BY name");
+    company_id: number;
+    company_name: string | null;
+  }>(
+    `
+      SELECT p.*, co.name AS company_name
+      FROM products p
+      LEFT JOIN companies co ON co.id = p.company_id
+      ORDER BY p.name
+    `
+  );
 
   const links = await all<{ product_id: number; user_id: number }>("SELECT product_id, user_id FROM product_responsibles");
   const map = new Map<number, number[]>();
@@ -38,6 +47,7 @@ export async function saveProduct(input: {
   description?: string | null;
   status: "active" | "inactive";
   uses_proposal: boolean;
+  company_id: number;
   responsible_user_ids: number[];
 }) {
   let productId = input.id;
@@ -45,7 +55,7 @@ export async function saveProduct(input: {
     await run(
       `
         UPDATE products SET name = @name, description = @description, status = @status,
-          uses_proposal = @usesProposal, updated_at = @updatedAt
+          uses_proposal = @usesProposal, company_id = @companyId, updated_at = @updatedAt
         WHERE id = @id
       `,
       {
@@ -54,20 +64,22 @@ export async function saveProduct(input: {
         description: input.description ?? null,
         status: input.status,
         usesProposal: input.uses_proposal,
+        companyId: input.company_id,
         updatedAt: nowIso()
       }
     );
   } else {
     const result = await run(
       `
-        INSERT INTO products (name, description, status, uses_proposal, created_at, updated_at)
-        VALUES (@name, @description, @status, @usesProposal, @createdAt, @updatedAt)
+        INSERT INTO products (name, description, status, uses_proposal, company_id, created_at, updated_at)
+        VALUES (@name, @description, @status, @usesProposal, @companyId, @createdAt, @updatedAt)
       `,
       {
         name: input.name,
         description: input.description ?? null,
         status: input.status,
         usesProposal: input.uses_proposal,
+        companyId: input.company_id,
         createdAt: nowIso(),
         updatedAt: nowIso()
       }

@@ -1,9 +1,5 @@
-import { ConvertedDealsView } from "@/components/converted-deals-view";
-import { loadCatalog } from "@/lib/catalog";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function ConvertidosPage() {
-  const { products, bdrs, users } = await loadCatalog();
-  return <ConvertedDealsView products={products} bdrs={bdrs} users={users} />;
+export default function FunilConvertidosRedirect() {
+  redirect("/negocios-convertidos");
 }

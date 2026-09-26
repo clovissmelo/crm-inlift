@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ClientContactShortcuts } from "@/components/client-contact-shortcuts";
+import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
 import type { Product, User } from "@/lib/types";
 import type { ProspeccaoListItem } from "@/lib/prospeccao-query";
 
@@ -71,53 +72,44 @@ export function ProspeccaoListView({
     <div>
       <h1 style={{ marginTop: 0 }}>Leads para prospecção</h1>
       <p className="muted">Prioridade: retornos atrasados, retornos de hoje, demais leads.</p>
-      <div className="filters-row">
-        <div className="field">
-          <label className="label">Busca</label>
-          <input className="input" value={filters.search} onChange={(e) => updateFilter({ search: e.target.value })} />
-        </div>
-        <div className="field">
-          <label className="label">Status</label>
-          <select className="select" value={filters.queue_status} onChange={(e) => updateFilter({ queue_status: e.target.value })}>
-            <option value="">Todos</option>
-            <option value="atrasado">Atrasado</option>
-            <option value="retorno_hoje">Retorno para hoje</option>
-            <option value="novo">Sem abordagem</option>
-            <option value="em_andamento">Com abordagem</option>
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">Produto</label>
-          <select className="select" value={filters.product_id} onChange={(e) => updateFilter({ product_id: e.target.value })}>
-            <option value="">Todos</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">BDR</label>
-          <select className="select" value={filters.bdr_user_id} onChange={(e) => updateFilter({ bdr_user_id: e.target.value })}>
-            <option value="">Todas</option>
-            {bdrs.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">Telefone</label>
-          <select className="select" value={filters.phone_availability} onChange={(e) => updateFilter({ phone_availability: e.target.value })}>
-            <option value="">Qualquer</option>
-            <option value="mobile">Celular</option>
-            <option value="landline">Fixo</option>
-            <option value="none">Sem telefone</option>
-          </select>
-        </div>
-      </div>
+      <FilterBar>
+        <FilterInput
+          label="Busca"
+          className="filter-chip-grow"
+          value={filters.search}
+          onChange={(e) => updateFilter({ search: e.target.value })}
+          placeholder="Nome, CNPJ…"
+        />
+        <FilterSelect label="Status" value={filters.queue_status} onChange={(e) => updateFilter({ queue_status: e.target.value })}>
+          <option value="">Todos</option>
+          <option value="atrasado">Atrasado</option>
+          <option value="retorno_hoje">Retorno para hoje</option>
+          <option value="novo">Sem abordagem</option>
+          <option value="em_andamento">Com abordagem</option>
+        </FilterSelect>
+        <FilterSelect label="Produto" value={filters.product_id} onChange={(e) => updateFilter({ product_id: e.target.value })}>
+          <option value="">Todos</option>
+          {products.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="BDR" value={filters.bdr_user_id} onChange={(e) => updateFilter({ bdr_user_id: e.target.value })}>
+          <option value="">Todas</option>
+          {bdrs.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="Telefone" value={filters.phone_availability} onChange={(e) => updateFilter({ phone_availability: e.target.value })}>
+          <option value="">Qualquer</option>
+          <option value="mobile">Celular</option>
+          <option value="landline">Fixo</option>
+          <option value="none">Sem telefone</option>
+        </FilterSelect>
+      </FilterBar>
 
       <div className="panel table-wrap">
         {loading ? <p className="muted">Carregando…</p> : null}

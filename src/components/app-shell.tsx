@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 import {
+  Building2,
   Calendar,
   Filter,
   Funnel,
@@ -15,27 +16,45 @@ import {
   Menu,
   PhoneCall,
   Package,
-  RotateCcw,
   Shield,
   Target,
+  Trophy,
   Users,
   X
 } from "lucide-react";
 import { UserMenu } from "@/components/user-menu";
 import { isAdmin } from "@/lib/admin";
+import { pageCrumbSegments } from "@/lib/page-crumb";
 import type { User } from "@/lib/types";
 
-const nav: Array<{ href: Route; label: string; icon: typeof LayoutDashboard }> = [
+type NavItem = { href: Route; label: string; icon: typeof LayoutDashboard };
+
+const navMain: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/funil", label: "Funil", icon: Funnel },
   { href: "/prospeccao", label: "Leads para prospecção", icon: PhoneCall },
-  { href: "/retornos", label: "Retornos", icon: RotateCcw },
   { href: "/agendamentos", label: "Agendamentos", icon: Calendar },
-  { href: "/organizacao-leads", label: "Organização de Leads", icon: Filter },
+  { href: "/negocios-convertidos", label: "Negócios convertidos", icon: Trophy },
   { href: "/clientes", label: "Clientes", icon: List },
-  { href: "/abordagens", label: "Abordagens", icon: Target },
+  { href: "/abordagens", label: "Abordagens", icon: Target }
+];
+
+const navGestao: NavItem[] = [
+  { href: "/organizacao-leads", label: "Organização de Leads", icon: Filter },
+  { href: "/empresas", label: "Empresas", icon: Building2 },
   { href: "/produtos", label: "Produtos", icon: Package }
 ];
+
+function NavLinkItem({ item, pathname }: { item: NavItem; pathname: string }) {
+  const Icon = item.icon;
+  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+  return (
+    <Link href={item.href} className={clsx("nav-link", active && "active")}>
+      <Icon size={18} aria-hidden />
+      <span className="nav-link-label">{item.label}</span>
+    </Link>
+  );
+}
 
 export function AppShell({
   user,
@@ -50,6 +69,7 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const crumbParts = pageCrumbSegments(pathname);
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -83,23 +103,20 @@ export function AppShell({
           </button>
         </div>
         <nav id="app-sidebar-nav" className="nav-list">
-          {nav.map((item) => {
-            const Icon = item.icon;
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            return (
-              <Link key={item.href} href={item.href} className={clsx("nav-link", active && "active")}>
-                <Icon size={18} />
-                {item.label}
-              </Link>
-            );
-          })}
+          {navMain.map((item) => (
+            <NavLinkItem key={item.href} item={item} pathname={pathname} />
+          ))}
+          <p className="nav-section-label">Gestão</p>
+          {navGestao.map((item) => (
+            <NavLinkItem key={item.href} item={item} pathname={pathname} />
+          ))}
           {isAdmin(user) ? (
             <Link
               href="/admin"
               className={clsx("nav-link", (pathname === "/admin" || pathname.startsWith("/admin/")) && "active")}
             >
-              <Shield size={18} />
-              Admin
+              <Shield size={18} aria-hidden />
+              <span className="nav-link-label">Admin</span>
             </Link>
           ) : null}
         </nav>
@@ -122,6 +139,14 @@ export function AppShell({
       </aside>
       <div className="main-column">
         <header className="topbar">
+          <p className="topbar-crumb" aria-label={`Localização: ${crumbParts.join(", ")}`}>
+            {crumbParts.map((part, i) => (
+              <span key={`${part}-${i}`}>
+                {i > 0 ? <span className="topbar-crumb-sep" aria-hidden> • </span> : null}
+                {part}
+              </span>
+            ))}
+          </p>
           <UserMenu user={user} />
         </header>
         <main className="page-content">{children}</main>

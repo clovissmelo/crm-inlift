@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { FilterBar, FilterSelect } from "@/components/filter-bar";
 import { LeadQualificationBadge } from "@/components/lead-qualification-picker";
 import { formatSpDateTime } from "@/lib/datetime";
 import { LEAD_QUALIFICATION_LABELS, LEAD_QUALIFICATION_ORDER, parseLeadQualification, type LeadQualification } from "@/lib/lead-qualification";
@@ -75,51 +76,39 @@ export function RetornosView({ products, bdrs }: { products: Product[]; bdrs: Us
           </button>
         ))}
       </div>
-      <div className="filters-row">
-        <div className="field">
-          <label className="label">BDR</label>
-          <select className="select" value={bdrUserId} onChange={(e) => setBdrUserId(e.target.value)}>
-            <option value="">Todas</option>
-            {bdrs.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">Produto</label>
-          <select className="select" value={productId} onChange={(e) => setProductId(e.target.value)}>
-            <option value="">Todos</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">Qualificação</label>
-          <select className="select" value={leadQualification} onChange={(e) => setLeadQualification(e.target.value as "" | LeadQualification)}>
-            <option value="">Todas</option>
-            {LEAD_QUALIFICATION_ORDER.map((q) => (
-              <option key={q} value={q}>
-                {LEAD_QUALIFICATION_LABELS[q]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">Período</label>
-          <select className="select" value={period} onChange={(e) => setPeriod(e.target.value)}>
-            <option value="today">Hoje</option>
-            <option value="yesterday">Ontem</option>
-            <option value="7d">7 dias</option>
-            <option value="30d">30 dias</option>
-            <option value="all">Tudo</option>
-          </select>
-        </div>
-      </div>
+      <FilterBar>
+        <FilterSelect label="BDR" value={bdrUserId} onChange={(e) => setBdrUserId(e.target.value)}>
+          <option value="">Todas</option>
+          {bdrs.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="Produto" value={productId} onChange={(e) => setProductId(e.target.value)}>
+          <option value="">Todos</option>
+          {products.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="Qualificação" value={leadQualification} onChange={(e) => setLeadQualification(e.target.value as "" | LeadQualification)}>
+          <option value="">Todas</option>
+          {LEAD_QUALIFICATION_ORDER.map((q) => (
+            <option key={q} value={q}>
+              {LEAD_QUALIFICATION_LABELS[q]}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="Período" value={period} onChange={(e) => setPeriod(e.target.value)}>
+          <option value="today">Hoje</option>
+          <option value="yesterday">Ontem</option>
+          <option value="7d">7 dias</option>
+          <option value="30d">30 dias</option>
+          <option value="all">Tudo</option>
+        </FilterSelect>
+      </FilterBar>
 
       {detail ? (
         <div className="panel" style={{ marginBottom: "1rem" }}>

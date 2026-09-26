@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatSpDateTime } from "@/lib/datetime";
+import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
 import type { Product, User } from "@/lib/types";
 
 type Stage = { id: number; name: string; sort_order: number; color: string; kind: string };
@@ -163,84 +164,55 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-        <h1 style={{ marginTop: 0 }}>Funil comercial</h1>
-        <Link className="btn" href="/funil/convertidos">
-          Negócios convertidos
-        </Link>
-      </div>
+      <h1 style={{ marginTop: 0 }}>Funil comercial</h1>
       <p className="muted">Arraste os cartões entre etapas ou use a seleção de etapa em cada cartão. Abordagens não alteram a etapa automaticamente.</p>
-      <div className="filters-row">
-        <div className="field">
-          <label className="label">Produto</label>
-          <select className="select" value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}>
-            <option value="">Todos</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">BDR origem</label>
-          <select className="select" value={filters.origin_bdr_user_id} onChange={(e) => setFilters((f) => ({ ...f, origin_bdr_user_id: e.target.value }))}>
-            <option value="">Todos</option>
-            {bdrs.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">Responsável</label>
-          <select className="select" value={filters.owner_user_id} onChange={(e) => setFilters((f) => ({ ...f, owner_user_id: e.target.value }))}>
-            <option value="">Todos</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">Closer</label>
-          <select className="select" value={filters.closer_user_id} onChange={(e) => setFilters((f) => ({ ...f, closer_user_id: e.target.value }))}>
-            <option value="">Todos</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">Temperatura</label>
-          <select className="select" value={filters.temperature} onChange={(e) => setFilters((f) => ({ ...f, temperature: e.target.value }))}>
-            <option value="">Todas</option>
-            <option value="cold">Frio</option>
-            <option value="warm">Morno</option>
-            <option value="hot">Quente</option>
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">Cidade</label>
-          <input className="input" value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} />
-        </div>
-        <div className="field">
-          <label className="label">UF</label>
-          <input className="input" maxLength={2} value={filters.uf} onChange={(e) => setFilters((f) => ({ ...f, uf: e.target.value }))} />
-        </div>
-        <div className="field">
-          <label className="label">Período (criação)</label>
-          <select className="select" value={filters.period} onChange={(e) => setFilters((f) => ({ ...f, period: e.target.value }))}>
-            <option value="all">Tudo</option>
-            <option value="30d">30 dias</option>
-            <option value="7d">7 dias</option>
-          </select>
-        </div>
-      </div>
+      <FilterBar>
+        <FilterSelect label="Produto" value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}>
+          <option value="">Todos</option>
+          {products.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="BDR origem" value={filters.origin_bdr_user_id} onChange={(e) => setFilters((f) => ({ ...f, origin_bdr_user_id: e.target.value }))}>
+          <option value="">Todos</option>
+          {bdrs.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="Responsável" value={filters.owner_user_id} onChange={(e) => setFilters((f) => ({ ...f, owner_user_id: e.target.value }))}>
+          <option value="">Todos</option>
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="Closer" value={filters.closer_user_id} onChange={(e) => setFilters((f) => ({ ...f, closer_user_id: e.target.value }))}>
+          <option value="">Todos</option>
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="Temperatura" value={filters.temperature} onChange={(e) => setFilters((f) => ({ ...f, temperature: e.target.value }))}>
+          <option value="">Todas</option>
+          <option value="cold">Frio</option>
+          <option value="warm">Morno</option>
+          <option value="hot">Quente</option>
+        </FilterSelect>
+        <FilterInput label="Cidade" value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} placeholder="—" />
+        <FilterInput label="UF" maxLength={2} value={filters.uf} onChange={(e) => setFilters((f) => ({ ...f, uf: e.target.value }))} placeholder="—" />
+        <FilterSelect label="Período" value={filters.period} onChange={(e) => setFilters((f) => ({ ...f, period: e.target.value }))}>
+          <option value="all">Tudo</option>
+          <option value="30d">30 dias</option>
+          <option value="7d">7 dias</option>
+        </FilterSelect>
+      </FilterBar>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
       {loading ? <p className="muted">Carregando…</p> : null}

@@ -27,11 +27,24 @@ export const profileUpdateSchema = z.object({
   new_password: z.string().min(8).optional()
 });
 
+export const companySchema = z.object({
+  name: z.string().trim().min(1, "Nome obrigatório"),
+  legal_name: z.string().trim().optional().nullable(),
+  cnpj: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((v) => (v?.trim() ? normalizeCnpj(v) : null)),
+  responsible_user_id: z.number().int().positive().optional().nullable(),
+  status: z.enum(["active", "inactive"])
+});
+
 export const productSchema = z.object({
   name: z.string().trim().min(1),
   description: z.string().trim().optional().nullable(),
   status: z.enum(["active", "inactive"]),
   uses_proposal: z.boolean(),
+  company_id: z.number().int().positive("Selecione a empresa"),
   responsible_user_ids: z.array(z.number().int().positive())
 });
 

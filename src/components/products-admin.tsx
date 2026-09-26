@@ -2,31 +2,42 @@
 
 import { useEffect, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
-import type { Product, User } from "@/lib/types";
+import type { Company, Product, User } from "@/lib/types";
 
 type ProductForm = {
   name: string;
   description: string;
   status: "active" | "inactive";
   uses_proposal: boolean;
+  company_id: string;
   responsible_user_ids: number[];
 };
 
-const emptyForm = (): ProductForm => ({
+const emptyForm = (defaultCompanyId = ""): ProductForm => ({
   name: "",
   description: "",
   status: "active",
   uses_proposal: false,
+  company_id: defaultCompanyId,
   responsible_user_ids: []
 });
 
-export function ProductsAdmin({ users, canDelete = false }: { users: User[]; canDelete?: boolean }) {
+export function ProductsAdmin({
+  users,
+  companies,
+  canDelete = false
+}: {
+  users: User[];
+  companies: Company[];
+  canDelete?: boolean;
+}) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState<ProductForm>(emptyForm());
+  const defaultCompanyId = companies.find((c) => c.status === "active")?.id ?? companies[0]?.id;
+  const [form, setForm] = useState<ProductForm>(() => emptyForm(defaultCompanyId ? String(defaultCompanyId) : ""));
   const [saving, setSaving] = useState(false);
 
   async function load() {
@@ -43,7 +54,7 @@ export function ProductsAdmin({ users, canDelete = false }: { users: User[]; can
 
   function openCreate() {
     setEditingId(null);
-    setForm(emptyForm());
+    setForm(emptyForm(defaultCompanyId ? String(defaultCompanyId) : ""));
     setError(null);
     setModalOpen(true);
   }
@@ -55,6 +66,7 @@ export function ProductsAdmin({ users, canDelete = false }: { users: User[]; can
       description: product.description ?? "",
       status: product.status,
       uses_proposal: product.uses_proposal,
+      company_id: String(product.company_id),
       responsible_user_ids: [...product.responsible_user_ids]
     });
     setError(null);
@@ -64,7 +76,7 @@ export function ProductsAdmin({ users, canDelete = false }: { users: User[]; can
   function closeModal() {
     setModalOpen(false);
     setEditingId(null);
-    setForm(emptyForm());
+    setForm(emptyForm(defaultCompanyId ? String(defaultCompanyId) : ""));
   }
 
   function toggleResponsible(userId: number) {
@@ -85,7 +97,10 @@ export function ProductsAdmin({ users, canDelete = false }: { users: User[]; can
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form)
+      body: JSON.stringify({
+        ...form,
+        company_id: Number(form.company_id)
+      })
     });
     const data = (await res.json()) as { error?: string };
     setSaving(false);
@@ -124,6 +139,7 @@ export function ProductsAdmin({ users, canDelete = false }: { users: User[]; can
             <thead>
               <tr>
                 <th>Nome</th>
+                <th>Empresa</th>
                 <th>Situação</th>
                 <th>Proposta</th>
                 <th style={{ width: canDelete ? 180 : 100 }} />
@@ -133,6 +149,7 @@ export function ProductsAdmin({ users, canDelete = false }: { users: User[]; can
               {products.map((p) => (
                 <tr key={p.id}>
                   <td>{p.name}</td>
+                  <td>{p.company_name ?? "—"}</td>
                   <td>{p.status === "active" ? "Ativo" : "Inativo"}</td>
                   <td>{p.uses_proposal ? "Sim" : "Não"}</td>
                   <td>
@@ -155,6 +172,22 @@ export function ProductsAdmin({ users, canDelete = false }: { users: User[]; can
           <div className="field">
             <label className="label">Nome</label>
             <input className="input" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
+          </div>
+          <div className="field">
+            <label className="label">Empresa *</label>
+            <select
+              className="select"
+              value={form.company_id}
+              onChange={(e) => setForm((f) => ({ ...f, company_id: e.target.value }))}
+              required
+            >
+              <option value="">Selecione…</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="field">
             <label className="label">Descrição</label>

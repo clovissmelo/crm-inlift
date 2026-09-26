@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
 import { LeadQualificationBadge } from "@/components/lead-qualification-picker";
 import { LEAD_QUALIFICATION_LABELS, LEAD_QUALIFICATION_ORDER } from "@/lib/lead-qualification";
 import { formatCnpj } from "@/lib/format";
@@ -65,74 +66,48 @@ export function ClientListView({ title, initialItems, initialTotal, products, bd
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>{title}</h1>
-      <div className="filters-row">
-        <div className="field">
-          <label className="label">Busca</label>
-          <input className="input" value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} />
-        </div>
-        <div className="field">
-          <label className="label">Cidade</label>
-          <input className="input" value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} />
-        </div>
-        <div className="field">
-          <label className="label">UF</label>
-          <input className="input" maxLength={2} value={filters.uf} onChange={(e) => setFilters((f) => ({ ...f, uf: e.target.value }))} />
-        </div>
-        <div className="field">
-          <label className="label">Segmento</label>
-          <input className="input" value={filters.segment} onChange={(e) => setFilters((f) => ({ ...f, segment: e.target.value }))} />
-        </div>
-        <div className="field">
-          <label className="label">Produto</label>
-          <select className="select" value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}>
-            <option value="">Todos</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">BDR</label>
-          <select className="select" value={filters.bdr_user_id} onChange={(e) => setFilters((f) => ({ ...f, bdr_user_id: e.target.value }))}>
-            <option value="">Todas</option>
-            {bdrs.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">Telefone</label>
-          <select
-            className="select"
-            value={filters.phone_availability}
-            onChange={(e) => setFilters((f) => ({ ...f, phone_availability: e.target.value }))}
-          >
-            <option value="">Qualquer</option>
-            <option value="mobile">Celular</option>
-            <option value="landline">Fixo</option>
-            <option value="none">Sem telefone</option>
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">Qualificação</label>
-          <select
-            className="select"
-            value={filters.lead_qualification}
-            onChange={(e) => setFilters((f) => ({ ...f, lead_qualification: e.target.value }))}
-          >
-            <option value="">Todas</option>
-            {LEAD_QUALIFICATION_ORDER.map((q) => (
-              <option key={q} value={q}>
-                {LEAD_QUALIFICATION_LABELS[q]}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      <FilterBar>
+        <FilterInput
+          label="Busca"
+          className="filter-chip-grow"
+          value={filters.search}
+          onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+          placeholder="Nome, CNPJ…"
+        />
+        <FilterInput label="Cidade" value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} placeholder="—" />
+        <FilterInput label="UF" maxLength={2} value={filters.uf} onChange={(e) => setFilters((f) => ({ ...f, uf: e.target.value }))} placeholder="—" />
+        <FilterInput label="Segmento" value={filters.segment} onChange={(e) => setFilters((f) => ({ ...f, segment: e.target.value }))} placeholder="—" />
+        <FilterSelect label="Produto" value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}>
+          <option value="">Todos</option>
+          {products.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="BDR" value={filters.bdr_user_id} onChange={(e) => setFilters((f) => ({ ...f, bdr_user_id: e.target.value }))}>
+          <option value="">Todas</option>
+          {bdrs.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="Telefone" value={filters.phone_availability} onChange={(e) => setFilters((f) => ({ ...f, phone_availability: e.target.value }))}>
+          <option value="">Qualquer</option>
+          <option value="mobile">Celular</option>
+          <option value="landline">Fixo</option>
+          <option value="none">Sem telefone</option>
+        </FilterSelect>
+        <FilterSelect label="Qualificação" value={filters.lead_qualification} onChange={(e) => setFilters((f) => ({ ...f, lead_qualification: e.target.value }))}>
+          <option value="">Todas</option>
+          {LEAD_QUALIFICATION_ORDER.map((q) => (
+            <option key={q} value={q}>
+              {LEAD_QUALIFICATION_LABELS[q]}
+            </option>
+          ))}
+        </FilterSelect>
+      </FilterBar>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
       {loading ? <p className="muted">Carregando…</p> : null}

@@ -1,5 +1,5 @@
 import { all, get, nowIso, run } from "@/lib/db";
-import { periodToRange, type DashboardPeriod } from "@/lib/datetime";
+import { periodToRange, ymdRangeToClosedAtIso, type DashboardPeriod } from "@/lib/datetime";
 import { getPipelineStage } from "@/lib/pipeline-stages";
 
 export type OpportunityOutcome = "open" | "won" | "lost";
@@ -664,16 +664,41 @@ export async function amendConversion(input: {
 
 export async function listConvertedDeals(filters: {
   period?: DashboardPeriod;
+  closed_from?: string;
+  closed_to?: string;
   product_id?: number;
+  company_id?: number;
   origin_bdr_user_id?: number;
   closer_user_id?: number;
 }) {
-  const range = periodToRange(filters.period ?? "all");
   const where: string[] = ["o.outcome = 'won'"];
   const params: Record<string, string | number> = {};
+
+  if (filters.closed_from && filters.closed_to) {
+    const range = ymdRangeToClosedAtIso(filters.closed_from, filters.closed_to);
+    where.push("s.closed_at >= @from");
+    params.from = range.from;
+    where.push("s.closed_at <= @to");
+    params.to = range.to;
+  } else if (filters.period) {
+    const range = periodToRange(filters.period);
+    if (range.from) {
+      where.push("s.closed_at >= @from");
+      params.from = range.from;
+    }
+    if (range.to) {
+      where.push("s.closed_at <= @to");
+      params.to = range.to;
+    }
+  }
+
   if (filters.product_id) {
     where.push("o.product_id = @productId");
     params.productId = filters.product_id;
+  }
+  if (filters.company_id) {
+    where.push("p.company_id = @companyId");
+    params.companyId = filters.company_id;
   }
   if (filters.origin_bdr_user_id) {
     where.push("o.origin_bdr_user_id = @bdr");
@@ -683,20 +708,13 @@ export async function listConvertedDeals(filters: {
     where.push("s.closer_user_id = @closer");
     params.closer = filters.closer_user_id;
   }
-  if (range.from) {
-    where.push("s.closed_at >= @from");
-    params.from = range.from;
-  }
-  if (range.to) {
-    where.push("s.closed_at <= @to");
-    params.to = range.to;
-  }
 
   return all(
     `
       SELECT o.id AS opportunity_id, o.title,
         COALESCE(c.trade_name, c.legal_name) AS client_name,
         p.name AS product_name,
+        co.name AS company_name,
         ob.name AS origin_bdr_name,
         u.name AS closer_name,
         s.closed_at, s.deal_value::text, s.deal_value_tbd, s.recorded_at
@@ -704,6 +722,7 @@ export async function listConvertedDeals(filters: {
       JOIN opportunity_conversion_snapshots s ON s.opportunity_id = o.id AND s.is_current = true
       JOIN clients c ON c.id = o.client_id
       JOIN products p ON p.id = o.product_id
+      LEFT JOIN companies co ON co.id = p.company_id
       LEFT JOIN users ob ON ob.id = o.origin_bdr_user_id
       JOIN users u ON u.id = s.closer_user_id
       WHERE ${where.join(" AND ")}

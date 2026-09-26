@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { FilterBar, FilterSelect } from "@/components/filter-bar";
 import { MeetingsCalendar } from "@/components/meetings-calendar";
 import { MeetingFormModal } from "@/components/meeting-form-modal";
 import {
@@ -161,52 +162,40 @@ export function AgendamentosView({
         </div>
       </div>
 
-      <div className="filters-row">
-        <div className="field">
-          <label className="label">Produto</label>
-          <select className="select" value={productId} onChange={(e) => setProductId(e.target.value)}>
-            <option value="">Todos</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">Situação</label>
-          <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">Todas</option>
-            {(Object.keys(MEETING_STATUS_LABELS) as MeetingStatus[]).map((s) => (
-              <option key={s} value={s}>
-                {MEETING_STATUS_LABELS[s]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">BDR</label>
-          <select className="select" value={bdrUserId} onChange={(e) => setBdrUserId(e.target.value)}>
-            <option value="">Todos</option>
-            {bdrs.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label className="label">Participante interno</label>
-          <select className="select" value={participantUserId} onChange={(e) => setParticipantUserId(e.target.value)}>
-            <option value="">Qualquer</option>
-            {allUsers.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      <FilterBar>
+        <FilterSelect label="Produto" value={productId} onChange={(e) => setProductId(e.target.value)}>
+          <option value="">Todos</option>
+          {products.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="Situação" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">Todas</option>
+          {(Object.keys(MEETING_STATUS_LABELS) as MeetingStatus[]).map((s) => (
+            <option key={s} value={s}>
+              {MEETING_STATUS_LABELS[s]}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="BDR" value={bdrUserId} onChange={(e) => setBdrUserId(e.target.value)}>
+          <option value="">Todos</option>
+          {bdrs.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="Participante" value={participantUserId} onChange={(e) => setParticipantUserId(e.target.value)}>
+          <option value="">Qualquer</option>
+          {allUsers.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </FilterSelect>
+      </FilterBar>
 
       {loading ? <p className="muted">Carregando…</p> : null}
 
