@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { ApproachWorkflowModal } from "@/components/approach-workflow-modal";
 import { CadastroModal } from "@/components/cadastro-ui";
-import { ClientContactShortcuts } from "@/components/client-contact-shortcuts";
+import { ClientContactShortcuts, type ContactDialOption } from "@/components/client-contact-shortcuts";
 import { MeetingFormModal } from "@/components/meeting-form-modal";
 import { ClientTimeline } from "@/components/client-timeline";
 import { ClientReconsultModal } from "@/components/client-reconsult-modal";
@@ -132,6 +132,16 @@ export function ClientDetailView({
   const clientDisplayName = initialClient.trade_name || initialClient.legal_name || "Cliente";
   const primaryContact = contacts[0];
   const primaryPhone = contacts.map((c) => c.phone).find(Boolean) ?? null;
+  const contactDialOptions = contacts.flatMap((c) => {
+    const opts: ContactDialOption[] = [];
+    if (c.phone?.trim()) {
+      opts.push({ contactId: c.id, contactName: c.name, phone: c.phone, label: "Telefone" });
+    }
+    if (c.whatsapp?.trim() && c.whatsapp !== c.phone) {
+      opts.push({ contactId: c.id, contactName: c.name, phone: c.whatsapp, label: "WhatsApp" });
+    }
+    return opts;
+  });
   const primaryWhatsapp = contacts.map((c) => c.whatsapp || c.phone).find(Boolean) ?? null;
   const primaryEmail = contacts.map((c) => c.email).find(Boolean) ?? null;
 
@@ -421,6 +431,9 @@ export function ClientDetailView({
             whatsapp={primaryWhatsapp}
             email={primaryEmail}
             productId={linkedProducts[0]?.product_id}
+            clientId={initialClient.id}
+            contactId={primaryContact?.id}
+            dialOptions={contactDialOptions}
             size="md"
           />
         </div>

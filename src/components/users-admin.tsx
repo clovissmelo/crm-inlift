@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Api4comBdrFields } from "@/components/api4com-bdr-fields";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
 import { ROLE_LABELS, type User, type UserRole } from "@/lib/types";
 
@@ -13,6 +14,8 @@ type UserForm = {
   password: string;
   status: "active" | "inactive";
   roles: UserRole[];
+  api4com_extension: string;
+  api4com_api_token: string;
 };
 
 const emptyForm = (): UserForm => ({
@@ -21,7 +24,9 @@ const emptyForm = (): UserForm => ({
   phone: "",
   password: "",
   status: "active",
-  roles: ["bdr"]
+  roles: ["bdr"],
+  api4com_extension: "",
+  api4com_api_token: ""
 });
 
 export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
@@ -32,6 +37,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<UserForm>(emptyForm());
   const [saving, setSaving] = useState(false);
+  const [editingHasApiToken, setEditingHasApiToken] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -47,6 +53,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
 
   function openCreate() {
     setEditingId(null);
+    setEditingHasApiToken(false);
     setForm(emptyForm());
     setError(null);
     setModalOpen(true);
@@ -60,8 +67,11 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
       phone: user.phone ?? "",
       password: "",
       status: user.status,
-      roles: [...user.roles]
+      roles: [...user.roles],
+      api4com_extension: user.api4com_extension ?? "",
+      api4com_api_token: ""
     });
+    setEditingHasApiToken(Boolean(user.has_api4com_api_token));
     setError(null);
     setModalOpen(true);
   }
@@ -89,8 +99,12 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
       email: form.email,
       phone: form.phone || null,
       status: form.status,
-      roles: form.roles
+      roles: form.roles,
+      api4com_extension: form.roles.includes("bdr") ? form.api4com_extension.trim() || null : null
     };
+    if (form.roles.includes("bdr") && form.api4com_api_token.trim()) {
+      payload.api4com_api_token = form.api4com_api_token.trim();
+    }
     if (form.password.trim()) payload.password = form.password;
 
     if (!editingId) {
@@ -206,6 +220,16 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
               <option value="inactive">Inativo</option>
             </select>
           </div>
+          {form.roles.includes("bdr") ? (
+            <Api4comBdrFields
+              compact
+              extension={form.api4com_extension}
+              onExtensionChange={(v) => setForm((f) => ({ ...f, api4com_extension: v }))}
+              apiToken={form.api4com_api_token}
+              onApiTokenChange={(v) => setForm((f) => ({ ...f, api4com_api_token: v }))}
+              hasApiToken={editingHasApiToken}
+            />
+          ) : null}
           <div className="field">
             <span className="label">Perfis</span>
             {ALL_ROLES.map((role) => (

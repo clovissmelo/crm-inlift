@@ -23,6 +23,7 @@ type RawRow = {
   primary_whatsapp: string | null;
   primary_email: string | null;
   primary_contact_name: string | null;
+  primary_contact_id: number | null;
   has_verified: boolean;
   product_ids: number[] | null;
   has_approach: boolean;
@@ -138,6 +139,7 @@ export type ProspeccaoListItem = ClientListItem & {
   primary_whatsapp: string | null;
   primary_email: string | null;
   primary_contact_name: string | null;
+  primary_contact_id: number | null;
 };
 
 export async function queryProspeccaoQueue(filters: ClientFilters) {
@@ -193,6 +195,9 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
         (
           SELECT c.name FROM contacts c WHERE c.client_id = clients.id ORDER BY c.id LIMIT 1
         ) AS primary_contact_name,
+        (
+          SELECT c.id FROM contacts c WHERE c.client_id = clients.id ORDER BY c.id LIMIT 1
+        ) AS primary_contact_id,
         bool_or(contacts.verification_status = 'confirmed') AS has_verified,
         array_agg(DISTINCT cp.product_id) FILTER (WHERE cp.product_id IS NOT NULL) AS product_ids,
         EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = clients.id) AS has_approach,
@@ -252,7 +257,8 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
       primary_phone: row.primary_phone,
       primary_whatsapp: row.primary_whatsapp,
       primary_email: row.primary_email,
-      primary_contact_name: row.primary_contact_name
+      primary_contact_name: row.primary_contact_name,
+      primary_contact_id: row.primary_contact_id
     };
   });
 

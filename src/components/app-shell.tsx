@@ -22,6 +22,7 @@ import {
   Users,
   X
 } from "lucide-react";
+import { Api4comCallProvider } from "@/components/api4com-call-provider";
 import { UserMenu } from "@/components/user-menu";
 import { isAdmin } from "@/lib/admin";
 import { pageCrumbSegments } from "@/lib/page-crumb";
@@ -149,7 +150,9 @@ export function AppShell({
           </p>
           <UserMenu user={user} />
         </header>
-        <main className="page-content">{children}</main>
+        <main className="page-content">
+          <Api4comCallProvider user={user}>{children}</Api4comCallProvider>
+        </main>
       </div>
     </div>
   );

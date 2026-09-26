@@ -30,10 +30,56 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       LEFT JOIN users u ON u.id = a.user_id
       LEFT JOIN products p ON p.id = a.product_id
       WHERE a.client_id = @clientId
+        AND NOT EXISTS (SELECT 1 FROM api4com_calls ac WHERE ac.approach_id = a.id)
       ORDER BY a.occurred_at DESC
     `,
     { clientId }
   );
+
+  const apiCalls = await all<{
+    id: number;
+    ended_at: string | null;
+    started_at: string | null;
+    duration_seconds: number | null;
+    phone_dialed: string;
+    hangup_cause_label: string | null;
+    user_name: string | null;
+    approach_id: number | null;
+    result_name: string | null;
+    approach_notes: string | null;
+  }>(
+    `
+      SELECT c.id, c.ended_at, c.started_at, c.duration_seconds, c.phone_dialed, c.hangup_cause_label,
+        u.name AS user_name, c.approach_id, rt.name AS result_name, a.notes AS approach_notes
+      FROM api4com_calls c
+      LEFT JOIN users u ON u.id = c.user_id
+      LEFT JOIN approaches a ON a.id = c.approach_id
+      LEFT JOIN approach_result_types rt ON rt.id = a.result_type_id
+      WHERE c.client_id = @clientId AND c.status = 'completed'
+      ORDER BY COALESCE(c.ended_at, c.started_at, c.created_at) DESC
+    `,
+    { clientId }
+  );
+
+  for (const call of apiCalls) {
+    const when = call.ended_at ?? call.started_at ?? new Date(0).toISOString();
+    const techParts = [
+      call.phone_dialed,
+      call.duration_seconds != null ? `${call.duration_seconds}s` : null,
+      call.hangup_cause_label ? `desligamento: ${call.hangup_cause_label}` : null
+    ].filter(Boolean);
+    const bdrParts = call.result_name
+      ? [`Resultado BDR: ${call.result_name}`, call.approach_notes].filter(Boolean)
+      : ["Resultado comercial pendente"];
+    items.push({
+      id: `api4com-${call.id}`,
+      kind: "api4com_call",
+      title: call.approach_id ? "Ligação API4COM (registrada)" : "Ligação API4COM",
+      detail: [...techParts, ...bdrParts].join(" · ") || null,
+      occurred_at: when,
+      user_name: call.user_name
+    });
+  }
 
   for (const a of approaches) {
     const channelLabel = a.channel === "whatsapp" ? "WhatsApp" : a.channel === "email" ? "E-mail" : "Ligação";

@@ -6,25 +6,60 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Informe a senha")
 });
 
+const api4comApiTokenField = z
+  .string()
+  .trim()
+  .optional()
+  .nullable()
+  .transform((v) => {
+    const t = v?.trim() ?? "";
+    return t ? t : null;
+  })
+  .refine((v) => v === null || v.length >= 8, "Token inválido (mínimo 8 caracteres)");
+
+const api4comExtensionField = z
+  .string()
+  .trim()
+  .optional()
+  .nullable()
+  .transform((v) => {
+    const t = v?.trim() ?? "";
+    return t ? t : null;
+  })
+  .refine((v) => v === null || /^[0-9A-Za-z_-]{2,12}$/.test(v), "Ramal inválido (2–12 caracteres alfanuméricos)");
+
 export const userCreateSchema = z.object({
   name: z.string().trim().min(2, "Nome obrigatório"),
   email: z.string().trim().email("E-mail inválido"),
   phone: z.string().trim().optional().nullable(),
   status: z.enum(["active", "inactive"]),
   roles: z.array(z.enum(["bdr", "product_owner", "manager", "admin"])).min(1, "Selecione ao menos um perfil"),
-  password: z.string().min(8, "Senha com no mínimo 8 caracteres")
+  password: z.string().min(8, "Senha com no mínimo 8 caracteres"),
+  api4com_extension: api4comExtensionField,
+  api4com_api_token: api4comApiTokenField
 });
 
 export const userUpdateSchema = userCreateSchema.partial().extend({
-  password: z.string().min(8).optional()
+  password: z.string().min(8).optional(),
+  clear_api4com_api_token: z.boolean().optional()
 });
 
 export const profileUpdateSchema = z.object({
   name: z.string().trim().min(2),
   email: z.string().trim().email(),
   phone: z.string().trim().optional().nullable(),
+  api4com_extension: api4comExtensionField,
+  api4com_api_token: api4comApiTokenField,
+  clear_api4com_api_token: z.boolean().optional(),
   current_password: z.string().optional(),
   new_password: z.string().min(8).optional()
+});
+
+export const api4comStartCallSchema = z.object({
+  client_id: z.number().int().positive().optional().nullable(),
+  contact_id: z.number().int().positive().optional().nullable(),
+  product_id: z.number().int().positive().optional().nullable(),
+  phone: z.string().trim().min(8, "Informe o telefone")
 });
 
 export const companySchema = z.object({

@@ -16,7 +16,8 @@ type Setting = {
 const CATEGORY_LABELS: Record<string, string> = {
   google_calendar: "Google Agenda / Meet",
   google_places: "Google Places (novos leads)",
-  lead_discovery: "Motor de leads"
+  lead_discovery: "Motor de leads",
+  api4com: "API4COM (telefonia)"
 };
 
 export function AdminApiVariables() {

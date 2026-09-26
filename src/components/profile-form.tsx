@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Api4comBdrFields } from "@/components/api4com-bdr-fields";
 import type { User } from "@/lib/types";
 
 export function ProfileForm({ user }: { user: User }) {
@@ -9,6 +10,10 @@ export function ProfileForm({ user }: { user: User }) {
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [phone, setPhone] = useState(user.phone ?? "");
+  const [api4comExtension, setApi4comExtension] = useState(user.api4com_extension ?? "");
+  const [api4comApiToken, setApi4comApiToken] = useState("");
+  const [hasApiToken, setHasApiToken] = useState(Boolean(user.has_api4com_api_token));
+  const isBdr = user.roles.includes("bdr");
   const [changingPassword, setChangingPassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -39,26 +44,59 @@ export function ProfileForm({ user }: { user: User }) {
       return;
     }
 
+    const payload: Record<string, unknown> = {
+      name,
+      email,
+      phone,
+      current_password: changingPassword && newPassword ? currentPassword : undefined,
+      new_password: changingPassword && newPassword ? newPassword : undefined
+    };
+    if (isBdr) {
+      payload.api4com_extension = api4comExtension.trim() || null;
+      if (api4comApiToken.trim()) payload.api4com_api_token = api4comApiToken.trim();
+    }
+
     const res = await fetch("/api/users/me", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        email,
-        phone,
-        current_password: changingPassword && newPassword ? currentPassword : undefined,
-        new_password: changingPassword && newPassword ? newPassword : undefined
-      })
+      body: JSON.stringify(payload)
     });
-    const data = (await res.json()) as { error?: string };
+    const data = (await res.json()) as { error?: string; user?: User };
     setLoading(false);
     if (!res.ok) {
       setError(data.error ?? "Erro ao salvar");
       return;
     }
+    if (api4comApiToken.trim()) {
+      setApi4comApiToken("");
+      setHasApiToken(true);
+    }
+    if (data.user) {
+      setHasApiToken(Boolean(data.user.has_api4com_api_token));
+      setApi4comExtension(data.user.api4com_extension ?? "");
+    }
     setMessage(changingPassword && newPassword ? "Perfil e senha atualizados." : "Perfil atualizado.");
     if (changingPassword) closePasswordSection();
     router.refresh();
+  }
+
+  async function clearApiToken() {
+    setLoading(true);
+    setError(null);
+    const res = await fetch("/api/users/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clear_api4com_api_token: true })
+    });
+    setLoading(false);
+    if (!res.ok) {
+      const data = (await res.json()) as { error?: string };
+      setError(data.error ?? "Erro ao remover token");
+      return;
+    }
+    setHasApiToken(false);
+    setApi4comApiToken("");
+    setMessage("Token API4COM removido do seu perfil.");
   }
 
   return (
@@ -79,6 +117,23 @@ export function ProfileForm({ user }: { user: User }) {
         <label className="label">WhatsApp / telefone</label>
         <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} />
       </div>
+
+      {isBdr ? (
+        <>
+          <Api4comBdrFields
+            extension={api4comExtension}
+            onExtensionChange={setApi4comExtension}
+            apiToken={api4comApiToken}
+            onApiTokenChange={setApi4comApiToken}
+            hasApiToken={hasApiToken}
+          />
+          {hasApiToken ? (
+            <button type="button" className="btn" style={{ marginBottom: "1rem" }} onClick={() => void clearApiToken()} disabled={loading}>
+              Remover token salvo
+            </button>
+          ) : null}
+        </>
+      ) : null}
 
       {!changingPassword ? (
         <button type="button" className="btn" style={{ marginBottom: "1rem" }} onClick={() => setChangingPassword(true)}>

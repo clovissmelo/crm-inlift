@@ -8,6 +8,8 @@ type UserRow = {
   phone: string | null;
   photo_path: string | null;
   status: "active" | "inactive";
+  api4com_extension: string | null;
+  api4com_api_token: string | null;
   created_at: string;
   last_access_at: string | null;
 };
@@ -24,10 +26,17 @@ async function attachRoles(users: UserRow[]): Promise<User[]> {
     list.push(r.role);
     byUser.set(r.user_id, list);
   }
-  return users.map((u) => ({
+  return users.map((u) => sanitizeUserForClient({
     ...u,
     roles: byUser.get(u.id) ?? []
   }));
+}
+
+export function sanitizeUserForClient(user: User & { api4com_api_token?: string | null }): User {
+  const has_api4com_api_token = Boolean(user.api4com_api_token?.trim());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- strip secret before client
+  const { api4com_api_token, ...rest } = user;
+  return { ...rest, has_api4com_api_token };
 }
 
 export async function listUsers(activeOnly = false) {
@@ -43,7 +52,7 @@ export async function getUserById(id: number) {
   const row = await get<UserRow>("SELECT * FROM users WHERE id = @id", { id });
   if (!row) return null;
   const [user] = await attachRoles([row]);
-  return user;
+  return sanitizeUserForClient(user);
 }
 
 export async function setUserRoles(userId: number, roles: UserRole[]) {

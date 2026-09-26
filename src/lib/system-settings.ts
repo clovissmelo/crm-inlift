@@ -9,7 +9,7 @@ export type SystemSettingRow = {
   updated_at: string;
 };
 
-const ADMIN_SETTING_CATEGORIES = ["google_calendar", "google_places", "lead_discovery"] as const;
+const ADMIN_SETTING_CATEGORIES = ["google_calendar", "google_places", "lead_discovery", "api4com"] as const;
 
 export async function listSystemSettingsForAdmin() {
   const cats = ADMIN_SETTING_CATEGORIES.map((c) => `'${c}'`).join(", ");

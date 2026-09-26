@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { FileSpreadsheet, Sparkles, SlidersHorizontal, Users } from "lucide-react";
+import { FileSpreadsheet, PhoneCall, Sparkles, SlidersHorizontal, Users } from "lucide-react";
 import type { Route } from "next";
 
 type HubItem = {
@@ -18,10 +18,16 @@ const ADMIN_ITEMS: HubItem[] = [
     description: "Equipe, perfis de acesso e situação da conta."
   },
   {
+    href: "/admin/integracoes",
+    icon: PhoneCall,
+    title: "Integrações",
+    description: "API4COM (telefonia), webhooks e instruções de configuração."
+  },
+  {
     href: "/admin/variaveis",
     icon: SlidersHorizontal,
     title: "Variáveis para as APIs",
-    description: "Google Agenda, Places, integrações e chaves do projeto."
+    description: "Google Agenda, Places, chaves e tokens no servidor."
   },
   {
     href: "/admin/novos-leads",

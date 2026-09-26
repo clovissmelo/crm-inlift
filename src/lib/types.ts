@@ -13,6 +13,9 @@ export type User = {
   photo_path: string | null;
   status: UserStatus;
   roles: UserRole[];
+  api4com_extension?: string | null;
+  /** Indica token pessoal salvo; o valor nunca é enviado ao navegador. */
+  has_api4com_api_token?: boolean;
   created_at: string;
   last_access_at: string | null;
 };
