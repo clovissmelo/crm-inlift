@@ -114,8 +114,6 @@ export function AgendamentosView({
 
   return (
     <div className="agendamentos-page">
-      <h1 style={{ marginTop: 0 }}>Agendamentos</h1>
-
       <div className="agendamentos-toolbar">
         <div className="agendamentos-toolbar-group">
           <button type="button" className={scope === "all" ? "btn btn-primary" : "btn"} onClick={() => setScope("all")}>

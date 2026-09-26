@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { PageIntro } from "@/components/page-intro";
 import type { LucideIcon } from "lucide-react";
-import { FileSpreadsheet, PhoneCall, Sparkles, SlidersHorizontal, Users } from "lucide-react";
+import { FileSpreadsheet, GitBranch, PhoneCall, Sparkles, SlidersHorizontal, Users } from "lucide-react";
 import type { Route } from "next";
 
 type HubItem = {
@@ -16,6 +17,12 @@ const ADMIN_ITEMS: HubItem[] = [
     icon: Users,
     title: "Usuários",
     description: "Equipe, perfis de acesso e situação da conta."
+  },
+  {
+    href: "/admin/etapas-funil",
+    icon: GitBranch,
+    title: "Etapas do funil comercial",
+    description: "Colunas do kanban, ordem, cores e zonas de convertido e perdido."
   },
   {
     href: "/admin/integracoes",
@@ -47,10 +54,9 @@ export function AdminHub() {
   return (
     <div className="hub-page">
       <header className="hub-page-header">
-        <h1 style={{ margin: 0 }}>Admin</h1>
-        <p className="muted" style={{ margin: "0.5rem 0 0", maxWidth: "36rem" }}>
+        <PageIntro>
           Configurações avançadas, usuários, integrações e ferramentas de crescimento do funil.
-        </p>
+        </PageIntro>
       </header>
       <ul className="hub-card-grid">
         {ADMIN_ITEMS.map((item) => {

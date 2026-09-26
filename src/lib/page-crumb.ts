@@ -1,11 +1,13 @@
 const ADMIN_SEGMENTS: Record<string, string> = {
   usuarios: "usuários",
-  importacao: "importação",
+  importacao: "importação de planilhas",
   "novos-leads": "novos leads",
-  variaveis: "variáveis"
+  variaveis: "variáveis para as APIs",
+  integracoes: "integrações",
+  "etapas-funil": "etapas do funil comercial"
 };
 
-/** Rótulo curto da página atual para o cabeçalho (minúsculas). */
+/** Rótulos do cabeçalho (topbar), minúsculas no código — exibidos em maiúsculas via CSS. */
 export function pageCrumbSegments(pathname: string): string[] {
   const segments = ["inlift"];
 
@@ -14,8 +16,12 @@ export function pageCrumbSegments(pathname: string): string[] {
     return segments;
   }
 
+  if (pathname.startsWith("/funil/convertidos")) {
+    segments.push("funil de prospecção");
+    return segments;
+  }
   if (pathname.startsWith("/funil")) {
-    segments.push("funil");
+    segments.push("funil comercial");
     return segments;
   }
   if (pathname.startsWith("/negocios-convertidos")) {
@@ -24,7 +30,7 @@ export function pageCrumbSegments(pathname: string): string[] {
   }
 
   if (pathname.startsWith("/prospeccao")) {
-    segments.push("leads prospecção");
+    segments.push("leads para prospecção");
     return segments;
   }
   if (pathname.startsWith("/retornos")) {
@@ -37,7 +43,7 @@ export function pageCrumbSegments(pathname: string): string[] {
   }
 
   if (pathname === "/clientes/novo") {
-    segments.push("clientes", "novo");
+    segments.push("clientes", "novo cliente");
     return segments;
   }
   if (pathname.startsWith("/clientes/")) {
@@ -82,7 +88,7 @@ export function pageCrumbSegments(pathname: string): string[] {
   }
 
   if (pathname.startsWith("/perfil")) {
-    segments.push("perfil");
+    segments.push("meu perfil");
     return segments;
   }
 

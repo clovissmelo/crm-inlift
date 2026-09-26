@@ -256,6 +256,10 @@ export const pipelineStageSchema = z.object({
   kind: z.enum(["in_progress", "won", "lost"])
 });
 
+export const pipelineStageDeleteSchema = z.object({
+  reassign_to_stage_id: z.number().int().positive().optional()
+});
+
 export const proposalSentSchema = z.object({
   sent_at: z.string().min(1),
   sent_channel: z.string().trim().min(1)

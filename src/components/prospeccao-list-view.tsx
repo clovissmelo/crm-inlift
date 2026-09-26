@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ClientContactShortcuts } from "@/components/client-contact-shortcuts";
 import { ProspeccaoPriorityBadge } from "@/components/prospeccao-priority-badge";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
+import { PageIntro } from "@/components/page-intro";
 import {
   PROSPECCAO_PRIORIDADE_FILTER_ORDER,
   PROSPECCAO_PRIORIDADE_LABELS
@@ -78,8 +79,7 @@ export function ProspeccaoListView({
 
   return (
     <div>
-      <h1 style={{ marginTop: 0 }}>Leads para prospecção</h1>
-      <p className="muted">Prioridade: reagendar, retorno, acompanhamento, primeiro contato.</p>
+      <PageIntro>Prioridade: reagendar, retorno, acompanhamento, primeiro contato.</PageIntro>
       <FilterBar>
         <FilterInput
           label="Busca"

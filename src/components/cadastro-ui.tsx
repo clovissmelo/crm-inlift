@@ -16,8 +16,8 @@ export function CadastroPageHeader({
   return (
     <div className="cadastro-page-header">
       <div>
-        <h1 style={{ margin: 0 }}>{title}</h1>
-        {description ? <p className="muted" style={{ margin: "0.35rem 0 0" }}>{description}</p> : null}
+        <span className="sr-only">{title}</span>
+        {description ? <p className="page-intro muted" style={{ marginBottom: description ? "0.75rem" : undefined }}>{description}</p> : null}
       </div>
       <button type="button" className="btn btn-primary" onClick={onNew}>
         {newLabel}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
+import { PageIntro } from "@/components/page-intro";
 import { PLACEHOLDER_HELP } from "@/lib/message-templates";
 import type { Product } from "@/lib/types";
 
@@ -180,8 +181,7 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
 
   return (
     <div>
-      <h1 style={{ marginTop: 0 }}>Abordagens</h1>
-      <p className="muted">Scripts de ligação, modelos de WhatsApp e resultados de abordagem.</p>
+      <PageIntro>Scripts de ligação, modelos de WhatsApp e resultados de abordagem.</PageIntro>
       {error && !scriptModal && !resultModal ? <div className="alert alert-error">{error}</div> : null}
 
       <CadastroPageHeader

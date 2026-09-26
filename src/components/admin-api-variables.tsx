@@ -1,5 +1,6 @@
 "use client";
 
+import { PageIntro } from "@/components/page-intro";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { GoogleIntegrationPanel } from "@/components/google-integration-panel";
@@ -80,10 +81,9 @@ export function AdminApiVariables() {
       <p className="muted" style={{ marginTop: 0 }}>
         <Link href="/admin">← Admin</Link>
       </p>
-      <h1 style={{ marginTop: 0 }}>Variáveis para as APIs</h1>
-      <p className="muted">
+      <PageIntro>
         Valores usados pelo CRM e pelo motor de novos leads. Podem ser alterados ao longo do projeto (ex.: e-mail que agenda Meet, chave Places).
-      </p>
+      </PageIntro>
 
       {message ? <div className="alert alert-info">{message}</div> : null}
       {error ? <div className="alert alert-error">{error}</div> : null}

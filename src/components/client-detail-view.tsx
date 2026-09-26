@@ -617,6 +617,7 @@ export function ClientDetailView({
               <label className="label">Qualificação do lead</label>
               <LeadQualificationPicker
                 value={clientDraft.lead_qualification}
+                showCurrentLabel={false}
                 onChange={(lead_qualification) => {
                   setClientDraft((d) => ({ ...d, lead_qualification }));
                   setLeadQualification(lead_qualification);

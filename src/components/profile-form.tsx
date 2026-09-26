@@ -101,7 +101,7 @@ export function ProfileForm({ user }: { user: User }) {
 
   return (
     <form className="panel" onSubmit={onSubmit} style={{ maxWidth: 520 }}>
-      <h1 style={{ marginTop: 0 }}>Meu perfil</h1>
+      <span className="sr-only">Meu perfil</span>
       {message ? <div className="alert alert-info">{message}</div> : null}
       {error ? <div className="alert alert-error">{error}</div> : null}
 
@@ -119,20 +119,15 @@ export function ProfileForm({ user }: { user: User }) {
       </div>
 
       {isBdr ? (
-        <>
-          <Api4comBdrFields
-            extension={api4comExtension}
-            onExtensionChange={setApi4comExtension}
-            apiToken={api4comApiToken}
-            onApiTokenChange={setApi4comApiToken}
-            hasApiToken={hasApiToken}
-          />
-          {hasApiToken ? (
-            <button type="button" className="btn" style={{ marginBottom: "1rem" }} onClick={() => void clearApiToken()} disabled={loading}>
-              Remover token salvo
-            </button>
-          ) : null}
-        </>
+        <Api4comBdrFields
+          extension={api4comExtension}
+          onExtensionChange={setApi4comExtension}
+          apiToken={api4comApiToken}
+          onApiTokenChange={setApi4comApiToken}
+          hasApiToken={hasApiToken}
+          onClearToken={() => void clearApiToken()}
+          clearingToken={loading}
+        />
       ) : null}
 
       {!changingPassword ? (

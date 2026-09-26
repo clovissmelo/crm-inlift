@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { FilterBar, FilterSelect } from "@/components/filter-bar";
+import { PageIntro } from "@/components/page-intro";
 import type { Product, User } from "@/lib/types";
 
 type FunnelStats = {
@@ -33,8 +34,7 @@ export function FunnelView({ products, bdrs }: { products: Product[]; bdrs: User
 
   return (
     <div>
-      <h1 style={{ marginTop: 0 }}>Funil de prospecção</h1>
-      <p className="muted">Contagens com base em abordagens e reuniões registradas (reuniões canceladas não entram como realizadas).</p>
+      <PageIntro>Contagens com base em abordagens e reuniões registradas (reuniões canceladas não entram como realizadas).</PageIntro>
       <FilterBar>
         <FilterSelect label="Período" value={period} onChange={(e) => setPeriod(e.target.value)}>
           <option value="today">Hoje</option>

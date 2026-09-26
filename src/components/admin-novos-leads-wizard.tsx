@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PageIntro } from "@/components/page-intro";
 import { useState } from "react";
 
 export function AdminNovosLeadsWizard() {
@@ -63,10 +64,9 @@ export function AdminNovosLeadsWizard() {
       <p className="muted" style={{ marginTop: 0 }}>
         <Link href="/admin">← Admin</Link>
       </p>
-      <h1 style={{ marginTop: 0 }}>Novos leads</h1>
-      <p className="muted">
+      <PageIntro>
         Busca leads via motor configurado (Google Places). Somente registros novos serão incluídos; clientes já existentes são ignorados.
-      </p>
+      </PageIntro>
 
       <div className="alert" style={{ marginBottom: "1rem", borderColor: "#854d0e", background: "#292011" }}>
         <strong>Atenção:</strong> ao executar esta busca, provedores externos (Google Places etc.) podem cobrar conforme uso da API.

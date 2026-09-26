@@ -68,7 +68,6 @@ export function RetornosView({ products, bdrs }: { products: Product[]; bdrs: Us
 
   return (
     <div>
-      <h1 style={{ marginTop: 0 }}>Retornos</h1>
       <div className="ui-segment" role="tablist" aria-label="Seção de retornos">
         {sections.map((s) => (
           <button

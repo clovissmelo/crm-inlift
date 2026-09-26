@@ -25,3 +25,19 @@ export function apiErrorText(payload: unknown, fallback = "Ocorreu um erro."): s
 
   return fallback;
 }
+
+/** Mensagens da API4COM traduzidas para orientação no CRM. */
+export function humanizeApi4comDialError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("user not registered")) {
+    return (
+      "A API4COM não reconheceu o ramal com o token atual. " +
+      "O token (perfil ou Admin → Variáveis) precisa ser da mesma conta em que o ramal existe (Integrações → Ramal, ex.: 1000). " +
+      "Confira se o ramal está ativo e com usuário/e-mail cadastrados no painel API4COM."
+    );
+  }
+  if (m.includes("invalid extension") || m.includes("extension")) {
+    return `Ramal recusado pela API4COM: ${message}. Confira o número cadastrado no CRM e no painel (Integrações → Ramal).`;
+  }
+  return message;
+}

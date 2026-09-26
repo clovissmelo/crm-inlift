@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ImportColumnKey } from "@/lib/import-spreadsheet";
+import { PageIntro } from "@/components/page-intro";
 import type { Product, User } from "@/lib/types";
 
 const FIELD_OPTIONS: Array<{ value: ImportColumnKey; label: string }> = [
@@ -90,8 +91,7 @@ export function ImportWizard({ products, bdrs }: { products: Product[]; bdrs: Us
 
   return (
     <div>
-      <h1 style={{ marginTop: 0 }}>Importação de planilhas</h1>
-      <p className="muted">Arquivos .xlsx ou .csv. O sistema registra nome do arquivo e data da importação.</p>
+      <PageIntro>Arquivos .xlsx ou .csv. O sistema registra nome do arquivo e data da importação.</PageIntro>
 
       <div className="panel">
         <div className="field">

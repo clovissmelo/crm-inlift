@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatSpDateTime } from "@/lib/datetime";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
+import { PageIntro } from "@/components/page-intro";
 import type { Product, User } from "@/lib/types";
 
 type Stage = { id: number; name: string; sort_order: number; color: string; kind: string };
@@ -164,8 +165,7 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
 
   return (
     <div>
-      <h1 style={{ marginTop: 0 }}>Funil comercial</h1>
-      <p className="muted">Arraste os cartões entre etapas ou use a seleção de etapa em cada cartão. Abordagens não alteram a etapa automaticamente.</p>
+      <PageIntro>Arraste os cartões entre etapas ou use a seleção de etapa em cada cartão. Abordagens não alteram a etapa automaticamente.</PageIntro>
       <FilterBar>
         <FilterSelect label="Produto" value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}>
           <option value="">Todos</option>

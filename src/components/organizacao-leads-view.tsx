@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
+import { PageIntro } from "@/components/page-intro";
 import { formatCnpj } from "@/lib/format";
 import type { ClientListItem, User } from "@/lib/types";
 
@@ -105,8 +106,7 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
 
   return (
     <div>
-      <h1 style={{ marginTop: 0 }}>Organização de Leads</h1>
-      <p className="muted">Filtre, selecione clientes e transfira a BDR responsável em lote.</p>
+      <PageIntro>Filtre, selecione clientes e transfira a BDR responsável em lote.</PageIntro>
 
       <FilterBar>
         <FilterInput label="Cidade" value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} placeholder="—" />

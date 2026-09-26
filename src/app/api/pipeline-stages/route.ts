@@ -1,3 +1,4 @@
+import { requireAdminApi } from "@/lib/admin";
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { listPipelineStages, upsertPipelineStage } from "@/lib/pipeline-stages";
 import { pipelineStageSchema } from "@/lib/validators";
@@ -13,6 +14,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const user = await requireApiUser();
   if (!user) return jsonUnauthorized();
+  const denied = requireAdminApi(user);
+  if (denied) return denied;
   const parsed = pipelineStageSchema.safeParse(await request.json());
   if (!parsed.success) {
     return Response.json({ error: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });

@@ -1,4 +1,4 @@
-import { apiErrorText } from "@/lib/api-error-text";
+import { apiErrorText, humanizeApi4comDialError } from "@/lib/api-error-text";
 import { getApi4comConfig } from "@/lib/api4com/config";
 
 export type Api4comStartCallPayload = {
@@ -36,7 +36,7 @@ export async function api4comStartCall(
 
   const data = (await res.json().catch(() => ({}))) as Api4comStartCallResponse & Record<string, unknown>;
   if (!res.ok) {
-    throw new Error(apiErrorText(data, `API4COM respondeu ${res.status}`));
+    throw new Error(humanizeApi4comDialError(apiErrorText(data, `API4COM respondeu ${res.status}`)));
   }
   if (!data.id) {
     throw new Error(data.message || "API4COM não retornou o ID da chamada.");

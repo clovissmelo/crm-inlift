@@ -38,6 +38,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
   const [form, setForm] = useState<UserForm>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [editingHasApiToken, setEditingHasApiToken] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -54,6 +55,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
   function openCreate() {
     setEditingId(null);
     setEditingHasApiToken(false);
+    setChangingPassword(false);
     setForm(emptyForm());
     setError(null);
     setModalOpen(true);
@@ -72,6 +74,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
       api4com_api_token: ""
     });
     setEditingHasApiToken(Boolean(user.has_api4com_api_token));
+    setChangingPassword(false);
     setError(null);
     setModalOpen(true);
   }
@@ -79,6 +82,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
   function closeModal() {
     setModalOpen(false);
     setEditingId(null);
+    setChangingPassword(false);
     setForm(emptyForm());
   }
 
@@ -202,17 +206,52 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
             <label className="label">WhatsApp</label>
             <input className="input" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
           </div>
-          <div className="field">
-            <label className="label">{editingId ? "Nova senha (opcional)" : "Senha inicial"}</label>
-            <input
-              className="input"
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-              required={!editingId}
-              placeholder={editingId ? "Deixe em branco para manter" : undefined}
-            />
-          </div>
+          {editingId ? (
+            !changingPassword ? (
+              <button
+                type="button"
+                className="btn"
+                style={{ marginBottom: "0.75rem" }}
+                onClick={() => setChangingPassword(true)}
+              >
+                Alterar senha
+              </button>
+            ) : (
+              <div className="field">
+                <label className="label">Nova senha</label>
+                <input
+                  className="input"
+                  type="password"
+                  value={form.password}
+                  onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ marginTop: 8 }}
+                  onClick={() => {
+                    setChangingPassword(false);
+                    setForm((f) => ({ ...f, password: "" }));
+                  }}
+                >
+                  Cancelar alteração de senha
+                </button>
+              </div>
+            )
+          ) : (
+            <div className="field">
+              <label className="label">Senha inicial</label>
+              <input
+                className="input"
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                required
+                autoComplete="new-password"
+              />
+            </div>
+          )}
           <div className="field">
             <label className="label">Situação</label>
             <select className="select" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as "active" | "inactive" }))}>
@@ -222,7 +261,6 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
           </div>
           {form.roles.includes("bdr") ? (
             <Api4comBdrFields
-              compact
               extension={form.api4com_extension}
               onExtensionChange={(v) => setForm((f) => ({ ...f, api4com_extension: v }))}
               apiToken={form.api4com_api_token}

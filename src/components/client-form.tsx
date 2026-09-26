@@ -61,7 +61,7 @@ export function ClientForm({ products, bdrs, clientId }: { products: Product[]; 
 
   return (
     <form className="panel" onSubmit={onSubmit} style={{ maxWidth: 640 }}>
-      <h1 style={{ marginTop: 0 }}>{clientId ? "Editar cliente" : "Novo cliente"}</h1>
+      <span className="sr-only">{clientId ? "Editar cliente" : "Novo cliente"}</span>
       {error ? <div className="alert alert-error">{error}</div> : null}
       <div className="field">
         <label className="label">CNPJ</label>

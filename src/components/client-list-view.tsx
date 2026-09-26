@@ -9,7 +9,6 @@ import { formatCnpj } from "@/lib/format";
 import type { ClientListItem, Product, User } from "@/lib/types";
 
 type Props = {
-  title: string;
   initialItems: ClientListItem[];
   initialTotal: number;
   products: Product[];
@@ -19,7 +18,7 @@ type Props = {
   };
 };
 
-export function ClientListView({ title, initialItems, initialTotal, products, bdrs, defaultFilters }: Props) {
+export function ClientListView({ initialItems, initialTotal, products, bdrs, defaultFilters }: Props) {
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [loading, setLoading] = useState(false);
@@ -65,7 +64,6 @@ export function ClientListView({ title, initialItems, initialTotal, products, bd
 
   return (
     <div>
-      <h1 style={{ marginTop: 0 }}>{title}</h1>
       <FilterBar>
         <FilterInput
           label="Busca"
