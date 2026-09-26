@@ -4,6 +4,7 @@ import { isMobileBr, phoneDigits } from "@/lib/format";
 import type { ClientListItem } from "@/lib/types";
 import { matchesPhoneFilter } from "@/lib/clients-query";
 import type { ClientFilters } from "@/lib/clients-query";
+import { CONTACT_PRIMARY_ORDER_SQL } from "@/lib/contacts";
 import { parseLeadQualification } from "@/lib/lead-qualification";
 
 type RawRow = {
@@ -180,23 +181,24 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
         (
           SELECT c.phone FROM contacts c
           WHERE c.client_id = clients.id AND NULLIF(trim(c.phone), '') IS NOT NULL
-          ORDER BY c.id LIMIT 1
+          ORDER BY ${CONTACT_PRIMARY_ORDER_SQL} LIMIT 1
         ) AS primary_phone,
         (
           SELECT COALESCE(NULLIF(trim(c.whatsapp), ''), NULLIF(trim(c.phone), ''))
           FROM contacts c WHERE c.client_id = clients.id
-          ORDER BY c.id LIMIT 1
+            AND (NULLIF(trim(c.whatsapp), '') IS NOT NULL OR NULLIF(trim(c.phone), '') IS NOT NULL)
+          ORDER BY ${CONTACT_PRIMARY_ORDER_SQL} LIMIT 1
         ) AS primary_whatsapp,
         (
           SELECT c.email FROM contacts c
           WHERE c.client_id = clients.id AND NULLIF(trim(c.email), '') IS NOT NULL
-          ORDER BY c.id LIMIT 1
+          ORDER BY ${CONTACT_PRIMARY_ORDER_SQL} LIMIT 1
         ) AS primary_email,
         (
-          SELECT c.name FROM contacts c WHERE c.client_id = clients.id ORDER BY c.id LIMIT 1
+          SELECT c.name FROM contacts c WHERE c.client_id = clients.id ORDER BY ${CONTACT_PRIMARY_ORDER_SQL} LIMIT 1
         ) AS primary_contact_name,
         (
-          SELECT c.id FROM contacts c WHERE c.client_id = clients.id ORDER BY c.id LIMIT 1
+          SELECT c.id FROM contacts c WHERE c.client_id = clients.id ORDER BY ${CONTACT_PRIMARY_ORDER_SQL} LIMIT 1
         ) AS primary_contact_id,
         bool_or(contacts.verification_status = 'confirmed') AS has_verified,
         array_agg(DISTINCT cp.product_id) FILTER (WHERE cp.product_id IS NOT NULL) AS product_ids,

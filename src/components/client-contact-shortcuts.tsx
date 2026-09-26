@@ -5,6 +5,7 @@ import { Phone, Mail, MessageCircle } from "lucide-react";
 import { WhatsAppTemplateModal } from "@/components/whatsapp-template-modal";
 import { CadastroModal } from "@/components/cadastro-ui";
 import { useApi4comSession } from "@/components/api4com-call-provider";
+import { apiErrorText } from "@/lib/api-error-text";
 import { mailtoLink, telLink, formatPhoneDisplay } from "@/lib/format";
 
 export type ContactDialOption = {
@@ -94,10 +95,15 @@ export function ClientContactShortcuts({
         phone: option.phone
       })
     });
-    const data = (await res.json()) as { error?: string };
+    let data: unknown = null;
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
     setDialing(false);
     if (!res.ok) {
-      setDialError(data.error ?? "Não foi possível iniciar a ligação.");
+      setDialError(apiErrorText(data, "Não foi possível iniciar a ligação."));
       return;
     }
     setPickerOpen(false);

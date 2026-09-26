@@ -8,7 +8,10 @@ export async function GET(_request: Request, { params }: Params) {
   const user = await requireApiUser();
   if (!user) return jsonUnauthorized();
   const { id } = await params;
-  const contacts = await all("SELECT * FROM contacts WHERE client_id = @id ORDER BY name", { id: Number(id) });
+  const contacts = await all(
+    "SELECT * FROM contacts WHERE client_id = @id ORDER BY is_primary_phone DESC, name",
+    { id: Number(id) }
+  );
   return Response.json({ contacts });
 }
 

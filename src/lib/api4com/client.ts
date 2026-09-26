@@ -1,3 +1,4 @@
+import { apiErrorText } from "@/lib/api-error-text";
 import { getApi4comConfig } from "@/lib/api4com/config";
 
 export type Api4comStartCallPayload = {
@@ -33,10 +34,9 @@ export async function api4comStartCall(
     body: JSON.stringify(payload)
   });
 
-  const data = (await res.json().catch(() => ({}))) as Api4comStartCallResponse & { error?: string };
+  const data = (await res.json().catch(() => ({}))) as Api4comStartCallResponse & Record<string, unknown>;
   if (!res.ok) {
-    const msg = data.message || data.error || `API4COM respondeu ${res.status}`;
-    throw new Error(msg);
+    throw new Error(apiErrorText(data, `API4COM respondeu ${res.status}`));
   }
   if (!data.id) {
     throw new Error(data.message || "API4COM não retornou o ID da chamada.");
@@ -74,9 +74,9 @@ export async function api4comRegisterWebhookIntegration(webhookUrl: string) {
     body: JSON.stringify(payload)
   });
 
-  const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
-    throw new Error(data.message || data.error || `Falha ao registrar webhook (${res.status})`);
+    throw new Error(apiErrorText(data, `Falha ao registrar webhook (${res.status})`));
   }
   return data;
 }

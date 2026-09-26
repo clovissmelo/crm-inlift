@@ -6,7 +6,10 @@ export async function getClientDetail(id: number) {
   const client = await get<Record<string, unknown>>("SELECT * FROM clients WHERE id = @id", { id });
   if (!client) return null;
 
-  const contacts = await all("SELECT * FROM contacts WHERE client_id = @id ORDER BY name", { id });
+  const contacts = await all(
+    "SELECT * FROM contacts WHERE client_id = @id ORDER BY is_primary_phone DESC, name",
+    { id }
+  );
   const productRows = await all<{ product_id: number; name: string }>(
     `
       SELECT cp.product_id, p.name

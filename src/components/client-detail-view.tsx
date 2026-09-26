@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Mail, Phone, Plus, RefreshCw } from "lucide-react";
+import { Mail, Phone, Plus, RefreshCw, Star } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { ApproachWorkflowModal } from "@/components/approach-workflow-modal";
@@ -25,7 +25,26 @@ export type ClientContact = {
   email: string | null;
   notes: string | null;
   verification_status: ContactVerification;
+  is_primary_phone?: boolean;
 };
+
+function sortContactsForDisplay(list: ClientContact[]) {
+  return [...list].sort((a, b) => {
+    const pa = a.is_primary_phone ? 1 : 0;
+    const pb = b.is_primary_phone ? 1 : 0;
+    if (pb !== pa) return pb - pa;
+    return a.name.localeCompare(b.name, "pt-BR");
+  });
+}
+
+function pickPrimaryContact(list: ClientContact[]) {
+  const sorted = sortContactsForDisplay(list);
+  return (
+    sorted.find((c) => c.is_primary_phone) ??
+    sorted.find((c) => c.phone?.trim() || c.whatsapp?.trim()) ??
+    sorted[0]
+  );
+}
 
 type Client = {
   id: number;
@@ -130,9 +149,10 @@ export function ClientDetailView({
   });
 
   const clientDisplayName = initialClient.trade_name || initialClient.legal_name || "Cliente";
-  const primaryContact = contacts[0];
-  const primaryPhone = contacts.map((c) => c.phone).find(Boolean) ?? null;
-  const contactDialOptions = contacts.flatMap((c) => {
+  const primaryContact = pickPrimaryContact(contacts);
+  const primaryPhone = primaryContact?.phone ?? contacts.map((c) => c.phone).find(Boolean) ?? null;
+  const sortedContacts = sortContactsForDisplay(contacts);
+  const contactDialOptions = sortedContacts.flatMap((c) => {
     const opts: ContactDialOption[] = [];
     if (c.phone?.trim()) {
       opts.push({ contactId: c.id, contactName: c.name, phone: c.phone, label: "Telefone" });
@@ -142,8 +162,11 @@ export function ClientDetailView({
     }
     return opts;
   });
-  const primaryWhatsapp = contacts.map((c) => c.whatsapp || c.phone).find(Boolean) ?? null;
-  const primaryEmail = contacts.map((c) => c.email).find(Boolean) ?? null;
+  const primaryWhatsapp =
+    (primaryContact?.whatsapp || primaryContact?.phone) ??
+    contacts.map((c) => c.whatsapp || c.phone).find(Boolean) ??
+    null;
+  const primaryEmail = primaryContact?.email ?? contacts.map((c) => c.email).find(Boolean) ?? null;
 
   useEffect(() => {
     if (followUpId) setApproachOpen(true);
@@ -174,6 +197,7 @@ export function ClientDetailView({
     whatsapp: "",
     email: ""
   });
+  const [primarySavingId, setPrimarySavingId] = useState<number | null>(null);
 
   async function addContact(e: React.FormEvent) {
     e.preventDefault();
@@ -203,6 +227,22 @@ export function ClientDetailView({
     ]);
     setNewContact({ name: "", job_title: "", phone: "", whatsapp: "", email: "" });
     setAddingContact(false);
+    router.refresh();
+  }
+
+  async function markPrimaryPhone(contactId: number) {
+    setPrimarySavingId(contactId);
+    setError(null);
+    const res = await fetch(`/api/contacts/${contactId}/set-primary-phone`, { method: "POST" });
+    const data = (await res.json()) as { error?: string };
+    setPrimarySavingId(null);
+    if (!res.ok) {
+      setError(data.error ?? "Não foi possível marcar o telefone principal.");
+      return;
+    }
+    setContacts((list) =>
+      sortContactsForDisplay(list.map((c) => ({ ...c, is_primary_phone: c.id === contactId })))
+    );
     router.refresh();
   }
 
@@ -704,8 +744,14 @@ export function ClientDetailView({
           </p>
         ) : null}
 
-        {contacts.map((contact) => (
-          <ContactReadOnly key={contact.id} contact={contact} onEdit={() => openContactEdit(contact)} />
+        {sortedContacts.map((contact) => (
+          <ContactReadOnly
+            key={contact.id}
+            contact={contact}
+            onEdit={() => openContactEdit(contact)}
+            onSetPrimary={() => void markPrimaryPhone(contact.id)}
+            settingPrimary={primarySavingId === contact.id}
+          />
         ))}
 
         <CadastroModal
@@ -790,11 +836,19 @@ export function ClientDetailView({
   );
 }
 
-function ContactReadOnly({ contact, onEdit }: { contact: ClientContact; onEdit: () => void }) {
-  const parts: string[] = [];
-  if (hasText(contact.phone)) parts.push(contact.phone!);
-  if (hasText(contact.whatsapp) && contact.whatsapp !== contact.phone) parts.push(`WhatsApp: ${contact.whatsapp}`);
-  if (hasText(contact.email)) parts.push(contact.email!);
+function ContactReadOnly({
+  contact,
+  onEdit,
+  onSetPrimary,
+  settingPrimary
+}: {
+  contact: ClientContact;
+  onEdit: () => void;
+  onSetPrimary: () => void;
+  settingPrimary?: boolean;
+}) {
+  const canBePrimary = hasText(contact.phone) || hasText(contact.whatsapp);
+  const isPrimary = Boolean(contact.is_primary_phone);
 
   return (
     <div className="client-contact-readonly">
@@ -802,30 +856,52 @@ function ContactReadOnly({ contact, onEdit }: { contact: ClientContact; onEdit: 
         <div>
           <strong>{contact.name}</strong>
           {hasText(contact.job_title) ? <span className="muted"> · {contact.job_title}</span> : null}
+          {isPrimary ? (
+            <span className="badge" style={{ marginLeft: 8 }} title="Usado em Ligar e prospecção">
+              <Star size={12} aria-hidden style={{ verticalAlign: -2, marginRight: 4 }} />
+              Telefone principal
+            </span>
+          ) : null}
           {contact.verification_status === "confirmed" ? (
             <span className="badge badge-verified" style={{ marginLeft: 8 }}>
               Verificado
             </span>
           ) : null}
         </div>
-        {parts.length > 0 ? (
-          <div className="client-contact-readonly-meta">
-            {hasText(contact.phone) ? (
-              <span>
-                <Phone size={14} aria-hidden /> {contact.phone}
-              </span>
-            ) : null}
-            {hasText(contact.email) ? (
-              <span>
-                <Mail size={14} aria-hidden /> {contact.email}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
+        <div className="client-contact-readonly-meta">
+          {hasText(contact.phone) ? (
+            <span>
+              <Phone size={14} aria-hidden /> {contact.phone}
+            </span>
+          ) : null}
+          {hasText(contact.whatsapp) && contact.whatsapp !== contact.phone ? (
+            <span>
+              WhatsApp: {contact.whatsapp}
+            </span>
+          ) : null}
+          {hasText(contact.email) ? (
+            <span>
+              <Mail size={14} aria-hidden /> {contact.email}
+            </span>
+          ) : null}
+        </div>
       </div>
-      <button type="button" className="btn client-contact-edit-btn" onClick={onEdit}>
-        Editar
-      </button>
+      <div className="client-contact-readonly-actions" style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+        {canBePrimary && !isPrimary ? (
+          <button
+            type="button"
+            className="btn"
+            disabled={settingPrimary}
+            onClick={onSetPrimary}
+            title="Usar este contato em Ligar, WhatsApp rápido e lista de prospecção"
+          >
+            {settingPrimary ? "Salvando…" : "Marcar telefone principal"}
+          </button>
+        ) : null}
+        <button type="button" className="btn client-contact-edit-btn" onClick={onEdit}>
+          Editar
+        </button>
+      </div>
     </div>
   );
 }
