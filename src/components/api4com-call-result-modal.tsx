@@ -6,6 +6,7 @@ import { LEAD_QUALIFICATION_LABELS, type LeadQualification } from "@/lib/lead-qu
 import { formatSpDateTime } from "@/lib/datetime";
 import type { Product } from "@/lib/types";
 import { formatPhoneDisplay } from "@/lib/format";
+import { inferApproachResultSlugFromCall } from "@/lib/api4com/infer-approach-result";
 
 type CallDetail = {
   id: number;
@@ -17,7 +18,9 @@ type CallDetail = {
   started_at: string | null;
   ended_at: string | null;
   duration_seconds: number | null;
+  hangup_cause_code: string | null;
   hangup_cause_label: string | null;
+  answered_at: string | null;
   client_name: string | null;
   contact_name: string | null;
   record_url: string | null;
@@ -25,9 +28,11 @@ type CallDetail = {
 
 type ResultType = {
   id: number;
+  slug: string;
   name: string;
   suggest_follow_up: boolean;
   lead_qualification: LeadQualification | null;
+  collect_notes: boolean;
 };
 
 type DialOption = {
@@ -83,6 +88,7 @@ export function Api4comCallResultModal({
   const [loading, setLoading] = useState(false);
   const [dialLoading, setDialLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resultLockedByIntegration, setResultLockedByIntegration] = useState(false);
 
   const call = ctx?.call ?? null;
 
@@ -122,21 +128,39 @@ export function Api4comCallResultModal({
     setProductId(autoProduct);
 
     const rt = (await rtRes.json()) as {
-      items: Array<ResultType & { status?: string; lead_qualification?: string | null }>;
+      items: Array<
+        ResultType & { status?: string; lead_qualification?: string | null; slug?: string; collect_notes?: boolean }
+      >;
     };
-    setResultTypes(
-      rt.items
-        .filter((i) => i.id && (!i.status || i.status === "active"))
-        .map((i) => ({
-          id: i.id,
-          name: i.name,
-          suggest_follow_up: i.suggest_follow_up,
-          lead_qualification:
-            i.lead_qualification === "warm" || i.lead_qualification === "hot" || i.lead_qualification === "cold"
-              ? i.lead_qualification
-              : null
-        }))
-    );
+    const activeResults = rt.items
+      .filter((i) => i.id && (!i.status || i.status === "active"))
+      .map((i) => ({
+        id: i.id,
+        slug: i.slug ?? "",
+        name: i.name,
+        suggest_follow_up: i.suggest_follow_up,
+        lead_qualification:
+          i.lead_qualification === "warm" || i.lead_qualification === "hot" || i.lead_qualification === "cold"
+            ? i.lead_qualification
+            : null,
+        collect_notes: i.collect_notes !== false
+      }));
+    setResultTypes(activeResults);
+
+    const inferredSlug = inferApproachResultSlugFromCall({
+      hangup_cause_code: ctxData.call.hangup_cause_code ?? null,
+      hangup_cause_label: ctxData.call.hangup_cause_label ?? null,
+      duration_seconds: ctxData.call.duration_seconds,
+      answered_at: ctxData.call.answered_at ?? null
+    });
+    const inferredMatch = inferredSlug ? activeResults.find((r) => r.slug === inferredSlug) : undefined;
+    if (inferredMatch) {
+      setResultTypeId(String(inferredMatch.id));
+      setResultLockedByIntegration(true);
+    } else {
+      setResultTypeId("");
+      setResultLockedByIntegration(false);
+    }
 
     setStep(ctxData.remaining.length > 0 ? "next_dial" : "result");
   }, [callId]);
@@ -144,6 +168,7 @@ export function Api4comCallResultModal({
   useEffect(() => {
     if (!open || !callId) return;
     setResultTypeId("");
+    setResultLockedByIntegration(false);
     setNotes("");
     setNextType("none");
     setNextDate("");
@@ -152,14 +177,8 @@ export function Api4comCallResultModal({
   }, [open, callId, loadContext]);
 
   const selectedResult = resultTypes.find((r) => String(r.id) === resultTypeId);
+  const showNotesField = selectedResult?.collect_notes !== false;
   const nextDial = ctx?.remaining[0] ?? null;
-
-  async function deferLater() {
-    if (!callId) return;
-    await fetch(`/api/api4com/calls/${callId}/defer`, { method: "POST" });
-    onClose();
-    onCompleted();
-  }
 
   async function skipNextDial() {
     if (!callId || !nextDial || !call?.client_id) return;
@@ -224,7 +243,7 @@ export function Api4comCallResultModal({
         )
       );
     }
-    const base = notes.trim();
+    const base = showNotesField ? notes.trim() : "";
     if (lines.length === 0) return base;
     return [base, lines.join("\n")].filter(Boolean).join("\n\n");
   }
@@ -345,8 +364,8 @@ export function Api4comCallResultModal({
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-            <button type="button" className="btn" onClick={() => void deferLater()}>
-              Preencher depois
+            <button type="button" className="btn" disabled={dialLoading} onClick={onClose}>
+              Fechar
             </button>
             <button type="button" className="btn" disabled={dialLoading} onClick={() => void skipNextDial()}>
               Pular este número
@@ -369,15 +388,30 @@ export function Api4comCallResultModal({
           </div>
           <div className="field">
             <label className="label">Resultado comercial *</label>
-            <select className="select" value={resultTypeId} onChange={(e) => setResultTypeId(e.target.value)} required>
+            <select
+              className="select"
+              value={resultTypeId}
+              onChange={(e) => setResultTypeId(e.target.value)}
+              required
+              disabled={resultLockedByIntegration}
+            >
               <option value="">Selecione…</option>
-              {resultTypes.map((r) => (
+              {(resultLockedByIntegration && selectedResult
+                ? [selectedResult]
+                : resultTypes
+              ).map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
                   {r.lead_qualification ? ` · ${LEAD_QUALIFICATION_LABELS[r.lead_qualification]}` : ""}
                 </option>
               ))}
             </select>
+            {resultLockedByIntegration ? (
+              <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
+                Preenchido automaticamente com base no desligamento da operadora
+                {call?.hangup_cause_label ? ` (${call.hangup_cause_label})` : ""}. Não é possível alterar.
+              </p>
+            ) : null}
             {selectedResult?.lead_qualification ? (
               <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
                 Qualificação do lead será definida automaticamente como{" "}
@@ -401,10 +435,12 @@ export function Api4comCallResultModal({
               </select>
             </div>
           ) : null}
-          <div className="field">
-            <label className="label">Observações</label>
-            <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
+          {showNotesField ? (
+            <div className="field">
+              <label className="label">Observações</label>
+              <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </div>
+          ) : null}
           <div className="field">
             <label className="label">Próximo passo</label>
             <select
@@ -429,9 +465,6 @@ export function Api4comCallResultModal({
                 Voltar: outros números
               </button>
             ) : null}
-            <button type="button" className="btn" onClick={() => void deferLater()}>
-              Preencher depois
-            </button>
             <button type="button" className="btn" onClick={onClose}>
               Fechar
             </button>
@@ -439,6 +472,9 @@ export function Api4comCallResultModal({
               {loading ? "Salvando…" : "Salvar resultado"}
             </button>
           </div>
+          <p className="muted" style={{ fontSize: "0.75rem", margin: "10px 0 0", textAlign: "right" }}>
+            Fechar sem salvar mantém o lead na prospecção. Use o aviso no topo da tela para registrar depois.
+          </p>
         </form>
       ) : null}
     </CadastroModal>

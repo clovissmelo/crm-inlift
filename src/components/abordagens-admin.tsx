@@ -13,6 +13,7 @@ type ResultRow = {
   status: string;
   suggest_follow_up: boolean;
   lead_qualification: LeadQualification | null;
+  collect_notes: boolean;
 };
 type ScriptRow = {
   id: number;
@@ -37,6 +38,7 @@ type ResultForm = {
   status: "active" | "inactive";
   suggest_follow_up: boolean;
   lead_qualification: LeadQualification | "";
+  collect_notes: boolean;
 };
 
 const emptyScriptForm = (): ScriptForm => ({
@@ -64,7 +66,8 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
     slug: "",
     status: "active",
     suggest_follow_up: false,
-    lead_qualification: ""
+    lead_qualification: "",
+    collect_notes: true
   });
   const [resultSaving, setResultSaving] = useState(false);
 
@@ -103,7 +106,14 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
 
   function openResultCreate() {
     setResultEditingId(null);
-    setResultForm({ name: "", slug: "", status: "active", suggest_follow_up: false, lead_qualification: "" });
+    setResultForm({
+      name: "",
+      slug: "",
+      status: "active",
+      suggest_follow_up: false,
+      lead_qualification: "",
+      collect_notes: true
+    });
     setError(null);
     setResultModal(true);
   }
@@ -115,7 +125,8 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
       slug: "",
       status: row.status as "active" | "inactive",
       suggest_follow_up: row.suggest_follow_up,
-      lead_qualification: row.lead_qualification ?? ""
+      lead_qualification: row.lead_qualification ?? "",
+      collect_notes: row.collect_notes !== false
     });
     setError(null);
     setResultModal(true);
@@ -162,7 +173,8 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
           name: resultForm.name,
           status: resultForm.status,
           suggest_follow_up: resultForm.suggest_follow_up,
-          lead_qualification: qualPayload
+          lead_qualification: qualPayload,
+          collect_notes: resultForm.collect_notes
         }
       : { ...resultForm, lead_qualification: qualPayload };
     const res = await fetch(url, {
@@ -223,6 +235,7 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
               <th>Nome</th>
               <th>Situação</th>
               <th>Qualificação</th>
+              <th>Observações</th>
               <th>Próxima ação</th>
               <th style={{ width: canDelete ? 180 : 100 }} />
             </tr>
@@ -235,6 +248,7 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
                 <td>
                   {r.lead_qualification ? LEAD_QUALIFICATION_LABELS[r.lead_qualification] : "—"}
                 </td>
+                <td>{r.collect_notes !== false ? "Sim" : "Não"}</td>
                 <td>{r.suggest_follow_up ? "Sugere follow-up" : "—"}</td>
                 <td>
                   <CadastroRowActions
@@ -393,6 +407,14 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
               <option value="hot">Quente — permanece no funil</option>
             </select>
           </div>
+          <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <input
+              type="checkbox"
+              checked={resultForm.collect_notes}
+              onChange={(e) => setResultForm((f) => ({ ...f, collect_notes: e.target.checked }))}
+            />
+            Solicitar observações ao registrar
+          </label>
           <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
             <input type="checkbox" checked={resultForm.suggest_follow_up} onChange={(e) => setResultForm((f) => ({ ...f, suggest_follow_up: e.target.checked }))} />
             Sugere próxima ação / follow-up

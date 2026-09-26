@@ -5,7 +5,7 @@ import { CadastroModal } from "@/components/cadastro-ui";
 import type { Product } from "@/lib/types";
 import type { ClientContact } from "@/components/client-detail-view";
 
-type ResultType = { id: number; name: string; suggest_follow_up: boolean };
+type ResultType = { id: number; name: string; suggest_follow_up: boolean; collect_notes?: boolean };
 type ClosureReason = { id: number; name: string; kind: "pause" | "close" };
 
 function spInputToIso(date: string, time: string) {
@@ -74,6 +74,7 @@ export function ApproachWorkflowModal({
   }, [open, defaultChannel, defaultContactId, defaultProductId]);
 
   const selectedResult = resultTypes.find((r) => String(r.id) === resultTypeId);
+  const showNotesField = selectedResult?.collect_notes !== false;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -172,10 +173,12 @@ export function ApproachWorkflowModal({
             ))}
           </select>
         </div>
-        <div className="field">
-          <label className="label">Observações</label>
-          <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </div>
+        {showNotesField ? (
+          <div className="field">
+            <label className="label">Observações</label>
+            <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </div>
+        ) : null}
         <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <input type="checkbox" checked={usePast} onChange={(e) => setUsePast(e.target.checked)} />
           Abordagem ocorreu fora do Funon (data anterior)

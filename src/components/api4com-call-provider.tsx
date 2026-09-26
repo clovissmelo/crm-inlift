@@ -1,8 +1,13 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Api4comCallResultModal } from "@/components/api4com-call-result-modal";
 import type { Product, User } from "@/lib/types";
+
+function isProspeccaoPath(pathname: string | null) {
+  return pathname?.startsWith("/prospeccao") ?? false;
+}
 
 type PendingCall = {
   id: number;
@@ -24,6 +29,8 @@ export function useApi4comSession() {
 }
 
 export function Api4comCallProvider({ user, children }: { user: User; children: React.ReactNode }) {
+  const pathname = usePathname();
+  const onProspeccaoPage = isProspeccaoPath(pathname);
   const canDial = user.roles.includes("bdr");
   const [products, setProducts] = useState<Product[]>([]);
   const [pending, setPending] = useState<PendingCall[]>([]);
@@ -55,19 +62,26 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
   }, [canDial, refreshPending]);
 
   useEffect(() => {
-    if (!canDial || modalOpen) return;
+    if (!canDial || !onProspeccaoPage || modalOpen) return;
     for (const call of pending) {
-      if (call.result_deferred_at) continue;
       if (autoOpenedRef.current.has(call.id)) continue;
       autoOpenedRef.current.add(call.id);
       setModalCallId(call.id);
       setModalOpen(true);
       break;
     }
-  }, [pending, canDial, modalOpen]);
+  }, [pending, canDial, modalOpen, onProspeccaoPage]);
 
-  const deferredCount = pending.length;
-  const showBanner = canDial && deferredCount > 0 && !modalOpen;
+  useEffect(() => {
+    if (onProspeccaoPage || !modalOpen) return;
+    if (modalCallId != null) autoOpenedRef.current.add(modalCallId);
+    setModalOpen(false);
+    setModalCallId(null);
+  }, [onProspeccaoPage, modalOpen, modalCallId]);
+
+  const pendingCount = pending.length;
+  const showProspeccaoRegisterUi = canDial && onProspeccaoPage;
+  const showBanner = showProspeccaoRegisterUi && pendingCount > 0 && !modalOpen;
 
   function openNextPending() {
     const next = pending[0];
@@ -77,6 +91,7 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
   }
 
   function closeModal() {
+    if (modalCallId != null) autoOpenedRef.current.add(modalCallId);
     setModalOpen(false);
     setModalCallId(null);
     void refreshPending();
@@ -101,9 +116,9 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
           }}
         >
           <span>
-            {deferredCount === 1
-              ? "1 ligação aguardando registro do resultado comercial."
-              : `${deferredCount} ligações aguardando registro do resultado comercial.`}
+            {pendingCount === 1
+              ? "1 ligação sem resultado registrado. O lead continua na prospecção até você salvar."
+              : `${pendingCount} ligações sem resultado registrado. Os leads continuam na prospecção até você salvar.`}
           </span>
           <button type="button" className="btn btn-primary" onClick={openNextPending}>
             Registrar agora
@@ -111,7 +126,7 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
         </div>
       ) : null}
       {children}
-      {canDial ? (
+      {showProspeccaoRegisterUi ? (
         <Api4comCallResultModal
           callId={modalCallId}
           open={modalOpen}

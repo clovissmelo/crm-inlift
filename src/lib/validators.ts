@@ -192,7 +192,8 @@ export const catalogItemSchema = z.object({
   status: z.enum(["active", "inactive"]).optional(),
   suggest_follow_up: z.boolean().optional(),
   kind: z.enum(["pause", "close"]).optional(),
-  lead_qualification: z.enum(["cold", "warm", "hot"]).optional().nullable()
+  lead_qualification: z.enum(["cold", "warm", "hot"]).optional().nullable(),
+  collect_notes: z.boolean().optional()
 });
 
 export const contactSchema = z.object({
