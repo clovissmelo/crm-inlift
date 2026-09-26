@@ -140,9 +140,9 @@ export async function GET(request: Request) {
     params
   );
 
-  const approachRows = await all<{ occurred_at: string }>(
+  const approachRows = await all<{ occurred_at: string; channel: string }>(
     `
-      SELECT a.occurred_at
+      SELECT a.occurred_at, a.channel
       FROM approaches a
       JOIN clients c ON c.id = a.client_id
       WHERE ${approachFilter}
@@ -151,13 +151,82 @@ export async function GET(request: Request) {
   );
 
   const seriesMap = new Map<string, number>();
+  const channelSeries = new Map<string, Map<string, number>>();
   for (const row of approachRows) {
     const key = bucketKeyForApproach(row.occurred_at, period);
     seriesMap.set(key, (seriesMap.get(key) ?? 0) + 1);
+    const ch = row.channel || "call";
+    if (!channelSeries.has(ch)) channelSeries.set(ch, new Map());
+    const bucket = channelSeries.get(ch)!;
+    bucket.set(key, (bucket.get(key) ?? 0) + 1);
   }
   const approaches_series = [...seriesMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([label, count]) => ({ label, count }));
+
+  const timelineLabels = [...new Set([...seriesMap.keys()])].sort((a, b) => a.localeCompare(b));
+  const channelOrder = ["call", "whatsapp", "email"] as const;
+  const approaches_timeline = {
+    labels: timelineLabels,
+    series: channelOrder.map((channel) => ({
+      channel,
+      values: timelineLabels.map((label) => channelSeries.get(channel)?.get(label) ?? 0)
+    }))
+  };
+
+  const clientsReachedRow = await get<{ count: string }>(
+    `
+      SELECT COUNT(DISTINCT a.client_id)::text AS count
+      FROM approaches a
+      JOIN clients c ON c.id = a.client_id
+      JOIN approach_result_types rt ON rt.id = a.result_type_id
+      WHERE ${approachFilter}
+        AND rt.slug IN (
+          'falou_responsavel', 'falou_outra_pessoa', 'demonstrou_interesse',
+          'pediu_retorno', 'reuniao_agendada'
+        )
+    `,
+    params
+  );
+
+  let bdrActivitySql = `
+    SELECT
+      u.name AS bdr_name,
+      (
+        SELECT COUNT(*)::text FROM approaches a
+        JOIN clients c ON c.id = a.client_id
+        WHERE a.user_id = u.id AND ${approachFilter}
+      ) AS approaches,
+      (
+        SELECT COUNT(*)::text FROM meetings m
+        JOIN clients c ON c.id = m.client_id
+        WHERE m.bdr_user_id = u.id AND ${meetingFilter}
+      ) AS meetings,
+      (
+        SELECT COUNT(*)::text FROM clients c
+        WHERE c.bdr_user_id = u.id AND ${clientFilter}
+      ) AS clients
+    FROM users u
+    WHERE (
+      EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role = 'bdr')
+      OR EXISTS (SELECT 1 FROM approaches a2 WHERE a2.user_id = u.id)
+    )
+  `;
+  if (bdrUserId) {
+    bdrActivitySql += " AND u.id = @bdrUserId";
+  }
+  bdrActivitySql += `
+    ORDER BY (
+      SELECT COUNT(*) FROM approaches a
+      JOIN clients c ON c.id = a.client_id
+      WHERE a.user_id = u.id AND ${approachFilter}
+    ) DESC, u.name
+    LIMIT 12
+  `;
+  const bdrActivity = await all<{ bdr_name: string; approaches: string; meetings: string; clients: string }>(
+    bdrActivitySql,
+    params
+  );
 
   const meetingsScheduled = await get<{ count: string }>(
     `SELECT COUNT(*)::text AS count FROM meetings m WHERE ${meetingFilter} AND m.status IN ('scheduled', 'confirmed')`,
@@ -342,6 +411,14 @@ export async function GET(request: Request) {
     pending_returns: Number(pendingReturns?.count ?? 0),
     approaches_by_bdr: approachesByBdr.map((r) => ({ bdr_name: r.user_name, count: Number(r.count) })),
     approaches_series,
+    approaches_timeline,
+    clients_reached: Number(clientsReachedRow?.count ?? 0),
+    bdr_activity: bdrActivity.map((row) => ({
+      bdr_name: row.bdr_name,
+      approaches: Number(row.approaches),
+      meetings: Number(row.meetings),
+      clients: Number(row.clients)
+    })),
     meetings_scheduled: Number(meetingsScheduled?.count ?? 0),
     meetings_confirmed: Number(meetingsConfirmed?.count ?? 0),
     meetings_held: Number(meetingsHeld?.count ?? 0),

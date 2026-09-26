@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, Calendar, Gem, Target } from "lucide-react";
 import { FilterBar, FilterSelect } from "@/components/filter-bar";
 import { LEAD_QUALIFICATION_LABELS, LEAD_QUALIFICATION_ORDER } from "@/lib/lead-qualification";
+import { DashboardAnalytics } from "@/components/dashboard-analytics";
 import type { Product, User } from "@/lib/types";
 import "./dashboard-home.css";
 
@@ -23,7 +24,15 @@ type Stats = {
   clients_with_verified_phone: number;
   clients_without_approach: number;
   unique_clients_attempted: number;
+  clients_reached: number;
   approaches_total: number;
+  approaches_by_channel: Array<{ channel: string; count: number }>;
+  approaches_timeline: {
+    labels: string[];
+    series: Array<{ channel: string; values: number[] }>;
+  };
+  call_results: Array<{ result: string; count: number }>;
+  bdr_activity: Array<{ bdr_name: string; approaches: number; meetings: number; clients: number }>;
   meetings_scheduled: number;
   deals_converted: number;
   returns_overdue: number;
@@ -31,6 +40,7 @@ type Stats = {
   meetings_upcoming: number;
   qualification: { cold: number; warm: number; hot: number };
   focus_items: FocusItem[];
+  period: string;
 };
 
 function periodFootnote(period: string) {
@@ -311,6 +321,20 @@ export function DashboardView({ products, bdrs }: { products: Product[]; bdrs: U
               </p>
             ) : null}
           </section>
+
+          <DashboardAnalytics
+            data={{
+              period,
+              approaches_by_channel: stats.approaches_by_channel ?? [],
+              approaches_timeline: stats.approaches_timeline ?? { labels: [], series: [] },
+              unique_clients_attempted: stats.unique_clients_attempted,
+              clients_reached: stats.clients_reached ?? 0,
+              meetings_scheduled: stats.meetings_scheduled,
+              deals_converted: stats.deals_converted,
+              call_results: stats.call_results ?? [],
+              bdr_activity: stats.bdr_activity ?? []
+            }}
+          />
         </>
       ) : null}
     </div>

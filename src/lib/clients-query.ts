@@ -3,6 +3,8 @@ import { isMobileBr, phoneDigits } from "@/lib/format";
 import { parseLeadQualification, type LeadQualification } from "@/lib/lead-qualification";
 import type { ClientListItem } from "@/lib/types";
 
+import type { ProspeccaoPrioridadeFilter } from "@/lib/prospeccao-priority";
+
 export type ProspeccaoQueueStatus = "" | "atrasado" | "retorno_hoje" | "novo" | "em_andamento";
 
 export type ClientFilters = {
@@ -10,9 +12,11 @@ export type ClientFilters = {
   uf?: string;
   segment?: string;
   product_id?: number;
+  company_id?: number;
   bdr_user_id?: number;
   phone_availability?: "mobile" | "landline" | "none" | "";
   queue_status?: ProspeccaoQueueStatus;
+  prioridade?: ProspeccaoPrioridadeFilter | "";
   without_approach?: boolean;
   lead_qualification?: LeadQualification | "";
   search?: string;

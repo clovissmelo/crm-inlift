@@ -68,6 +68,41 @@ function buildFilters(filters: ClientFilters, todayStart: string, todayEnd: stri
     where.push(`EXISTS (SELECT 1 FROM client_products cp WHERE cp.client_id = clients.id AND cp.product_id = @productId)`);
     params.productId = filters.product_id;
   }
+  if (filters.company_id) {
+    where.push(`
+      EXISTS (
+        SELECT 1 FROM client_products cp
+        JOIN products p ON p.id = cp.product_id
+        WHERE cp.client_id = clients.id AND p.company_id = @companyId
+      )
+    `);
+    params.companyId = filters.company_id;
+  }
+  if (filters.prioridade === "reagendar") {
+    where.push(`
+      EXISTS (
+        SELECT 1 FROM follow_ups fu
+        WHERE fu.client_id = clients.id AND fu.status = 'pending' AND fu.scheduled_at < @todayStart
+      )
+    `);
+  } else if (filters.prioridade === "retorno") {
+    where.push(`
+      EXISTS (
+        SELECT 1 FROM follow_ups fu
+        WHERE fu.client_id = clients.id AND fu.status = 'pending' AND fu.scheduled_at >= @todayStart
+      )
+    `);
+  } else if (filters.prioridade === "acompanhamento") {
+    where.push(`
+      NOT EXISTS (SELECT 1 FROM follow_ups fu WHERE fu.client_id = clients.id AND fu.status = 'pending')
+      AND EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = clients.id)
+    `);
+  } else if (filters.prioridade === "primeiro_contato") {
+    where.push(`
+      NOT EXISTS (SELECT 1 FROM follow_ups fu WHERE fu.client_id = clients.id AND fu.status = 'pending')
+      AND NOT EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = clients.id)
+    `);
+  }
   if (filters.search) {
     where.push(`(clients.trade_name ILIKE @search OR clients.legal_name ILIKE @search OR clients.cnpj ILIKE @search)`);
     params.search = `%${filters.search}%`;
@@ -121,8 +156,7 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
           scheduled_at,
           CASE
             WHEN scheduled_at < @todayStart THEN 0
-            WHEN scheduled_at <= @todayEnd THEN 1
-            ELSE 2
+            ELSE 1
           END AS fu_priority
         FROM follow_ups
         WHERE status = 'pending'
@@ -162,11 +196,18 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
         bool_or(contacts.verification_status = 'confirmed') AS has_verified,
         array_agg(DISTINCT cp.product_id) FILTER (WHERE cp.product_id IS NOT NULL) AS product_ids,
         EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = clients.id) AS has_approach,
-        COALESCE(pending_fu.fu_priority, CASE WHEN NOT EXISTS (SELECT 1 FROM approaches a2 WHERE a2.client_id = clients.id) THEN 3 ELSE 4 END) AS queue_priority,
+        COALESCE(
+          pending_fu.fu_priority,
+          CASE
+            WHEN EXISTS (SELECT 1 FROM approaches a2 WHERE a2.client_id = clients.id) THEN 2
+            ELSE 3
+          END
+        ) AS queue_priority,
         CASE
-          WHEN pending_fu.fu_priority = 0 THEN 'Atrasado'
-          WHEN pending_fu.fu_priority = 1 THEN 'Retorno para hoje'
-          ELSE NULL
+          WHEN pending_fu.fu_priority = 0 THEN 'Reagendar'
+          WHEN pending_fu.fu_priority = 1 THEN 'Retorno'
+          WHEN EXISTS (SELECT 1 FROM approaches a2 WHERE a2.client_id = clients.id) THEN 'Acompanhamento'
+          ELSE 'Primeiro contato'
         END AS queue_label,
         pending_fu.scheduled_at AS next_follow_up_at
       FROM clients

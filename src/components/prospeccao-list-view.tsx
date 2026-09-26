@@ -3,20 +3,27 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ClientContactShortcuts } from "@/components/client-contact-shortcuts";
+import { ProspeccaoPriorityBadge } from "@/components/prospeccao-priority-badge";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
-import type { Product, User } from "@/lib/types";
+import {
+  PROSPECCAO_PRIORIDADE_FILTER_ORDER,
+  PROSPECCAO_PRIORIDADE_LABELS
+} from "@/lib/prospeccao-priority";
+import type { Company, Product, User } from "@/lib/types";
 import type { ProspeccaoListItem } from "@/lib/prospeccao-query";
 
 export function ProspeccaoListView({
   initialItems,
   initialTotal,
   products,
-  bdrs
+  bdrs,
+  companies
 }: {
   initialItems: ProspeccaoListItem[];
   initialTotal: number;
   products: Product[];
   bdrs: User[];
+  companies: Company[];
 }) {
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
@@ -28,7 +35,8 @@ export function ProspeccaoListView({
     product_id: "",
     bdr_user_id: "",
     phone_availability: "",
-    queue_status: "",
+    prioridade: "",
+    company_id: "",
     search: ""
   });
   const [offset, setOffset] = useState(0);
@@ -71,7 +79,7 @@ export function ProspeccaoListView({
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Leads para prospecção</h1>
-      <p className="muted">Prioridade: retornos atrasados, retornos de hoje, demais leads.</p>
+      <p className="muted">Prioridade: reagendar, retorno, acompanhamento, primeiro contato.</p>
       <FilterBar>
         <FilterInput
           label="Busca"
@@ -80,12 +88,21 @@ export function ProspeccaoListView({
           onChange={(e) => updateFilter({ search: e.target.value })}
           placeholder="Nome, CNPJ…"
         />
-        <FilterSelect label="Status" value={filters.queue_status} onChange={(e) => updateFilter({ queue_status: e.target.value })}>
-          <option value="">Todos</option>
-          <option value="atrasado">Atrasado</option>
-          <option value="retorno_hoje">Retorno para hoje</option>
-          <option value="novo">Sem abordagem</option>
-          <option value="em_andamento">Com abordagem</option>
+        <FilterSelect label="Prioridade" value={filters.prioridade} onChange={(e) => updateFilter({ prioridade: e.target.value })}>
+          <option value="">Todas</option>
+          {PROSPECCAO_PRIORIDADE_FILTER_ORDER.map((key) => (
+            <option key={key} value={key}>
+              {PROSPECCAO_PRIORIDADE_LABELS[key]}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect label="Empresa" value={filters.company_id} onChange={(e) => updateFilter({ company_id: e.target.value })}>
+          <option value="">Todas</option>
+          {companies.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
         </FilterSelect>
         <FilterSelect label="Produto" value={filters.product_id} onChange={(e) => updateFilter({ product_id: e.target.value })}>
           <option value="">Todos</option>
@@ -131,9 +148,7 @@ export function ProspeccaoListView({
               return (
                 <tr key={item.id}>
                   <td>
-                    {item.queue_label === "Atrasado" ? <span className="badge badge-overdue">Atrasado</span> : null}
-                    {item.queue_label === "Retorno para hoje" ? <span className="badge badge-today">Retorno para hoje</span> : null}
-                    {!item.queue_label ? <span className="muted">—</span> : null}
+                    <ProspeccaoPriorityBadge label={item.queue_label} />
                   </td>
                   <td>
                     <Link href={`/clientes/${item.id}`}>{displayName}</Link>

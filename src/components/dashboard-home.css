@@ -325,3 +325,129 @@
   color: var(--muted);
   line-height: 1.35;
 }
+
+.dash-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+@media (max-width: 960px) {
+  .dash-analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dash-analytics-panel {
+  min-height: 17rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-channel-legend {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.dash-channel-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+.dash-line-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin-top: auto;
+}
+
+.dash-line-chart-grid {
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 1;
+}
+
+.dash-line-chart-axis {
+  fill: #6b7280;
+  font-size: 10px;
+  text-transform: capitalize;
+}
+
+.dash-funnel-list,
+.dash-call-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dash-funnel-row-head,
+.dash-call-results-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  margin-bottom: 0.35rem;
+}
+
+.dash-funnel-meta strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-funnel-track {
+  height: 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.dash-funnel-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2dd4bf, #58a6ff);
+}
+
+.dash-funnel-fill-alt {
+  background: linear-gradient(90deg, #58a6ff, #2dd4bf);
+}
+
+.dash-bdr-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.25rem;
+}
+
+.dash-bdr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.dash-bdr-table th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 500;
+  padding: 0.35rem 0.5rem 0.5rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dash-bdr-table td {
+  padding: 0.55rem 0.5rem 0.55rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-bdr-table tbody tr:last-child td {
+  border-bottom: none;
+}

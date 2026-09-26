@@ -69,9 +69,16 @@ export function RetornosView({ products, bdrs }: { products: Product[]; bdrs: Us
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Retornos</h1>
-      <div className="filters-row">
+      <div className="ui-segment" role="tablist" aria-label="Seção de retornos">
         {sections.map((s) => (
-          <button key={s.id} className={section === s.id ? "btn btn-primary" : "btn"} type="button" onClick={() => setSection(s.id)}>
+          <button
+            key={s.id}
+            type="button"
+            role="tab"
+            aria-selected={section === s.id}
+            className={section === s.id ? "ui-segment-btn is-active" : "ui-segment-btn"}
+            onClick={() => setSection(s.id)}
+          >
             {s.label}
           </button>
         ))}

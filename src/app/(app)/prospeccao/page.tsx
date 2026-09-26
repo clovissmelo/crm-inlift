@@ -5,7 +5,9 @@ import { queryProspeccaoQueue } from "@/lib/prospeccao-query";
 export const dynamic = "force-dynamic";
 
 export default async function ProspeccaoPage() {
-  const { products, bdrs } = await loadCatalog();
+  const { products, bdrs, companies } = await loadCatalog();
   const { items, total } = await queryProspeccaoQueue({ limit: 50, offset: 0 });
-  return <ProspeccaoListView initialItems={items} initialTotal={total} products={products} bdrs={bdrs} />;
+  return (
+    <ProspeccaoListView initialItems={items} initialTotal={total} products={products} bdrs={bdrs} companies={companies} />
+  );
 }
