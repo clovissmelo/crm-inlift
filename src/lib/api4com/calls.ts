@@ -26,6 +26,7 @@ export type Api4comCallRow = {
   result_pending: boolean;
   result_deferred_at: string | null;
   error_message: string | null;
+  dial_session_root_id: number | null;
   created_at: string;
 };
 
@@ -73,6 +74,7 @@ export async function initiateApi4comCall(input: {
   contactId?: number | null;
   productId?: number | null;
   phone: string;
+  dialSessionRootId?: number | null;
 }) {
   const extension = await getUserExtension(input.userId);
   if (!extension) {
@@ -92,10 +94,10 @@ export async function initiateApi4comCall(input: {
     `
       INSERT INTO api4com_calls (
         user_id, client_id, contact_id, product_id, phone_dialed, extension,
-        status, created_at, updated_at
+        dial_session_root_id, status, created_at, updated_at
       ) VALUES (
         @userId, @clientId, @contactId, @productId, @phone, @extension,
-        'initiating', @now, @now
+        @dialSessionRootId, 'initiating', @now, @now
       )
     `,
     {
@@ -105,6 +107,7 @@ export async function initiateApi4comCall(input: {
       productId: input.productId ?? null,
       phone: called,
       extension,
+      dialSessionRootId: input.dialSessionRootId ?? null,
       now
     }
   );
@@ -215,6 +218,16 @@ export async function listPendingCallsForUser(userId: number) {
         AND c.result_pending = true
         AND c.approach_id IS NULL
         AND c.status = 'completed'
+        AND c.id = (
+          SELECT c2.id FROM api4com_calls c2
+          WHERE c2.user_id = @userId
+            AND c2.result_pending = true
+            AND c2.approach_id IS NULL
+            AND c2.status = 'completed'
+            AND COALESCE(c2.dial_session_root_id, c2.id) = COALESCE(c.dial_session_root_id, c.id)
+          ORDER BY c2.ended_at DESC NULLS LAST, c2.id DESC
+          LIMIT 1
+        )
       ORDER BY c.ended_at DESC NULLS LAST, c.id DESC
       LIMIT 20
     `,
@@ -225,27 +238,90 @@ export async function listPendingCallsForUser(userId: number) {
 export async function deferCallResult(callId: number, userId: number) {
   const row = await getCallById(callId);
   if (!row || row.user_id !== userId) throw new Error("Chamada não encontrada");
+  const sessionRoot = row.dial_session_root_id ?? row.id;
   await run(
     `
       UPDATE api4com_calls SET result_deferred_at = @now, updated_at = @now
-      WHERE id = @id
+      WHERE user_id = @userId
+        AND COALESCE(dial_session_root_id, id) = @sessionRoot
+        AND result_pending = true
+        AND approach_id IS NULL
     `,
-    { id: callId, now: nowIso() }
+    { userId, sessionRoot, now: nowIso() }
   );
 }
 
 export async function linkCallToApproach(callId: number, userId: number, approachId: number) {
   const row = await getCallById(callId);
   if (!row || row.user_id !== userId) throw new Error("Chamada não encontrada");
+  const sessionRoot = row.dial_session_root_id ?? row.id;
   await run(
     `
       UPDATE api4com_calls SET
         approach_id = @approachId,
         result_pending = false,
         updated_at = @now
+      WHERE user_id = @userId
+        AND COALESCE(dial_session_root_id, id) = @sessionRoot
+        AND approach_id IS NULL
+    `,
+    { userId, sessionRoot, approachId, now: nowIso() }
+  );
+}
+
+export async function ensureDialSessionRoot(callId: number) {
+  await run(
+    `
+      UPDATE api4com_calls SET
+        dial_session_root_id = COALESCE(dial_session_root_id, id),
+        updated_at = @now
       WHERE id = @id
     `,
-    { id: callId, approachId, now: nowIso() }
+    { id: callId, now: nowIso() }
+  );
+}
+
+export async function clearPendingOnSiblingCalls(callId: number) {
+  const row = await getCallById(callId);
+  if (!row) return;
+  const sessionRoot = row.dial_session_root_id ?? row.id;
+  await run(
+    `
+      UPDATE api4com_calls SET result_pending = false, updated_at = @now
+      WHERE COALESCE(dial_session_root_id, id) = @sessionRoot
+        AND id <> @callId
+        AND approach_id IS NULL
+        AND status = 'completed'
+    `,
+    { sessionRoot, callId, now: nowIso() }
+  );
+}
+
+export async function recordDialSkip(input: {
+  sessionRootId: number;
+  userId: number;
+  clientId: number;
+  contactId?: number | null;
+  phone: string;
+}) {
+  const called = normalizeApi4comCalledNumber(input.phone);
+  if (!called) throw new Error("Telefone inválido");
+  await run(
+    `
+      INSERT INTO api4com_dial_skips (
+        dial_session_root_id, user_id, client_id, contact_id, phone, created_at
+      ) VALUES (
+        @sessionRootId, @userId, @clientId, @contactId, @phone, @now
+      )
+    `,
+    {
+      sessionRootId: input.sessionRootId,
+      userId: input.userId,
+      clientId: input.clientId,
+      contactId: input.contactId ?? null,
+      phone: called,
+      now: nowIso()
+    }
   );
 }
 
@@ -303,6 +379,24 @@ export async function processApi4comWebhook(payload: Api4comWebhookPayload, webh
     callRow = await get<Api4comCallRow>("SELECT * FROM api4com_calls WHERE api4com_call_id = @apiId LIMIT 1", {
       apiId: payload.id
     });
+  }
+
+  if (!callRow && payload.caller && payload.called) {
+    const calledNorm = normalizeApi4comCalledNumber(String(payload.called));
+    const ext = normalizeApi4comExtension(String(payload.caller));
+    if (calledNorm && ext) {
+      const since = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+      callRow = await get<Api4comCallRow>(
+        `
+          SELECT * FROM api4com_calls
+          WHERE phone_dialed = @phone AND extension = @ext
+            AND status IN ('initiating', 'ringing', 'in_progress')
+            AND created_at >= @since
+          ORDER BY id DESC LIMIT 1
+        `,
+        { phone: calledNorm, ext, since }
+      );
+    }
   }
 
   const eventType = payload.eventType ?? "";
@@ -368,6 +462,10 @@ export async function processApi4comWebhook(payload: Api4comWebhookPayload, webh
   if (isHangup) status = "completed";
 
   const resultPending = isHangup && !callRow.approach_id;
+  if (resultPending) {
+    await ensureDialSessionRoot(callRow.id);
+    await clearPendingOnSiblingCalls(callRow.id);
+  }
 
   await run(
     `

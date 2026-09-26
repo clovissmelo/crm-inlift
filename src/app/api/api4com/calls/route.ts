@@ -20,7 +20,8 @@ export async function POST(request: Request) {
       clientId: parsed.data.client_id,
       contactId: parsed.data.contact_id,
       productId: parsed.data.product_id,
-      phone: parsed.data.phone
+      phone: parsed.data.phone,
+      dialSessionRootId: parsed.data.dial_session_root_id
     });
     return Response.json(result, { status: 201 });
   } catch (e) {

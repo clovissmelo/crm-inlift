@@ -59,7 +59,8 @@ export const api4comStartCallSchema = z.object({
   client_id: z.number().int().positive().optional().nullable(),
   contact_id: z.number().int().positive().optional().nullable(),
   product_id: z.number().int().positive().optional().nullable(),
-  phone: z.string().trim().min(8, "Informe o telefone")
+  phone: z.string().trim().min(8, "Informe o telefone"),
+  dial_session_root_id: z.number().int().positive().optional().nullable()
 });
 
 export const companySchema = z.object({
@@ -133,7 +134,7 @@ export const approachCreateSchema = z.object({
 export const messageScriptSchema = z.object({
   title: z.string().trim().min(1),
   product_id: z.number().int().positive().optional().nullable(),
-  script_type: z.enum(["call", "whatsapp"]),
+  script_type: z.enum(["call", "whatsapp", "email"]),
   body: z.string().trim().min(1),
   status: z.enum(["active", "inactive"])
 });
@@ -190,7 +191,8 @@ export const catalogItemSchema = z.object({
   name: z.string().trim().min(1),
   status: z.enum(["active", "inactive"]).optional(),
   suggest_follow_up: z.boolean().optional(),
-  kind: z.enum(["pause", "close"]).optional()
+  kind: z.enum(["pause", "close"]).optional(),
+  lead_qualification: z.enum(["cold", "warm", "hot"]).optional().nullable()
 });
 
 export const contactSchema = z.object({

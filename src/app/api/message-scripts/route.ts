@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const allStatuses = url.searchParams.get("all") === "1";
   const where = allStatuses ? ["1=1"] : ["status = 'active'"];
   const params: Record<string, string | number> = {};
-  if (type === "call" || type === "whatsapp") {
+  if (type === "call" || type === "whatsapp" || type === "email") {
     where.push("script_type = @type");
     params.type = type;
   }

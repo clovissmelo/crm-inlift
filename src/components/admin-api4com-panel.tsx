@@ -98,7 +98,12 @@ export function AdminApi4comPanel() {
             </li>
             <li>
               Clique em <strong>Registrar webhook na API4COM</strong> após o deploy (usa {status.docs.integrations}). Eventos:{" "}
-              {status.docs.webhook_events.join(", ")}.
+              {status.docs.webhook_events.join(", ")}. Se no painel API4COM o webhook continuar <strong>Inativo</strong>, cole a
+              mesma URL na aba Webhook e clique em <strong>Ativar</strong>.
+            </li>
+            <li>
+              Sem webhook ativo, a ligação aparece na API4COM mas o CRM não recebe o fim da chamada — histórico e popup de
+              resultado comercial ficam vazios.
             </li>
             <li>
               Discagem pelo CRM usa {status.docs.calls} (não use /dialer).

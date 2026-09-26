@@ -11,12 +11,14 @@ import {
   Calendar,
   Filter,
   Funnel,
+  GitBranch,
   LayoutDashboard,
   List,
   Menu,
   PhoneCall,
   Package,
   Shield,
+  Sparkles,
   Target,
   Trophy,
   Users,
@@ -40,11 +42,33 @@ const navMain: NavItem[] = [
   { href: "/abordagens", label: "Abordagens", icon: Target }
 ];
 
-const navGestao: NavItem[] = [
-  { href: "/organizacao-leads", label: "Organização de Leads", icon: Filter },
-  { href: "/empresas", label: "Empresas", icon: Building2 },
-  { href: "/produtos", label: "Produtos", icon: Package }
-];
+function navGestaoItems(admin: boolean): NavItem[] {
+  const items: NavItem[] = [];
+  if (admin) {
+    items.push({ href: "/admin/novos-leads", label: "Novos leads", icon: Sparkles });
+  }
+  items.push({ href: "/organizacao-leads", label: "Organizar leads", icon: Filter });
+  if (admin) {
+    items.push({ href: "/admin/etapas-funil", label: "Etapas do funil", icon: GitBranch });
+  }
+  items.push(
+    { href: "/empresas", label: "Empresas", icon: Building2 },
+    { href: "/produtos", label: "Produtos", icon: Package }
+  );
+  if (admin) {
+    items.push({ href: "/admin/usuarios", label: "Usuários", icon: Users });
+  }
+  return items;
+}
+
+function isAdminHubPath(pathname: string) {
+  if (pathname === "/admin") return true;
+  return (
+    pathname.startsWith("/admin/integracoes") ||
+    pathname.startsWith("/admin/variaveis") ||
+    pathname.startsWith("/admin/importacao")
+  );
+}
 
 function NavLinkItem({ item, pathname }: { item: NavItem; pathname: string }) {
   const Icon = item.icon;
@@ -71,6 +95,8 @@ export function AppShell({
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const crumbParts = pageCrumbSegments(pathname);
+  const userIsAdmin = isAdmin(user);
+  const gestaoNav = navGestaoItems(userIsAdmin);
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -108,13 +134,13 @@ export function AppShell({
             <NavLinkItem key={item.href} item={item} pathname={pathname} />
           ))}
           <p className="nav-section-label">Gestão</p>
-          {navGestao.map((item) => (
+          {gestaoNav.map((item) => (
             <NavLinkItem key={item.href} item={item} pathname={pathname} />
           ))}
-          {isAdmin(user) ? (
+          {userIsAdmin ? (
             <Link
               href="/admin"
-              className={clsx("nav-link", (pathname === "/admin" || pathname.startsWith("/admin/")) && "active")}
+              className={clsx("nav-link", isAdminHubPath(pathname) && "active")}
             >
               <Shield size={18} aria-hidden />
               <span className="nav-link-label">Admin</span>

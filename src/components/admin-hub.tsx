@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageIntro } from "@/components/page-intro";
 import type { LucideIcon } from "lucide-react";
-import { FileSpreadsheet, GitBranch, PhoneCall, Sparkles, SlidersHorizontal, Users } from "lucide-react";
+import { FileSpreadsheet, PhoneCall, SlidersHorizontal } from "lucide-react";
 import type { Route } from "next";
 
 type HubItem = {
@@ -13,18 +13,6 @@ type HubItem = {
 
 const ADMIN_ITEMS: HubItem[] = [
   {
-    href: "/admin/usuarios",
-    icon: Users,
-    title: "Usuários",
-    description: "Equipe, perfis de acesso e situação da conta."
-  },
-  {
-    href: "/admin/etapas-funil",
-    icon: GitBranch,
-    title: "Etapas do funil comercial",
-    description: "Colunas do kanban, ordem, cores e zonas de convertido e perdido."
-  },
-  {
     href: "/admin/integracoes",
     icon: PhoneCall,
     title: "Integrações",
@@ -35,12 +23,6 @@ const ADMIN_ITEMS: HubItem[] = [
     icon: SlidersHorizontal,
     title: "Variáveis para as APIs",
     description: "Google Agenda, Places, chaves e tokens no servidor."
-  },
-  {
-    href: "/admin/novos-leads",
-    icon: Sparkles,
-    title: "Novos leads",
-    description: "Busca de leads novos com o motor de descoberta."
   },
   {
     href: "/admin/importacao",
@@ -55,7 +37,7 @@ export function AdminHub() {
     <div className="hub-page">
       <header className="hub-page-header">
         <PageIntro>
-          Configurações avançadas, usuários, integrações e ferramentas de crescimento do funil.
+          Integrações, variáveis de ambiente e importação em massa. Demais cadastros estão no menu Gestão.
         </PageIntro>
       </header>
       <ul className="hub-card-grid">

@@ -24,14 +24,15 @@ export async function POST(request: Request) {
   try {
     const result = await run(
       `
-        INSERT INTO approach_result_types (slug, name, status, suggest_follow_up, created_at, updated_at)
-        VALUES (@slug, @name, @status, @suggestFollowUp, @now, @now)
+        INSERT INTO approach_result_types (slug, name, status, suggest_follow_up, lead_qualification, created_at, updated_at)
+        VALUES (@slug, @name, @status, @suggestFollowUp, @leadQualification, @now, @now)
       `,
       {
         slug: slug.trim(),
         name: parsed.data.name,
         status: parsed.data.status ?? "active",
         suggestFollowUp: parsed.data.suggest_follow_up ?? false,
+        leadQualification: parsed.data.lead_qualification ?? null,
         now: nowIso()
       }
     );

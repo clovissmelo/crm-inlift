@@ -47,8 +47,23 @@ function classifyPhones(phonesRaw: string | null, whatsappsRaw: string | null) {
   return { hasMobile, hasLandline };
 }
 
+const PROSPECCAO_EXCLUDE_COLD_AFTER_APPROACH_SQL = `
+  NOT EXISTS (
+    SELECT 1 FROM approaches a
+    JOIN approach_result_types rt ON rt.id = a.result_type_id
+    WHERE a.client_id = clients.id
+      AND rt.lead_qualification = 'cold'
+      AND a.id = (
+        SELECT a2.id FROM approaches a2
+        WHERE a2.client_id = clients.id
+        ORDER BY a2.occurred_at DESC, a2.id DESC
+        LIMIT 1
+      )
+  )
+`;
+
 function buildFilters(filters: ClientFilters, todayStart: string, todayEnd: string) {
-  const where: string[] = ["1=1"];
+  const where: string[] = ["1=1", PROSPECCAO_EXCLUDE_COLD_AFTER_APPROACH_SQL];
   const params: Record<string, string | number> = { todayStart, todayEnd };
   if (filters.city) {
     where.push("lower(clients.city) = lower(@city)");

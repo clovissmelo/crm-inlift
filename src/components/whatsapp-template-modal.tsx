@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CadastroModal } from "@/components/cadastro-ui";
 import { applyTemplate, findMissingTemplateVars, PLACEHOLDER_HELP } from "@/lib/message-templates";
 import { whatsAppLink } from "@/lib/format";
 
@@ -32,9 +33,12 @@ export function WhatsAppTemplateModal({
     });
   }, [open, productId]);
 
-  if (!open) return null;
-
-  const selected = scripts.find((s) => String(s.id) === scriptId);
+  useEffect(() => {
+    if (open) return;
+    setScriptId("");
+    setBody("");
+    setError(null);
+  }, [open]);
 
   function loadScript(id: string) {
     setScriptId(id);
@@ -57,9 +61,10 @@ export function WhatsAppTemplateModal({
   }
 
   return (
-    <div className="panel" style={{ marginBottom: "1rem" }}>
-      <h3 style={{ marginTop: 0 }}>Mensagem WhatsApp</h3>
-      <p className="muted">Escolha um modelo, revise e abra a conversa. Isso não registra abordagem automaticamente.</p>
+    <CadastroModal open={open} title="Mensagem WhatsApp" onClose={onClose} wide>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Escolha um modelo, revise e abra a conversa. Isso não registra abordagem automaticamente.
+      </p>
       {error ? <div className="alert alert-error">{error}</div> : null}
       <div className="field">
         <label className="label">Modelo</label>
@@ -74,20 +79,19 @@ export function WhatsAppTemplateModal({
       </div>
       <div className="field">
         <label className="label">Mensagem</label>
-        <textarea className="textarea" value={body} onChange={(e) => setBody(e.target.value)} />
+        <textarea className="textarea" value={body} onChange={(e) => setBody(e.target.value)} rows={6} />
       </div>
       <p className="muted" style={{ fontSize: "0.75rem" }}>
         Campos: {PLACEHOLDER_HELP.map((p) => p.key).join(", ")}
       </p>
-      <div style={{ display: "flex", gap: "0.5rem" }}>
-        <button className="btn btn-primary" type="button" onClick={openChat} disabled={!body.trim()}>
-          Abrir WhatsApp
-        </button>
+      <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end", marginTop: "0.5rem" }}>
         <button className="btn" type="button" onClick={onClose}>
           Cancelar
         </button>
+        <button className="btn btn-primary" type="button" onClick={openChat} disabled={!body.trim()}>
+          Abrir WhatsApp
+        </button>
       </div>
-      {selected ? null : null}
-    </div>
+    </CadastroModal>
   );
 }

@@ -19,7 +19,7 @@ const FIELD_OPTIONS: Array<{ value: ImportColumnKey; label: string }> = [
   { value: "notes", label: "Observações" },
   { value: "contact_name", label: "Contato — nome" },
   { value: "contact_phone", label: "Contato — telefone" },
-  { value: "contact_whatsapp", label: "Contato — WhatsApp" },
+  { value: "contact_whatsapp", label: "Contato — telefone adicional" },
   { value: "contact_email", label: "Contato — e-mail" }
 ];
 

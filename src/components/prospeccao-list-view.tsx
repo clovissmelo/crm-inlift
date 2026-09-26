@@ -164,6 +164,7 @@ export function ProspeccaoListView({
                       whatsapp={item.primary_whatsapp}
                       email={item.primary_email}
                       productId={productId}
+                      productName={productId ? productNameById.get(productId) : undefined}
                       clientId={item.id}
                       contactId={item.primary_contact_id ?? undefined}
                       size="sm"

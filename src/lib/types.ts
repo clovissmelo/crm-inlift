@@ -61,7 +61,7 @@ export type ClientListItem = {
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   bdr: "BDR",
-  product_owner: "Responsável por produto",
+  product_owner: "Responsável por produto/empresa",
   manager: "Gestor",
   admin: "Administrador"
 };

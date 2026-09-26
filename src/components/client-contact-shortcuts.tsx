@@ -6,7 +6,8 @@ import { WhatsAppTemplateModal } from "@/components/whatsapp-template-modal";
 import { CadastroModal } from "@/components/cadastro-ui";
 import { useApi4comSession } from "@/components/api4com-call-provider";
 import { apiErrorText } from "@/lib/api-error-text";
-import { mailtoLink, telLink, formatPhoneDisplay } from "@/lib/format";
+import { EmailApproachModal } from "@/components/email-approach-modal";
+import { telLink, formatPhoneDisplay } from "@/lib/format";
 
 export type ContactDialOption = {
   contactId?: number;
@@ -39,7 +40,7 @@ function buildDialOptions(input: {
       contactId: input.contactId,
       contactName: input.contactName,
       phone: input.whatsapp,
-      label: "WhatsApp"
+      label: "Telefone adicional"
     });
   }
   return opts;
@@ -52,6 +53,7 @@ export function ClientContactShortcuts({
   whatsapp,
   email,
   productId,
+  productName,
   clientId,
   contactId,
   dialOptions,
@@ -63,6 +65,7 @@ export function ClientContactShortcuts({
   whatsapp?: string | null;
   email?: string | null;
   productId?: number;
+  productName?: string | null;
   clientId?: number;
   contactId?: number;
   dialOptions?: ContactDialOption[];
@@ -70,18 +73,20 @@ export function ClientContactShortcuts({
 }) {
   const api4com = useApi4comSession();
   const [waOpen, setWaOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [dialFeedbackOpen, setDialFeedbackOpen] = useState(false);
   const [dialing, setDialing] = useState(false);
   const [dialError, setDialError] = useState<string | null>(null);
 
   const waNumber = whatsapp || phone;
-  const mail = email ? mailtoLink(email) : null;
+  const hasEmail = Boolean(email?.trim());
   const btnClass = size === "sm" ? "btn btn-icon-sm" : "btn";
 
   const options = buildDialOptions({ phone, whatsapp, contactId, contactName, dialOptions });
   const useApi4com = Boolean(api4com?.canDial && clientId && options.length);
 
-  async function startCall(option: ContactDialOption) {
+  async function startCall(option: ContactDialOption, fromPicker: boolean) {
     if (!clientId) return;
     setDialing(true);
     setDialError(null);
@@ -104,16 +109,30 @@ export function ClientContactShortcuts({
     setDialing(false);
     if (!res.ok) {
       setDialError(apiErrorText(data, "Não foi possível iniciar a ligação."));
+      if (!fromPicker) setDialFeedbackOpen(true);
       return;
     }
     setPickerOpen(false);
+    setDialFeedbackOpen(false);
+    setDialError(null);
+  }
+
+  function closePicker() {
+    setPickerOpen(false);
+    setDialError(null);
+  }
+
+  function closeDialFeedback() {
+    setDialFeedbackOpen(false);
+    setDialError(null);
   }
 
   function onCallClick() {
     if (!useApi4com) return;
     setDialError(null);
+    setDialFeedbackOpen(false);
     if (options.length === 1) {
-      void startCall(options[0]!);
+      void startCall(options[0]!, false);
       return;
     }
     setPickerOpen(true);
@@ -160,21 +179,16 @@ export function ClientContactShortcuts({
             <MessageCircle size={16} />
           </span>
         )}
-        {mail ? (
-          <a className={btnClass} href={mail} title="E-mail" aria-label="E-mail">
+        {hasEmail ? (
+          <button type="button" className={btnClass} title="E-mail" aria-label="E-mail" onClick={() => setEmailOpen(true)}>
             <Mail size={16} />
-          </a>
+          </button>
         ) : (
           <span className={`${btnClass} disabled`} title="Sem e-mail" aria-hidden>
             <Mail size={16} />
           </span>
         )}
       </div>
-      {dialError ? (
-        <div className="alert alert-error" style={{ marginTop: 4, fontSize: "0.75rem", maxWidth: 280 }}>
-          {dialError}
-        </div>
-      ) : null}
       {waNumber ? (
         <WhatsAppTemplateModal
           open={waOpen}
@@ -183,11 +197,33 @@ export function ClientContactShortcuts({
           productId={productId}
           vars={{
             contato_nome: contactName ?? undefined,
-            cliente_nome: clientName
+            cliente_nome: clientName,
+            produto_nome: productName ?? undefined
           }}
         />
       ) : null}
-      <CadastroModal open={pickerOpen} title="Escolher número" onClose={() => setPickerOpen(false)}>
+      {hasEmail ? (
+        <EmailApproachModal
+          open={emailOpen}
+          onClose={() => setEmailOpen(false)}
+          email={email!.trim()}
+          productId={productId}
+          vars={{
+            contato_nome: contactName ?? undefined,
+            cliente_nome: clientName,
+            produto_nome: productName ?? undefined
+          }}
+        />
+      ) : null}
+      <CadastroModal open={dialFeedbackOpen} title="Não foi possível ligar" onClose={closeDialFeedback}>
+        {dialError ? <div className="alert alert-error">{dialError}</div> : null}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.75rem" }}>
+          <button type="button" className="btn btn-primary" onClick={closeDialFeedback}>
+            Fechar
+          </button>
+        </div>
+      </CadastroModal>
+      <CadastroModal open={pickerOpen} title="Escolher número" onClose={closePicker}>
         {dialError ? <div className="alert alert-error">{dialError}</div> : null}
         <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
           {options.map((o, i) => (
@@ -197,7 +233,7 @@ export function ClientContactShortcuts({
                 className="btn"
                 style={{ width: "100%", justifyContent: "flex-start" }}
                 disabled={dialing}
-                onClick={() => void startCall(o)}
+                onClick={() => void startCall(o, true)}
               >
                 {formatPhoneDisplay(o.phone)}
                 {o.contactName ? ` · ${o.contactName}` : ""}

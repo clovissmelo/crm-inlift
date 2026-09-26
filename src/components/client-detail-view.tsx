@@ -158,7 +158,7 @@ export function ClientDetailView({
       opts.push({ contactId: c.id, contactName: c.name, phone: c.phone, label: "Telefone" });
     }
     if (c.whatsapp?.trim() && c.whatsapp !== c.phone) {
-      opts.push({ contactId: c.id, contactName: c.name, phone: c.whatsapp, label: "WhatsApp" });
+      opts.push({ contactId: c.id, contactName: c.name, phone: c.whatsapp, label: "Telefone adicional" });
     }
     return opts;
   });
@@ -197,6 +197,7 @@ export function ClientDetailView({
     whatsapp: "",
     email: ""
   });
+  const [newContactSecondPhone, setNewContactSecondPhone] = useState(false);
   const [primarySavingId, setPrimarySavingId] = useState<number | null>(null);
 
   async function addContact(e: React.FormEvent) {
@@ -205,7 +206,11 @@ export function ClientDetailView({
     const res = await fetch(`/api/clients/${initialClient.id}/contacts`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...newContact, verification_status: "unverified" })
+      body: JSON.stringify({
+        ...newContact,
+        whatsapp: newContactSecondPhone ? newContact.whatsapp || null : null,
+        verification_status: "unverified"
+      })
     });
     const data = (await res.json()) as { error?: string; id?: number };
     if (!res.ok) {
@@ -226,6 +231,7 @@ export function ClientDetailView({
       }
     ]);
     setNewContact({ name: "", job_title: "", phone: "", whatsapp: "", email: "" });
+    setNewContactSecondPhone(false);
     setAddingContact(false);
     router.refresh();
   }
@@ -352,6 +358,7 @@ export function ClientDetailView({
     setContactEditDraft(null);
     setContacts(initialContacts);
     setNewContact({ name: "", job_title: "", phone: "", whatsapp: "", email: "" });
+    setNewContactSecondPhone(false);
   }
 
   function openOppModal() {
@@ -471,6 +478,7 @@ export function ClientDetailView({
             whatsapp={primaryWhatsapp}
             email={primaryEmail}
             productId={linkedProducts[0]?.product_id}
+            productName={linkedProducts[0]?.name}
             clientId={initialClient.id}
             contactId={primaryContact?.id}
             dialOptions={contactDialOptions}
@@ -795,28 +803,20 @@ export function ClientDetailView({
             }}
           >
             <h4 style={{ marginTop: 0 }}>Novo contato</h4>
-            <div className="field">
-              <label className="label">Nome</label>
-              <input className="input" value={newContact.name} onChange={(e) => setNewContact((c) => ({ ...c, name: e.target.value }))} required />
-            </div>
-            <div className="field">
-              <label className="label">Cargo</label>
-              <input className="input" value={newContact.job_title} onChange={(e) => setNewContact((c) => ({ ...c, job_title: e.target.value }))} />
-            </div>
-            <div className="filters-row">
-              <div className="field">
-                <label className="label">Telefone</label>
-                <input className="input" value={newContact.phone} onChange={(e) => setNewContact((c) => ({ ...c, phone: e.target.value }))} />
-              </div>
-              <div className="field">
-                <label className="label">WhatsApp</label>
-                <input className="input" value={newContact.whatsapp} onChange={(e) => setNewContact((c) => ({ ...c, whatsapp: e.target.value }))} />
-              </div>
-            </div>
-            <div className="field">
-              <label className="label">E-mail</label>
-              <input className="input" type="email" value={newContact.email} onChange={(e) => setNewContact((c) => ({ ...c, email: e.target.value }))} />
-            </div>
+            <ContactFormFields
+              name={newContact.name}
+              job_title={newContact.job_title}
+              phone={newContact.phone}
+              email={newContact.email}
+              secondPhone={newContact.whatsapp}
+              includeSecondPhone={newContactSecondPhone}
+              onIncludeSecondPhoneChange={(open) => {
+                setNewContactSecondPhone(open);
+                if (!open) setNewContact((c) => ({ ...c, whatsapp: "" }));
+              }}
+              onChange={(patch) => setNewContact((c) => ({ ...c, ...patch }))}
+              nameRequired
+            />
             <div style={{ display: "flex", gap: 8 }}>
               <button className="btn btn-primary" type="submit">
                 Salvar contato
@@ -858,13 +858,13 @@ function ContactReadOnly({
           <strong>{contact.name}</strong>
           {hasText(contact.job_title) ? <span className="muted"> · {contact.job_title}</span> : null}
           {isPrimary ? (
-            <span className="badge" style={{ marginLeft: 8 }} title="Usado em Ligar e prospecção">
-              <Star size={12} aria-hidden style={{ verticalAlign: -2, marginRight: 4 }} />
-              Telefone principal
+            <span className="badge badge-contact-primary" title="Usado em Ligar e prospecção">
+              <Star size={11} aria-hidden />
+              Principal
             </span>
           ) : null}
           {contact.verification_status === "confirmed" ? (
-            <span className="badge badge-verified" style={{ marginLeft: 8 }}>
+            <span className="badge badge-verified client-contact-badge-gap">
               Verificado
             </span>
           ) : null}
@@ -877,7 +877,8 @@ function ContactReadOnly({
           ) : null}
           {hasText(contact.whatsapp) && contact.whatsapp !== contact.phone ? (
             <span>
-              WhatsApp: {contact.whatsapp}
+              <Phone size={14} aria-hidden /> {contact.whatsapp}
+              <span className="muted"> (telefone adicional)</span>
             </span>
           ) : null}
           {hasText(contact.email) ? (
@@ -907,6 +908,84 @@ function ContactReadOnly({
   );
 }
 
+type ContactFormPatch = {
+  name?: string;
+  job_title?: string;
+  phone?: string;
+  email?: string;
+  whatsapp?: string;
+};
+
+function ContactFormFields({
+  name,
+  job_title,
+  phone,
+  email,
+  secondPhone,
+  includeSecondPhone,
+  onIncludeSecondPhoneChange,
+  onChange,
+  nameRequired
+}: {
+  name: string;
+  job_title: string;
+  phone: string;
+  email: string;
+  secondPhone: string;
+  includeSecondPhone: boolean;
+  onIncludeSecondPhoneChange: (open: boolean) => void;
+  onChange: (patch: ContactFormPatch) => void;
+  nameRequired?: boolean;
+}) {
+  return (
+    <>
+      <div className="field">
+        <label className="label">Nome</label>
+        <input
+          className="input"
+          value={name}
+          onChange={(e) => onChange({ name: e.target.value })}
+          required={nameRequired}
+        />
+      </div>
+      <div className="field">
+        <label className="label">Cargo</label>
+        <input className="input" value={job_title} onChange={(e) => onChange({ job_title: e.target.value })} />
+      </div>
+      <div className="field">
+        <label className="label">Telefone</label>
+        <input className="input" value={phone} onChange={(e) => onChange({ phone: e.target.value })} />
+      </div>
+      <div className="field">
+        <label className="label">E-mail</label>
+        <input className="input" type="email" value={email} onChange={(e) => onChange({ email: e.target.value })} />
+      </div>
+      {!includeSecondPhone ? (
+        <button type="button" className="btn contact-add-phone-btn" onClick={() => onIncludeSecondPhoneChange(true)}>
+          + Incluir outro telefone
+        </button>
+      ) : (
+        <div className="field">
+          <div className="contact-second-phone-head">
+            <label className="label" style={{ marginBottom: 0 }}>
+              Telefone adicional
+            </label>
+            <button type="button" className="btn contact-second-phone-remove" onClick={() => onIncludeSecondPhoneChange(false)}>
+              Remover
+            </button>
+          </div>
+          <input
+            className="input"
+            value={secondPhone}
+            onChange={(e) => onChange({ whatsapp: e.target.value })}
+            placeholder="Opcional"
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
 function ContactEditor({
   contact,
   onChange,
@@ -920,32 +999,27 @@ function ContactEditor({
   onVerify: (s: ContactVerification) => void | Promise<void>;
   hideSaveButton?: boolean;
 }) {
+  const [includeSecondPhone, setIncludeSecondPhone] = useState(() => hasText(contact.whatsapp));
+
+  useEffect(() => {
+    setIncludeSecondPhone(hasText(contact.whatsapp));
+  }, [contact.id, contact.whatsapp]);
+
   return (
     <div>
-      <div className="filters-row">
-        <div className="field">
-          <label className="label">Nome</label>
-          <input className="input" value={contact.name} onChange={(e) => onChange({ ...contact, name: e.target.value })} />
-        </div>
-        <div className="field">
-          <label className="label">Cargo</label>
-          <input className="input" value={contact.job_title ?? ""} onChange={(e) => onChange({ ...contact, job_title: e.target.value })} />
-        </div>
-      </div>
-      <div className="filters-row">
-        <div className="field">
-          <label className="label">Telefone</label>
-          <input className="input" value={contact.phone ?? ""} onChange={(e) => onChange({ ...contact, phone: e.target.value })} />
-        </div>
-        <div className="field">
-          <label className="label">WhatsApp</label>
-          <input className="input" value={contact.whatsapp ?? ""} onChange={(e) => onChange({ ...contact, whatsapp: e.target.value })} />
-        </div>
-      </div>
-      <div className="field">
-        <label className="label">E-mail</label>
-        <input className="input" value={contact.email ?? ""} onChange={(e) => onChange({ ...contact, email: e.target.value })} />
-      </div>
+      <ContactFormFields
+        name={contact.name}
+        job_title={contact.job_title ?? ""}
+        phone={contact.phone ?? ""}
+        email={contact.email ?? ""}
+        secondPhone={contact.whatsapp ?? ""}
+        includeSecondPhone={includeSecondPhone}
+        onIncludeSecondPhoneChange={(open) => {
+          setIncludeSecondPhone(open);
+          if (!open) onChange({ ...contact, whatsapp: "" });
+        }}
+        onChange={(patch) => onChange({ ...contact, ...patch })}
+      />
       {contact.verification_status === "confirmed" ? <span className="badge badge-verified">Verificado</span> : null}
       <div className="field" style={{ maxWidth: 280, marginTop: 8 }}>
         <label className="label">Verificação do número</label>

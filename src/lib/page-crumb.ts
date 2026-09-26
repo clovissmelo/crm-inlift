@@ -60,7 +60,7 @@ export function pageCrumbSegments(pathname: string): string[] {
     return segments;
   }
   if (pathname.startsWith("/organizacao-leads")) {
-    segments.push("organização de leads");
+    segments.push("organizar leads");
     return segments;
   }
   if (pathname.startsWith("/empresas")) {
@@ -77,6 +77,18 @@ export function pageCrumbSegments(pathname: string): string[] {
     return segments;
   }
 
+  if (pathname.startsWith("/admin/novos-leads")) {
+    segments.push("novos leads");
+    return segments;
+  }
+  if (pathname.startsWith("/admin/etapas-funil")) {
+    segments.push("etapas do funil");
+    return segments;
+  }
+  if (pathname.startsWith("/admin/usuarios")) {
+    segments.push("usuários");
+    return segments;
+  }
   if (pathname.startsWith("/admin")) {
     segments.push("admin");
     const rest = pathname.slice("/admin".length).replace(/^\//, "");

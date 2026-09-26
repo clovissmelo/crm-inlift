@@ -38,6 +38,8 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
 
   const apiCalls = await all<{
     id: number;
+    status: string;
+    created_at: string;
     ended_at: string | null;
     started_at: string | null;
     duration_seconds: number | null;
@@ -47,34 +49,51 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     approach_id: number | null;
     result_name: string | null;
     approach_notes: string | null;
+    error_message: string | null;
   }>(
     `
-      SELECT c.id, c.ended_at, c.started_at, c.duration_seconds, c.phone_dialed, c.hangup_cause_label,
+      SELECT c.id, c.status, c.created_at, c.ended_at, c.started_at, c.duration_seconds, c.phone_dialed,
+        c.hangup_cause_label, c.error_message,
         u.name AS user_name, c.approach_id, rt.name AS result_name, a.notes AS approach_notes
       FROM api4com_calls c
       LEFT JOIN users u ON u.id = c.user_id
       LEFT JOIN approaches a ON a.id = c.approach_id
       LEFT JOIN approach_result_types rt ON rt.id = a.result_type_id
-      WHERE c.client_id = @clientId AND c.status = 'completed'
+      WHERE c.client_id = @clientId
+        AND c.status IN ('initiating', 'ringing', 'in_progress', 'completed', 'failed')
       ORDER BY COALESCE(c.ended_at, c.started_at, c.created_at) DESC
     `,
     { clientId }
   );
 
   for (const call of apiCalls) {
-    const when = call.ended_at ?? call.started_at ?? new Date(0).toISOString();
+    const when = call.ended_at ?? call.started_at ?? call.created_at;
     const techParts = [
       call.phone_dialed,
       call.duration_seconds != null ? `${call.duration_seconds}s` : null,
       call.hangup_cause_label ? `desligamento: ${call.hangup_cause_label}` : null
     ].filter(Boolean);
-    const bdrParts = call.result_name
-      ? [`Resultado BDR: ${call.result_name}`, call.approach_notes].filter(Boolean)
-      : ["Resultado comercial pendente"];
+    let title = "Ligação API4COM";
+    if (call.status === "failed") title = "Ligação API4COM (falhou ao discar)";
+    else if (call.status === "initiating" || call.status === "ringing" || call.status === "in_progress") {
+      title = "Ligação API4COM (em andamento)";
+    } else if (call.approach_id) title = "Ligação API4COM (registrada)";
+
+    let bdrParts: string[];
+    if (call.status === "failed") {
+      bdrParts = call.error_message ? [call.error_message] : ["Discagem não concluída"];
+    } else if (call.status !== "completed") {
+      bdrParts = ["Aguardando retorno da telefonia (webhook API4COM)"];
+    } else if (call.result_name) {
+      bdrParts = [`Resultado BDR: ${call.result_name}`, call.approach_notes].filter(Boolean) as string[];
+    } else {
+      bdrParts = ["Resultado comercial pendente"];
+    }
+
     items.push({
       id: `api4com-${call.id}`,
       kind: "api4com_call",
-      title: call.approach_id ? "Ligação API4COM (registrada)" : "Ligação API4COM",
+      title,
       detail: [...techParts, ...bdrParts].join(" · ") || null,
       occurred_at: when,
       user_name: call.user_name

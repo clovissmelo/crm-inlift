@@ -4,9 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
 import { PageIntro } from "@/components/page-intro";
 import { PLACEHOLDER_HELP } from "@/lib/message-templates";
+import { LEAD_QUALIFICATION_LABELS, type LeadQualification } from "@/lib/lead-qualification";
 import type { Product } from "@/lib/types";
 
-type ResultRow = { id: number; name: string; status: string; suggest_follow_up: boolean };
+type ResultRow = {
+  id: number;
+  name: string;
+  status: string;
+  suggest_follow_up: boolean;
+  lead_qualification: LeadQualification | null;
+};
 type ScriptRow = {
   id: number;
   title: string;
@@ -19,7 +26,7 @@ type ScriptRow = {
 type ScriptForm = {
   title: string;
   product_id: string;
-  script_type: "call" | "whatsapp";
+  script_type: "call" | "whatsapp" | "email";
   body: string;
   status: "active" | "inactive";
 };
@@ -29,6 +36,7 @@ type ResultForm = {
   slug: string;
   status: "active" | "inactive";
   suggest_follow_up: boolean;
+  lead_qualification: LeadQualification | "";
 };
 
 const emptyScriptForm = (): ScriptForm => ({
@@ -51,7 +59,13 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
 
   const [resultModal, setResultModal] = useState(false);
   const [resultEditingId, setResultEditingId] = useState<number | null>(null);
-  const [resultForm, setResultForm] = useState<ResultForm>({ name: "", slug: "", status: "active", suggest_follow_up: false });
+  const [resultForm, setResultForm] = useState<ResultForm>({
+    name: "",
+    slug: "",
+    status: "active",
+    suggest_follow_up: false,
+    lead_qualification: ""
+  });
   const [resultSaving, setResultSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -79,7 +93,7 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
     setScriptForm({
       title: row.title,
       product_id: row.product_id ? String(row.product_id) : "",
-      script_type: row.script_type as "call" | "whatsapp",
+      script_type: row.script_type as "call" | "whatsapp" | "email",
       body: row.body,
       status: row.status as "active" | "inactive"
     });
@@ -89,7 +103,7 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
 
   function openResultCreate() {
     setResultEditingId(null);
-    setResultForm({ name: "", slug: "", status: "active", suggest_follow_up: false });
+    setResultForm({ name: "", slug: "", status: "active", suggest_follow_up: false, lead_qualification: "" });
     setError(null);
     setResultModal(true);
   }
@@ -100,7 +114,8 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
       name: row.name,
       slug: "",
       status: row.status as "active" | "inactive",
-      suggest_follow_up: row.suggest_follow_up
+      suggest_follow_up: row.suggest_follow_up,
+      lead_qualification: row.lead_qualification ?? ""
     });
     setError(null);
     setResultModal(true);
@@ -136,9 +151,20 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
     setError(null);
     const url = resultEditingId ? `/api/approach-result-types/${resultEditingId}` : "/api/approach-result-types";
     const method = resultEditingId ? "PATCH" : "POST";
+    const qualPayload =
+      resultForm.lead_qualification === "cold" ||
+      resultForm.lead_qualification === "warm" ||
+      resultForm.lead_qualification === "hot"
+        ? resultForm.lead_qualification
+        : null;
     const body = resultEditingId
-      ? { name: resultForm.name, status: resultForm.status, suggest_follow_up: resultForm.suggest_follow_up }
-      : resultForm;
+      ? {
+          name: resultForm.name,
+          status: resultForm.status,
+          suggest_follow_up: resultForm.suggest_follow_up,
+          lead_qualification: qualPayload
+        }
+      : { ...resultForm, lead_qualification: qualPayload };
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -196,6 +222,7 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
             <tr>
               <th>Nome</th>
               <th>Situação</th>
+              <th>Qualificação</th>
               <th>Próxima ação</th>
               <th style={{ width: canDelete ? 180 : 100 }} />
             </tr>
@@ -205,6 +232,9 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
               <tr key={r.id}>
                 <td>{r.name}</td>
                 <td>{r.status === "active" ? "Ativo" : "Inativo"}</td>
+                <td>
+                  {r.lead_qualification ? LEAD_QUALIFICATION_LABELS[r.lead_qualification] : "—"}
+                </td>
                 <td>{r.suggest_follow_up ? "Sugere follow-up" : "—"}</td>
                 <td>
                   <CadastroRowActions
@@ -237,7 +267,7 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
               {scripts.map((s) => (
                 <tr key={s.id}>
                   <td>{s.title}</td>
-                  <td>{s.script_type === "call" ? "Ligação" : "WhatsApp"}</td>
+                  <td>{s.script_type === "call" ? "Ligação" : s.script_type === "email" ? "E-mail" : "WhatsApp"}</td>
                   <td>{s.status === "active" ? "Ativo" : "Inativo"}</td>
                   <td>
                     <CadastroRowActions
@@ -268,9 +298,14 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
           <div className="filters-row">
             <div className="field">
               <label className="label">Tipo</label>
-              <select className="select" value={scriptForm.script_type} onChange={(e) => setScriptForm((f) => ({ ...f, script_type: e.target.value as "call" | "whatsapp" }))}>
+              <select
+                className="select"
+                value={scriptForm.script_type}
+                onChange={(e) => setScriptForm((f) => ({ ...f, script_type: e.target.value as "call" | "whatsapp" | "email" }))}
+              >
                 <option value="call">Script de ligação</option>
                 <option value="whatsapp">WhatsApp</option>
+                <option value="email">E-mail</option>
               </select>
             </div>
             <div className="field">
@@ -338,6 +373,24 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
             <select className="select" value={resultForm.status} onChange={(e) => setResultForm((f) => ({ ...f, status: e.target.value as "active" | "inactive" }))}>
               <option value="active">Ativo</option>
               <option value="inactive">Inativo</option>
+            </select>
+          </div>
+          <div className="field">
+            <label className="label">Qualificação do lead (automática ao salvar)</label>
+            <select
+              className="select"
+              value={resultForm.lead_qualification}
+              onChange={(e) =>
+                setResultForm((f) => ({
+                  ...f,
+                  lead_qualification: e.target.value as LeadQualification | ""
+                }))
+              }
+            >
+              <option value="">Não alterar / manual futuro</option>
+              <option value="cold">Frio — sai da prospecção</option>
+              <option value="warm">Morno — permanece no funil</option>
+              <option value="hot">Quente — permanece no funil</option>
             </select>
           </div>
           <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>

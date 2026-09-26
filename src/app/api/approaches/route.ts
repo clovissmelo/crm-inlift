@@ -1,6 +1,6 @@
 import { createApproach } from "@/lib/approaches";
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
-import { get } from "@/lib/db";
+import { get, nowIso, run } from "@/lib/db";
 import { completeFollowUp } from "@/lib/follow-ups";
 import { approachCreateSchema } from "@/lib/validators";
 
@@ -15,8 +15,8 @@ export async function POST(request: Request) {
   }
 
   const data = parsed.data;
-  const resultType = await get<{ suggest_follow_up: boolean }>(
-    "SELECT suggest_follow_up FROM approach_result_types WHERE id = @id AND status = 'active'",
+  const resultType = await get<{ suggest_follow_up: boolean; lead_qualification: string | null }>(
+    "SELECT suggest_follow_up, lead_qualification FROM approach_result_types WHERE id = @id AND status = 'active'",
     { id: data.result_type_id }
   );
   if (!resultType) return Response.json({ error: "Resultado inválido" }, { status: 400 });
@@ -51,6 +51,17 @@ export async function POST(request: Request) {
 
     if (data.follow_up_id) {
       await completeFollowUp(data.follow_up_id, user.id, approachId);
+    }
+
+    if (
+      resultType.lead_qualification === "cold" ||
+      resultType.lead_qualification === "warm" ||
+      resultType.lead_qualification === "hot"
+    ) {
+      await run(
+        "UPDATE clients SET lead_qualification = @qual, updated_at = @now WHERE id = @clientId",
+        { qual: resultType.lead_qualification, clientId: data.client_id, now: nowIso() }
+      );
     }
 
     return Response.json({ id: approachId }, { status: 201 });

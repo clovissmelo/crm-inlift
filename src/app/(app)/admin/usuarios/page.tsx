@@ -1,15 +1,11 @@
-import Link from "next/link";
 import { UsersAdmin } from "@/components/users-admin";
+import { requireAdminPage } from "@/lib/admin";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export default function AdminUsuariosPage() {
-  return (
-    <div>
-      <p className="muted" style={{ marginTop: 0 }}>
-        <Link href="/admin">← Admin</Link>
-      </p>
-      <UsersAdmin canDelete />
-    </div>
-  );
+export default async function AdminUsuariosPage() {
+  const user = await requireUser();
+  requireAdminPage(user);
+  return <UsersAdmin canDelete />;
 }

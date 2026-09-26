@@ -136,10 +136,17 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
         </FilterSelect>
       </FilterBar>
 
-      <div className="panel" style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "end" }}>
-        <div className="field" style={{ minWidth: 220 }}>
-          <label className="label">Nova BDR responsável</label>
-          <select className="select" value={toBdr} onChange={(e) => setToBdr(e.target.value)}>
+      <div className="panel organizacao-bulk-bar">
+        <div className="field organizacao-bulk-bar-field">
+          <label className="label" htmlFor="organizacao-new-bdr">
+            Nova BDR responsável
+          </label>
+          <select
+            id="organizacao-new-bdr"
+            className="select"
+            value={toBdr}
+            onChange={(e) => setToBdr(e.target.value)}
+          >
             <option value="">Selecione</option>
             {bdrs.map((b) => (
               <option key={b.id} value={b.id}>
@@ -148,25 +155,27 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
             ))}
           </select>
         </div>
-        <button
-          className="btn btn-primary"
-          type="button"
-          disabled={!toBdr || selectedCount === 0}
-          onClick={() => setConfirmOpen(true)}
-        >
-          Transferir selecionados
-        </button>
-        <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <input
-            type="checkbox"
-            checked={selectAllResults}
-            onChange={(e) => {
-              setSelectAllResults(e.target.checked);
-              if (e.target.checked) setSelected(new Set());
-            }}
-          />
-          Selecionar todos os {total} resultados do filtro
-        </label>
+        <div className="organizacao-bulk-bar-actions">
+          <button
+            className="btn btn-primary"
+            type="button"
+            disabled={!toBdr || selectedCount === 0}
+            onClick={() => setConfirmOpen(true)}
+          >
+            Transferir selecionados
+          </button>
+          <label className="organizacao-bulk-select-all">
+            <input
+              type="checkbox"
+              checked={selectAllResults}
+              onChange={(e) => {
+                setSelectAllResults(e.target.checked);
+                if (e.target.checked) setSelected(new Set());
+              }}
+            />
+            <span>Selecionar todos os {total} resultados do filtro</span>
+          </label>
+        </div>
       </div>
 
       {message ? <div className="alert alert-info">{message}</div> : null}

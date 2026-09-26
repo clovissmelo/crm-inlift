@@ -18,9 +18,12 @@ export function ClientTimeline({ clientId }: { clientId: number }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void (async () => {
-      setLoading(true);
+    let cancelled = false;
+
+    async function load(showSpinner: boolean) {
+      if (showSpinner) setLoading(true);
       const res = await fetch(`/api/clients/${clientId}/timeline`);
+      if (cancelled) return;
       if (!res.ok) {
         setError("Não foi possível carregar o histórico.");
         setLoading(false);
@@ -28,8 +31,16 @@ export function ClientTimeline({ clientId }: { clientId: number }) {
       }
       const data = (await res.json()) as { items: Item[] };
       setItems(data.items ?? []);
+      setError(null);
       setLoading(false);
-    })();
+    }
+
+    void load(true);
+    const t = window.setInterval(() => void load(false), 12_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+    };
   }, [clientId]);
 
   if (loading) return <p className="muted">Carregando histórico…</p>;
