@@ -250,7 +250,14 @@ export async function listActiveCallsForUser(userId: number) {
       LEFT JOIN contacts ct ON ct.id = c.contact_id
       LEFT JOIN products p ON p.id = c.product_id
       WHERE c.user_id = @userId
-        AND c.status IN ('initiating', 'ringing', 'in_progress')
+        AND c.ended_at IS NULL
+        AND (
+          c.status = 'in_progress'
+          OR (
+            c.status IN ('initiating', 'ringing')
+            AND c.created_at > now() - interval '20 minutes'
+          )
+        )
       ORDER BY c.id DESC
       LIMIT 1
     `,

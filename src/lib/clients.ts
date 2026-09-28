@@ -161,3 +161,20 @@ export async function updateClient(
     }
   }
 }
+
+/** Vincula um produto ao cliente sem remover os já associados. */
+export async function addClientProductLink(clientId: number, productId: number) {
+  const client = await get<{ id: number }>("SELECT id FROM clients WHERE id = @id", { id: clientId });
+  if (!client) throw new Error("Cliente não encontrado");
+  const product = await get<{ id: number }>("SELECT id FROM products WHERE id = @id", { id: productId });
+  if (!product) throw new Error("Produto não encontrado");
+  await run(
+    `
+      INSERT INTO client_products (client_id, product_id)
+      VALUES (@clientId, @productId)
+      ON CONFLICT (client_id, product_id) DO NOTHING
+    `,
+    { clientId, productId }
+  );
+  await run("UPDATE clients SET updated_at = @now WHERE id = @id", { id: clientId, now: nowIso() });
+}

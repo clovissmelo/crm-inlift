@@ -120,9 +120,13 @@ export function ClientForm({ products, bdrs, clientId }: { products: Product[]; 
         </select>
       </div>
       <div className="field">
-        <span className="label">Produtos de interesse</span>
+        <span className="label">Produtos vinculados</span>
+        <p className="muted" style={{ fontSize: "0.8125rem", margin: "0 0 8px" }}>
+          Selecione um ou mais produtos associados a este cliente.
+        </p>
+        {products.length === 0 ? <p className="muted">Nenhum produto cadastrado no sistema.</p> : null}
         {products.map((p) => (
-          <label key={p.id} style={{ display: "block" }}>
+          <label key={p.id} style={{ display: "block", marginBottom: 4 }}>
             <input type="checkbox" checked={form.product_ids.includes(p.id)} onChange={() => toggleProduct(p.id)} /> {p.name}
           </label>
         ))}

@@ -31,7 +31,7 @@ type Props = {
   onLogUpdated?: (log: CallScriptLogEntry[]) => void;
 };
 
-function stepLabel(status: string) {
+export function callScriptStatusLabel(status: string) {
   if (status === "in_progress") return "Em chamada";
   if (status === "ringing") return "Chamando…";
   return "Ligação iniciada";
@@ -134,7 +134,7 @@ export function CallScriptGuidePanel({
       <aside className="call-script-panel" aria-label="Script da ligação">
         <header className="call-script-panel-head">
           <div>
-            <h2>{stepLabel(call.status)}</h2>
+            <h2>{callScriptStatusLabel(call.status)}</h2>
             <p className="call-script-panel-meta">
               {[call.client_name, call.product_name].filter(Boolean).join(" · ") || "Cliente"}
             </p>

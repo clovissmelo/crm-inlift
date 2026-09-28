@@ -2,28 +2,10 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Api4comCallResultModal } from "@/components/api4com-call-result-modal";
-import { CallScriptGuidePanel, type ActiveCallForScript } from "@/components/call-script-guide-panel";
-import { isStructuredCallScriptBody } from "@/lib/call-script-log";
+import { CallSessionSidePanel, type CallSessionPanelMode } from "@/components/call-session-side-panel";
+import { type ActiveCallForScript } from "@/components/call-script-guide-panel";
+import { pickCallScriptBody } from "@/lib/pick-call-script";
 import type { Product, User } from "@/lib/types";
-
-function pickCallScriptBody(
-  items: Array<{ body: string; script_type: string; product_id: number | null }>,
-  productId: number | null
-) {
-  const callScripts = items.filter((s) => s.script_type === "call" && s.body?.trim());
-  const pool = productId
-    ? callScripts.filter((s) => s.product_id === productId || s.product_id == null)
-    : callScripts;
-  const withFlow = pool.filter((s) => isStructuredCallScriptBody(s.body));
-  if (productId != null) {
-    const exactFlow = withFlow.find((s) => s.product_id === productId);
-    if (exactFlow) return exactFlow.body;
-    const exact = pool.find((s) => s.product_id === productId);
-    if (exact) return exact.body;
-  }
-  return withFlow[0]?.body ?? pool[0]?.body ?? null;
-}
 
 function isProspeccaoPath(pathname: string | null) {
   return pathname?.startsWith("/prospeccao") ?? false;
@@ -54,13 +36,12 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
   const canDial = user.roles.includes("bdr");
   const [products, setProducts] = useState<Product[]>([]);
   const [pending, setPending] = useState<PendingCall[]>([]);
-  const [modalCallId, setModalCallId] = useState<number | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
   const autoOpenedRef = useRef<Set<number>>(new Set());
 
   const [activeCall, setActiveCall] = useState<ActiveCallForScript | null>(null);
   const [callScriptBody, setCallScriptBody] = useState<string | null>(null);
-  const [scriptPanelCollapsed, setScriptPanelCollapsed] = useState(false);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [resultCallId, setResultCallId] = useState<number | null>(null);
 
   const refreshPending = useCallback(async () => {
     if (!canDial) return;
@@ -110,62 +91,60 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
       setCallScriptBody(null);
       return;
     }
-    setScriptPanelCollapsed(false);
+    setResultCallId(null);
+    setPanelCollapsed(false);
     const params = new URLSearchParams({ type: "call" });
     if (activeCall.product_id) params.set("product_id", String(activeCall.product_id));
     void fetch(`/api/message-scripts?${params}`)
       .then((r) => r.json())
-      .then((d: { items?: Array<{ body: string; script_type: string; product_id: number | null }> }) => {
-        setCallScriptBody(pickCallScriptBody(d.items ?? [], activeCall.product_id));
-      })
+      .then(
+        (d: {
+          items?: Array<{ body: string; script_type: string; product_id: number | null; updated_at?: string }>;
+        }) => {
+          setCallScriptBody(pickCallScriptBody(d.items ?? [], activeCall.product_id));
+        }
+      )
       .catch(() => setCallScriptBody(null));
   }, [activeCall?.id, activeCall?.product_id]);
 
   useEffect(() => {
-    if (activeCall) setScriptPanelCollapsed(false);
-  }, [activeCall?.id]);
-
-  useEffect(() => {
-    if (!canDial || !onProspeccaoPage || modalOpen) return;
+    if (!canDial || !onProspeccaoPage || activeCall) return;
     for (const call of pending) {
       if (autoOpenedRef.current.has(call.id)) continue;
       autoOpenedRef.current.add(call.id);
-      setModalCallId(call.id);
-      setModalOpen(true);
+      setResultCallId(call.id);
+      setPanelCollapsed(false);
       break;
     }
-  }, [pending, canDial, modalOpen, onProspeccaoPage]);
+  }, [pending, canDial, onProspeccaoPage, activeCall]);
 
   useEffect(() => {
-    if (onProspeccaoPage || !modalOpen) return;
-    if (modalCallId != null) autoOpenedRef.current.add(modalCallId);
-    setModalOpen(false);
-    setModalCallId(null);
-  }, [onProspeccaoPage, modalOpen, modalCallId]);
+    if (onProspeccaoPage) return;
+    setResultCallId(null);
+  }, [onProspeccaoPage]);
 
-  const pendingCount = pending.length;
-  const showProspeccaoRegisterUi = canDial && onProspeccaoPage;
-  const showBanner = showProspeccaoRegisterUi && pendingCount > 0 && !modalOpen;
+  useEffect(() => {
+    if (resultCallId != null && !pending.some((p) => p.id === resultCallId)) {
+      setResultCallId(null);
+    }
+  }, [pending, resultCallId]);
 
-  function openNextPending() {
-    const next = pending[0];
-    if (!next) return;
-    setModalCallId(next.id);
-    setModalOpen(true);
-  }
+  const panelMode: CallSessionPanelMode | null = activeCall ? "script" : resultCallId != null ? "result" : null;
+  const showSidePanel = canDial && panelMode != null && (panelMode === "script" || onProspeccaoPage);
 
-  function closeModal() {
-    if (modalCallId != null) autoOpenedRef.current.add(modalCallId);
-    setModalOpen(false);
-    setModalCallId(null);
+  function closeResultPanel() {
+    if (resultCallId != null) autoOpenedRef.current.add(resultCallId);
+    setResultCallId(null);
     void refreshPending();
   }
 
-  const showScriptPanel = canDial && activeCall != null && !modalOpen;
+  const pendingCount = pending.length;
+  const showPendingHint =
+    canDial && onProspeccaoPage && pendingCount > 0 && panelMode !== "result" && !activeCall;
 
   return (
     <Api4comContext.Provider value={{ canDial }}>
-      {showBanner ? (
+      {showPendingHint ? (
         <div
           className="alert alert-info"
           style={{
@@ -186,29 +165,34 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
               ? "1 ligação sem resultado registrado. O lead continua na prospecção até você salvar."
               : `${pendingCount} ligações sem resultado registrado. Os leads continuam na prospecção até você salvar.`}
           </span>
-          <button type="button" className="btn btn-primary" onClick={openNextPending}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              const next = pending[0];
+              if (!next) return;
+              setResultCallId(next.id);
+              setPanelCollapsed(false);
+            }}
+          >
             Registrar agora
           </button>
         </div>
       ) : null}
       {children}
-      {showScriptPanel ? (
-        <CallScriptGuidePanel
-          call={activeCall}
+      {showSidePanel && panelMode ? (
+        <CallSessionSidePanel
+          mode={panelMode}
+          collapsed={panelCollapsed}
+          onCollapse={() => setPanelCollapsed(true)}
+          onExpand={() => setPanelCollapsed(false)}
+          activeCall={activeCall}
           scriptBody={callScriptBody}
-          collapsed={scriptPanelCollapsed}
-          onCollapse={() => setScriptPanelCollapsed(true)}
-          onExpand={() => setScriptPanelCollapsed(false)}
           onLogUpdated={(log) => setActiveCall((c) => (c ? { ...c, script_flow_log: log } : c))}
-        />
-      ) : null}
-      {showProspeccaoRegisterUi ? (
-        <Api4comCallResultModal
-          callId={modalCallId}
-          open={modalOpen}
+          resultCallId={resultCallId}
           products={products}
-          onClose={closeModal}
-          onCompleted={() => void refreshPending()}
+          onResultClose={closeResultPanel}
+          onResultCompleted={() => void refreshPending()}
         />
       ) : null}
     </Api4comContext.Provider>

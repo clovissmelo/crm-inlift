@@ -66,19 +66,25 @@ function spInputToIso(date: string, time: string) {
   return new Date(`${date}T${time}:00-03:00`).toISOString();
 }
 
-export function Api4comCallResultModal({
-  callId,
-  open,
-  onClose,
-  onCompleted,
-  products
-}: {
+type ResultFormProps = {
   callId: number | null;
-  open: boolean;
+  active: boolean;
+  layout: "modal" | "panel";
   onClose: () => void;
   onCompleted: () => void;
   products: Product[];
-}) {
+  onModalTitleChange?: (title: string) => void;
+};
+
+export function Api4comCallResultForm({
+  callId,
+  active,
+  layout,
+  onClose,
+  onCompleted,
+  products,
+  onModalTitleChange
+}: ResultFormProps) {
   const [ctx, setCtx] = useState<DialContext | null>(null);
   const [step, setStep] = useState<"next_dial" | "result">("result");
   const [resultTypes, setResultTypes] = useState<ResultType[]>([]);
@@ -208,7 +214,7 @@ export function Api4comCallResultModal({
   }, [callId]);
 
   useEffect(() => {
-    if (!open || !callId) return;
+    if (!active || !callId) return;
     setCtx(null);
     setResultTypes([]);
     setResultTypeId("");
@@ -219,7 +225,14 @@ export function Api4comCallResultModal({
     setNextTime("");
     setStep("result");
     void loadContext();
-  }, [open, callId, loadContext]);
+  }, [active, callId, loadContext]);
+
+  const modalTitle =
+    step === "next_dial" ? "Ligar para outro contato?" : "COMPLEMENTO DE REGISTRO";
+
+  useEffect(() => {
+    if (layout === "modal") onModalTitleChange?.(modalTitle);
+  }, [layout, modalTitle, onModalTitleChange]);
 
   const selectedResult = resultTypes.find((r) => String(r.id) === resultTypeId);
   const effectiveProductId = useMemo(() => {
@@ -418,11 +431,10 @@ export function Api4comCallResultModal({
       ? `${Math.floor(call.duration_seconds / 60)}:${String(call.duration_seconds % 60).padStart(2, "0")}`
       : "—";
 
-  const modalTitle =
-    step === "next_dial" ? "Ligar para outro contato?" : "COMPLEMENTO DE REGISTRO";
+  if (!active || !callId) return null;
 
-  return (
-    <CadastroModal open={open} title={modalTitle} onClose={onClose}>
+  const inner = (
+    <>
       {call ? (
         <div className="muted" style={{ fontSize: "0.8125rem", marginBottom: 12 }}>
           <p style={{ margin: "0 0 4px" }}>
@@ -590,6 +602,38 @@ export function Api4comCallResultModal({
           </div>
         </form>
       ) : null}
+    </>
+  );
+
+  return inner;
+}
+
+export function Api4comCallResultModal({
+  callId,
+  open,
+  onClose,
+  onCompleted,
+  products
+}: {
+  callId: number | null;
+  open: boolean;
+  onClose: () => void;
+  onCompleted: () => void;
+  products: Product[];
+}) {
+  const [modalTitle, setModalTitle] = useState("COMPLEMENTO DE REGISTRO");
+
+  return (
+    <CadastroModal open={open} title={modalTitle} onClose={onClose}>
+      <Api4comCallResultForm
+        callId={callId}
+        active={open}
+        layout="modal"
+        products={products}
+        onClose={onClose}
+        onCompleted={onCompleted}
+        onModalTitleChange={setModalTitle}
+      />
     </CadastroModal>
   );
 }

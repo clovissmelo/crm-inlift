@@ -162,6 +162,10 @@ export function ClientDetailView({
   const [newOppProductId, setNewOppProductId] = useState("");
   const [newOppTitle, setNewOppTitle] = useState("");
   const [oppModalOpen, setOppModalOpen] = useState(false);
+  const [productLinkModalOpen, setProductLinkModalOpen] = useState(false);
+  const [linkProductId, setLinkProductId] = useState("");
+  const [linkProductCreateOpp, setLinkProductCreateOpp] = useState(false);
+  const [savingProductLink, setSavingProductLink] = useState(false);
   const [returnToProspeccao, setReturnToProspeccao] = useState(true);
   const [inProspeccao, setInProspeccao] = useState(Boolean(initialClient.in_prospeccao_queue ?? true));
   const [prospeccaoModalOpen, setProspeccaoModalOpen] = useState(false);
@@ -428,6 +432,39 @@ export function ClientDetailView({
     setContacts(initialContacts);
     setNewContact({ name: "", job_title: "", phone: "", whatsapp: "", email: "" });
     setNewContactSecondPhone(false);
+  }
+
+  function openProductLinkModal() {
+    setError(null);
+    const available = allProducts.filter((p) => !linkedProducts.some((lp) => lp.product_id === p.id));
+    setLinkProductId(available[0] ? String(available[0].id) : allProducts[0] ? String(allProducts[0].id) : "");
+    setLinkProductCreateOpp(false);
+    setProductLinkModalOpen(true);
+  }
+
+  async function confirmProductLink() {
+    if (!linkProductId) {
+      setError("Selecione o produto.");
+      return;
+    }
+    setSavingProductLink(true);
+    setError(null);
+    const res = await fetch(`/api/clients/${initialClient.id}/products`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        product_id: Number(linkProductId),
+        create_opportunity: linkProductCreateOpp
+      })
+    });
+    const data = (await res.json()) as { error?: string };
+    setSavingProductLink(false);
+    if (!res.ok) {
+      setError(data.error ?? "Erro ao associar produto");
+      return;
+    }
+    setProductLinkModalOpen(false);
+    router.refresh();
   }
 
   function openOppModal() {
@@ -722,6 +759,51 @@ export function ClientDetailView({
         </div>
       </CadastroModal>
 
+      <CadastroModal
+        open={productLinkModalOpen}
+        title="Associar produto ao cliente"
+        onClose={() => !savingProductLink && setProductLinkModalOpen(false)}
+      >
+        <p className="muted" style={{ marginTop: 0, fontSize: "0.875rem" }}>
+          O produto é adicionado ao cadastro; os já vinculados permanecem.
+        </p>
+        <div className="field">
+          <label className="label">Produto</label>
+          <select
+            className="select"
+            value={linkProductId}
+            onChange={(e) => setLinkProductId(e.target.value)}
+            disabled={savingProductLink}
+          >
+            <option value="">Selecione</option>
+            {allProducts.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+                {linkedProducts.some((lp) => lp.product_id === p.id) ? " (já vinculado)" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        <label style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "flex-start" }}>
+          <input
+            type="checkbox"
+            checked={linkProductCreateOpp}
+            onChange={(e) => setLinkProductCreateOpp(e.target.checked)}
+            disabled={savingProductLink}
+            style={{ marginTop: 4 }}
+          />
+          <span>Criar oportunidade aberta para este produto</span>
+        </label>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="button" className="btn" disabled={savingProductLink} onClick={() => setProductLinkModalOpen(false)}>
+            Cancelar
+          </button>
+          <button type="button" className="btn btn-primary" disabled={savingProductLink} onClick={() => void confirmProductLink()}>
+            {savingProductLink ? "Salvando…" : "Confirmar"}
+          </button>
+        </div>
+      </CadastroModal>
+
       <CadastroModal open={oppModalOpen} title="Nova oportunidade" onClose={() => setOppModalOpen(false)}>
         <div className="field">
           <label className="label">Produto</label>
@@ -811,9 +893,17 @@ export function ClientDetailView({
               </InfoLine>
             ) : null}
             {bdr?.name ? <InfoLine label="BDR">{bdr.name}</InfoLine> : null}
-            {linkedProducts.length > 0 ? (
-              <InfoLine label="Produtos">{linkedProducts.map((p) => p.name).join(", ")}</InfoLine>
-            ) : null}
+            <InfoLine label="Produtos">
+              {linkedProducts.length > 0 ? linkedProducts.map((p) => p.name).join(", ") : "Nenhum"}
+              <button
+                type="button"
+                className="btn"
+                style={{ marginLeft: 12, verticalAlign: "middle" }}
+                onClick={openProductLinkModal}
+              >
+                Associar produto
+              </button>
+            </InfoLine>
             {hasText(initialClient.notes) ? <InfoLine label="Observações">{initialClient.notes}</InfoLine> : null}
           </div>
         ) : (

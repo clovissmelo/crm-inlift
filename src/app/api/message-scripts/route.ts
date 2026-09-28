@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     params.productId = Number(productId);
   }
   const items = await all(
-    `SELECT * FROM message_scripts WHERE ${where.join(" AND ")} ORDER BY title`,
+    `SELECT * FROM message_scripts WHERE ${where.join(" AND ")} ORDER BY updated_at DESC NULLS LAST, title`,
     params
   );
   return Response.json({ items });

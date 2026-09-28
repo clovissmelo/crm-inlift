@@ -54,7 +54,15 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
       content: "",
       next: null
     };
-    setDrafts((list) => [...list, next]);
+    setDrafts((list) => {
+      if (list.length === 0) return [...list, next];
+      const updated = list.map((d, i) =>
+        i === list.length - 1 && d.type === "linear" && (d.next == null || d.next === "")
+          ? { ...d, next: id }
+          : d
+      );
+      return [...updated, next];
+    });
     setSelectedId(id);
   }
 

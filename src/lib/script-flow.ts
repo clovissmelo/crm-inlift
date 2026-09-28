@@ -46,7 +46,7 @@ export function parseCallScriptBody(body: string): ScriptFlow | null {
   if (!trimmed) return null;
   try {
     const parsed = JSON.parse(trimmed) as unknown;
-    if (isScriptFlow(parsed) && parsed.steps[parsed.start]) return parsed;
+    if (isScriptFlow(parsed) && parsed.steps[parsed.start]) return enrichLinearNextLinks(parsed);
   } catch {
     /* texto legado */
   }
@@ -66,6 +66,11 @@ export function parseCallScriptBody(body: string): ScriptFlow | null {
 
 export function serializeCallScriptFlow(flow: ScriptFlow): string {
   return JSON.stringify(flow);
+}
+
+/** Preenche `next` em etapas lineares quando a ordem das etapas indica sequência. */
+export function enrichLinearNextLinks(flow: ScriptFlow): ScriptFlow {
+  return draftsToFlow(flowToDrafts(flow));
 }
 
 export function flowToDrafts(flow: ScriptFlow): ScriptFlowStepDraft[] {
@@ -102,8 +107,9 @@ export function flowToDrafts(flow: ScriptFlow): ScriptFlowStepDraft[] {
 
 export function draftsToFlow(drafts: ScriptFlowStepDraft[]): ScriptFlow {
   const steps: Record<string, ScriptFlowStep> = {};
-  for (const d of drafts) {
-    const id = d.id.trim() || `step-${drafts.indexOf(d) + 1}`;
+  for (let i = 0; i < drafts.length; i++) {
+    const d = drafts[i]!;
+    const id = d.id.trim() || `step-${i + 1}`;
     if (d.type === "branch") {
       steps[id] = {
         type: "branch",
@@ -116,11 +122,16 @@ export function draftsToFlow(drafts: ScriptFlowStepDraft[]): ScriptFlow {
         }))
       };
     } else {
+      let next = d.next ?? null;
+      if (!next && i < drafts.length - 1) {
+        const followingId = drafts[i + 1]!.id.trim() || `step-${i + 2}`;
+        next = followingId;
+      }
       steps[id] = {
         type: "linear",
         title: d.title.trim() || "Etapa",
         content: d.content,
-        next: d.next ?? null
+        next
       };
     }
   }
