@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { usePathname } from "next/navigation";
 import { CallSessionSidePanel, type CallSessionPanelMode } from "@/components/call-session-side-panel";
 import { type ActiveCallForScript } from "@/components/call-script-guide-panel";
+import { tryAutoRegisterApi4comCall } from "@/lib/api4com/auto-register-call";
 import { pickCallScriptBody } from "@/lib/pick-call-script";
 import type { Product, User } from "@/lib/types";
 
@@ -112,11 +113,18 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
     for (const call of pending) {
       if (autoOpenedRef.current.has(call.id)) continue;
       autoOpenedRef.current.add(call.id);
-      setResultCallId(call.id);
-      setPanelCollapsed(false);
+      void (async () => {
+        const autoDone = await tryAutoRegisterApi4comCall(call.id);
+        if (autoDone) {
+          void refreshPending();
+          return;
+        }
+        setResultCallId(call.id);
+        setPanelCollapsed(false);
+      })();
       break;
     }
-  }, [pending, canDial, onProspeccaoPage, activeCall]);
+  }, [pending, canDial, onProspeccaoPage, activeCall, refreshPending]);
 
   useEffect(() => {
     if (onProspeccaoPage) return;

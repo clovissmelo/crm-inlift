@@ -1,18 +1,25 @@
 "use client";
 
+import clsx from "clsx";
 import { useCallback, useEffect, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
+import { LeadQualificationBadge } from "@/components/lead-qualification-picker";
 import { PageIntro } from "@/components/page-intro";
 import {
-  APPROACH_NEXT_ACTION_KEYS,
-  APPROACH_NEXT_ACTION_LABELS,
   formatAllowedNextActionsSummary,
   parseAllowedNextActions,
   resolveAllowedNextActions,
+  RESULT_REGISTRATION_ACTION_KEYS,
+  APPROACH_NEXT_ACTION_LABELS,
   type ApproachNextActionKey
 } from "@/lib/approach-next-actions";
-import { LeadQualificationBadge } from "@/components/lead-qualification-picker";
-import { LEAD_QUALIFICATION_LABELS, type LeadQualification } from "@/lib/lead-qualification";
+import {
+  LEAD_QUALIFICATION_CSS,
+  LEAD_QUALIFICATION_LABELS,
+  LEAD_QUALIFICATION_ORDER,
+  type LeadQualification
+} from "@/lib/lead-qualification";
+import "./resultado-comercial-admin.css";
 
 type ResultRow = {
   id: number;
@@ -22,6 +29,7 @@ type ResultRow = {
   lead_qualification: LeadQualification | null;
   collect_notes: boolean;
   require_schedule_return: boolean;
+  require_final_registration: boolean;
   allowed_next_actions?: unknown;
 };
 
@@ -33,13 +41,14 @@ type ResultForm = {
   lead_qualification: LeadQualification | "";
   collect_notes: boolean;
   require_schedule_return: boolean;
+  require_final_registration: boolean;
   allowed_next_actions: ApproachNextActionKey[];
 };
 
 function normalizeAllowedForForm(row: Pick<ResultRow, "allowed_next_actions" | "require_schedule_return" | "suggest_follow_up">) {
   const parsed = parseAllowedNextActions(row.allowed_next_actions);
-  if (parsed.length > 0) return parsed;
-  return resolveAllowedNextActions(row);
+  if (parsed.length > 0) return parsed.filter((k) => RESULT_REGISTRATION_ACTION_KEYS.includes(k));
+  return resolveAllowedNextActions(row).filter((k) => RESULT_REGISTRATION_ACTION_KEYS.includes(k));
 }
 
 export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boolean }) {
@@ -54,8 +63,9 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
     status: "active",
     suggest_follow_up: false,
     lead_qualification: "",
-    collect_notes: true,
+    collect_notes: false,
     require_schedule_return: false,
+    require_final_registration: true,
     allowed_next_actions: ["none"]
   });
   const [resultSaving, setResultSaving] = useState(false);
@@ -77,8 +87,9 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
       status: "active",
       suggest_follow_up: false,
       lead_qualification: "",
-      collect_notes: true,
+      collect_notes: false,
       require_schedule_return: false,
+      require_final_registration: true,
       allowed_next_actions: ["none"]
     });
     setError(null);
@@ -93,8 +104,9 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
       status: row.status as "active" | "inactive",
       suggest_follow_up: row.suggest_follow_up,
       lead_qualification: row.lead_qualification ?? "",
-      collect_notes: row.collect_notes !== false,
+      collect_notes: row.collect_notes === true,
       require_schedule_return: row.require_schedule_return === true,
+      require_final_registration: row.require_final_registration !== false,
       allowed_next_actions: normalizeAllowedForForm(row)
     });
     setError(null);
@@ -107,7 +119,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
       const set = new Set(f.allowed_next_actions);
       if (set.has(key)) set.delete(key);
       else set.add(key);
-      let next = APPROACH_NEXT_ACTION_KEYS.filter((k) => set.has(k));
+      let next = RESULT_REGISTRATION_ACTION_KEYS.filter((k) => set.has(k));
       if (next.length === 0) next = ["none"];
       return { ...f, allowed_next_actions: next };
     });
@@ -137,6 +149,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
           lead_qualification: qualPayload,
           collect_notes: resultForm.collect_notes,
           require_schedule_return: resultForm.require_schedule_return,
+          require_final_registration: resultForm.require_final_registration,
           allowed_next_actions: allowed
         }
       : { ...resultForm, lead_qualification: qualPayload, allowed_next_actions: allowed };
@@ -174,7 +187,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
 
       <CadastroPageHeader
         title="Resultados de abordagem"
-        description="Tipos de resultado ao registrar uma abordagem."
+        description="Configure qualificação, registro pós-ligação e próximos passos por resultado."
         onNew={openResultCreate}
         newLabel="Novo resultado"
       />
@@ -185,7 +198,8 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
               <th>Nome</th>
               <th>Situação</th>
               <th>Qualificação</th>
-              <th>Observações</th>
+              <th>Registro final</th>
+              <th>Exigir obs.</th>
               <th>Retorno obrig.</th>
               <th>Próximos passos</th>
               <th style={{ width: canDelete ? 180 : 100 }} />
@@ -197,7 +211,8 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
                 <td>{r.name}</td>
                 <td>{r.status === "active" ? "Ativo" : "Inativo"}</td>
                 <td>{r.lead_qualification ? <LeadQualificationBadge value={r.lead_qualification} /> : "—"}</td>
-                <td>{r.collect_notes !== false ? "Sim" : "—"}</td>
+                <td>{r.require_final_registration !== false ? "Sim" : "Automático"}</td>
+                <td>{r.collect_notes === true ? "Sim" : "—"}</td>
                 <td>{r.require_schedule_return ? "Sim" : "—"}</td>
                 <td style={{ fontSize: "0.8125rem", maxWidth: 280 }}>{formatAllowedNextActionsSummary(r)}</td>
                 <td>
@@ -220,105 +235,140 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
       >
         <form onSubmit={saveResult}>
           {error ? <div className="alert alert-error">{error}</div> : null}
-          {!resultEditingId ? (
+
+          <div className="resultado-modal-section">
+            <p className="resultado-modal-section-title">Identificação</p>
+            {!resultEditingId ? (
+              <div className="field">
+                <label className="label">Identificador (slug)</label>
+                <input
+                  className="input"
+                  value={resultForm.slug}
+                  onChange={(e) => setResultForm((f) => ({ ...f, slug: e.target.value }))}
+                  required
+                  placeholder="ex.: retorno_agendado"
+                />
+              </div>
+            ) : null}
             <div className="field">
-              <label className="label">Identificador (slug)</label>
+              <label className="label">Nome</label>
               <input
                 className="input"
-                value={resultForm.slug}
-                onChange={(e) => setResultForm((f) => ({ ...f, slug: e.target.value }))}
+                value={resultForm.name}
+                onChange={(e) => setResultForm((f) => ({ ...f, name: e.target.value }))}
                 required
-                placeholder="ex.: retorno_agendado"
               />
             </div>
-          ) : null}
-          <div className="field">
-            <label className="label">Nome</label>
-            <input className="input" value={resultForm.name} onChange={(e) => setResultForm((f) => ({ ...f, name: e.target.value }))} required />
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="label">Situação</label>
+              <select
+                className="select"
+                value={resultForm.status}
+                onChange={(e) => setResultForm((f) => ({ ...f, status: e.target.value as "active" | "inactive" }))}
+              >
+                <option value="active">Ativo</option>
+                <option value="inactive">Inativo</option>
+              </select>
+            </div>
           </div>
-          <div className="field">
-            <label className="label">Situação</label>
-            <select className="select" value={resultForm.status} onChange={(e) => setResultForm((f) => ({ ...f, status: e.target.value as "active" | "inactive" }))}>
-              <option value="active">Ativo</option>
-              <option value="inactive">Inativo</option>
-            </select>
-          </div>
-          <div className="field">
-            <label className="label">Qualificação do lead (automática ao salvar)</label>
-            <select
-              className="select"
-              value={resultForm.lead_qualification}
-              onChange={(e) =>
-                setResultForm((f) => ({
-                  ...f,
-                  lead_qualification: e.target.value as LeadQualification | ""
-                }))
-              }
-            >
-              <option value="">Não alterar / manual futuro</option>
-              <option value="cold">Frio — sai da prospecção</option>
-              <option value="warm">Morno — permanece no funil</option>
-              <option value="hot">Quente — permanece no funil</option>
-            </select>
-          </div>
-          <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            <input
-              type="checkbox"
-              checked={resultForm.collect_notes}
-              onChange={(e) => setResultForm((f) => ({ ...f, collect_notes: e.target.checked }))}
-            />
-            Solicitar observações ao registrar
-          </label>
-          <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            <input
-              type="checkbox"
-              checked={resultForm.require_schedule_return}
-              onChange={(e) => {
-                const checked = e.target.checked;
-                setResultForm((f) => {
-                  let allowed = [...f.allowed_next_actions];
-                  if (checked && !allowed.includes("schedule_return")) {
-                    allowed = ["schedule_return", ...allowed];
-                  }
-                  return {
-                    ...f,
-                    require_schedule_return: checked,
-                    suggest_follow_up: checked ? true : f.suggest_follow_up,
-                    allowed_next_actions: allowed
-                  };
-                });
-              }}
-            />
-            Obrigar agendar retorno
-          </label>
-          <div className="field">
-            <span className="label">Próximos passos disponíveis ao registrar</span>
-            <p className="muted" style={{ fontSize: "0.8125rem", margin: "0 0 8px" }}>
-              Marque o que o BDR pode escolher após selecionar este resultado (ex.: número inválido → só Nenhum).
+
+          <div className="resultado-modal-section">
+            <p className="resultado-modal-section-title">Qualificação do lead</p>
+            <p className="muted" style={{ fontSize: "0.8125rem", margin: "0 0 10px" }}>
+              Aplicada automaticamente ao salvar a abordagem.
             </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {APPROACH_NEXT_ACTION_KEYS.map((key) => (
-                <label key={key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div className="lead-qual-picker" role="group" aria-label="Qualificação do lead">
+              {LEAD_QUALIFICATION_ORDER.map((q) => {
+                const active = resultForm.lead_qualification === q;
+                return (
+                  <button
+                    key={q}
+                    type="button"
+                    className={clsx("lead-qual-btn", LEAD_QUALIFICATION_CSS[q], active ? "is-active" : "is-inactive")}
+                    onClick={() => setResultForm((f) => ({ ...f, lead_qualification: q }))}
+                    aria-pressed={active}
+                  >
+                    {LEAD_QUALIFICATION_LABELS[q]}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              className={clsx("btn resultado-qual-none", !resultForm.lead_qualification && "btn-primary")}
+              onClick={() => setResultForm((f) => ({ ...f, lead_qualification: "" }))}
+            >
+              Sem qualificação automática
+            </button>
+
+            <div className="resultado-check-grid" style={{ marginTop: 16 }}>
+              <label className="resultado-check-row">
+                <input
+                  type="checkbox"
+                  checked={resultForm.require_final_registration}
+                  onChange={(e) => setResultForm((f) => ({ ...f, require_final_registration: e.target.checked }))}
+                />
+                <span>Exigir registro final</span>
+              </label>
+              <label className="resultado-check-row">
+                <input
+                  type="checkbox"
+                  checked={resultForm.collect_notes}
+                  onChange={(e) => setResultForm((f) => ({ ...f, collect_notes: e.target.checked }))}
+                />
+                <span>Exigir observações</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="resultado-modal-section">
+            <p className="resultado-modal-section-title">Opções disponíveis para registro de resultado</p>
+            <div className="resultado-check-grid">
+              {RESULT_REGISTRATION_ACTION_KEYS.map((key) => (
+                <label key={key} className="resultado-check-row">
                   <input
                     type="checkbox"
                     checked={resultForm.allowed_next_actions.includes(key)}
                     disabled={resultForm.require_schedule_return && key === "schedule_return"}
                     onChange={() => toggleAllowedAction(key)}
                   />
-                  {APPROACH_NEXT_ACTION_LABELS[key]}
+                  <span>{APPROACH_NEXT_ACTION_LABELS[key]}</span>
                 </label>
               ))}
             </div>
+            <label className="resultado-check-row" style={{ marginTop: 10 }}>
+              <input
+                type="checkbox"
+                checked={resultForm.require_schedule_return}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setResultForm((f) => {
+                    let allowed = [...f.allowed_next_actions];
+                    if (checked && !allowed.includes("schedule_return")) {
+                      allowed = ["schedule_return", ...allowed];
+                    }
+                    return {
+                      ...f,
+                      require_schedule_return: checked,
+                      suggest_follow_up: checked ? true : f.suggest_follow_up,
+                      allowed_next_actions: allowed
+                    };
+                  });
+                }}
+              />
+              <span>Obrigar agendar retorno</span>
+            </label>
+            <label className="resultado-check-row">
+              <input
+                type="checkbox"
+                checked={resultForm.suggest_follow_up}
+                onChange={(e) => setResultForm((f) => ({ ...f, suggest_follow_up: e.target.checked }))}
+              />
+              <span>Exigir próximo passo (não aceitar Nenhum)</span>
+            </label>
           </div>
-          <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            <input
-              type="checkbox"
-              checked={resultForm.suggest_follow_up}
-              onChange={(e) => setResultForm((f) => ({ ...f, suggest_follow_up: e.target.checked }))}
-            />
-            Exigir próximo passo (não aceitar Nenhum quando estiver marcado acima)
-          </label>
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+
+          <div className="resultado-modal-actions">
             <button type="button" className="btn" onClick={() => setResultModal(false)}>
               Cancelar
             </button>

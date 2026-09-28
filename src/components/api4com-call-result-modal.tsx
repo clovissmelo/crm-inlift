@@ -42,6 +42,7 @@ type ResultType = {
   lead_qualification: LeadQualification | null;
   collect_notes: boolean;
   require_schedule_return: boolean;
+  require_final_registration: boolean;
   allowed_next_actions?: unknown;
 };
 
@@ -121,6 +122,7 @@ export function Api4comCallResultForm({
         collect_notes?: boolean;
         require_schedule_return?: boolean;
         allowed_next_actions?: unknown;
+        require_final_registration?: boolean;
       }
     >;
   }) {
@@ -137,6 +139,7 @@ export function Api4comCallResultForm({
             : null,
         collect_notes: i.collect_notes !== false,
         require_schedule_return: i.require_schedule_return === true,
+        require_final_registration: i.require_final_registration !== false,
         allowed_next_actions: i.allowed_next_actions
       }));
   }
@@ -266,7 +269,8 @@ export function Api4comCallResultForm({
     return products.find((p) => p.id === effectiveProductId)?.name ?? null;
   }, [effectiveProductId, products]);
 
-  const showNotesField = selectedResult?.collect_notes !== false;
+  const showNotesField = selectedResult?.collect_notes === true;
+  const showRegistrationSteps = selectedResult?.require_final_registration !== false;
   const nextDial = ctx?.remaining[0] ?? null;
 
   async function dismissPending() {
@@ -368,7 +372,11 @@ export function Api4comCallResultForm({
       setError("Selecione o resultado comercial.");
       return;
     }
-    if (selectedResult) {
+    if (selectedResult?.collect_notes === true && !notes.trim()) {
+      setError("Informe as observações exigidas para este resultado.");
+      return;
+    }
+    if (selectedResult && showRegistrationSteps) {
       const nextErr = validateNextActionChoice(selectedResult, nextType);
       if (nextErr) {
         setError(nextErr);
@@ -574,21 +582,27 @@ export function Api4comCallResultForm({
           {showNotesField ? (
             <div className="field">
               <label className="label">Observações</label>
-              <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
+              <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} required />
             </div>
           ) : null}
-          <ApproachNextStepField
-            result={selectedResult}
-            nextType={nextType}
-            onNextTypeChange={setNextType}
-            nextDate={nextDate}
-            nextTime={nextTime}
-            onNextDateChange={setNextDate}
-            onNextTimeChange={setNextTime}
-            reasonId={reasonId}
-            onReasonIdChange={setReasonId}
-            closureReasons={closureReasons}
-          />
+          {showRegistrationSteps ? (
+            <ApproachNextStepField
+              result={selectedResult}
+              nextType={nextType}
+              onNextTypeChange={setNextType}
+              nextDate={nextDate}
+              nextTime={nextTime}
+              onNextDateChange={setNextDate}
+              onNextTimeChange={setNextTime}
+              reasonId={reasonId}
+              onReasonIdChange={setReasonId}
+              closureReasons={closureReasons}
+            />
+          ) : (
+            <p className="muted" style={{ fontSize: "0.8125rem" }}>
+              Este resultado não exige complemento de registro — confirme para concluir a ligação.
+            </p>
+          )}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12, flexWrap: "wrap" }}>
             {ctx && ctx.remaining.length > 0 ? (
               <button type="button" className="btn" onClick={() => setStep("next_dial")}>

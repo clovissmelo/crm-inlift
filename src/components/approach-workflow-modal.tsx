@@ -17,6 +17,7 @@ type ResultType = {
   suggest_follow_up: boolean;
   collect_notes?: boolean;
   require_schedule_return?: boolean;
+  require_final_registration?: boolean;
   allowed_next_actions?: unknown;
 };
 type ClosureReason = { id: number; name: string; kind: "pause" | "close" };
@@ -92,7 +93,8 @@ export function ApproachWorkflowModal({
   }, [open, defaultChannel, defaultContactId, defaultProductId, resolvedProductId]);
 
   const selectedResult = resultTypes.find((r) => String(r.id) === resultTypeId);
-  const showNotesField = selectedResult?.collect_notes !== false;
+  const showNotesField = selectedResult?.collect_notes === true;
+  const showRegistrationSteps = selectedResult?.require_final_registration !== false;
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -231,22 +233,26 @@ export function ApproachWorkflowModal({
           </div>
         ) : null}
 
-        <h4>Próxima ação</h4>
-        <ApproachNextStepField
-          result={selectedResult}
-          nextType={nextType}
-          onNextTypeChange={setNextType}
-          nextDate={nextDate}
-          nextTime={nextTime}
-          onNextDateChange={setNextDate}
-          onNextTimeChange={setNextTime}
-          nextNotes={nextNotes}
-          onNextNotesChange={setNextNotes}
-          reasonId={reasonId}
-          onReasonIdChange={setReasonId}
-          closureReasons={closureReasons}
-          showNotesForSchedule
-        />
+        {showRegistrationSteps ? (
+          <>
+            <h4>Próxima ação</h4>
+            <ApproachNextStepField
+              result={selectedResult}
+              nextType={nextType}
+              onNextTypeChange={setNextType}
+              nextDate={nextDate}
+              nextTime={nextTime}
+              onNextDateChange={setNextDate}
+              onNextTimeChange={setNextTime}
+              nextNotes={nextNotes}
+              onNextNotesChange={setNextNotes}
+              reasonId={reasonId}
+              onReasonIdChange={setReasonId}
+              closureReasons={closureReasons}
+              showNotesForSchedule
+            />
+          </>
+        ) : null}
 
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <button className="btn btn-primary" type="submit" disabled={loading}>

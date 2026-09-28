@@ -16,6 +16,14 @@ export const APPROACH_NEXT_ACTION_LABELS: Record<ApproachNextActionKey, string> 
   close: "Encerrar oportunidade"
 };
 
+/** Opções exibidas no cadastro de resultado comercial (sem pausar). */
+export const RESULT_REGISTRATION_ACTION_KEYS: ApproachNextActionKey[] = [
+  "none",
+  "schedule_return",
+  "schedule_meeting",
+  "close"
+];
+
 export type ApproachResultNextRules = {
   allowed_next_actions?: unknown;
   require_schedule_return?: boolean;

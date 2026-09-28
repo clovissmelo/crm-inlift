@@ -203,6 +203,7 @@ export const catalogItemSchema = z.object({
   lead_qualification: z.enum(["cold", "warm", "hot"]).optional().nullable(),
   collect_notes: z.boolean().optional(),
   require_schedule_return: z.boolean().optional(),
+  require_final_registration: z.boolean().optional(),
   allowed_next_actions: z.array(approachNextActionKeySchema).optional().nullable()
 });
 
