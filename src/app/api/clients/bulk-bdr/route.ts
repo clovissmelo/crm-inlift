@@ -1,5 +1,9 @@
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { queryAllMatchingClientIds } from "@/lib/clients-query";
+import {
+  clientFiltersFromOrganizacaoParams,
+  organizacaoFiltersToRecord
+} from "@/lib/organizacao-leads-filters";
 import { reassignPendingFollowUpsForClients } from "@/lib/follow-ups";
 import { nowIso, run } from "@/lib/db";
 
@@ -11,7 +15,7 @@ export async function POST(request: Request) {
     to_bdr_user_id: number;
     client_ids?: number[];
     select_all?: boolean;
-    filters?: Record<string, string | number | boolean | undefined>;
+    filters?: Record<string, string>;
   };
 
   if (!body.to_bdr_user_id) {
@@ -20,15 +24,9 @@ export async function POST(request: Request) {
 
   let clientIds = body.client_ids ?? [];
   if (body.select_all) {
-    clientIds = await queryAllMatchingClientIds({
-      city: body.filters?.city as string | undefined,
-      uf: body.filters?.uf as string | undefined,
-      segment: body.filters?.segment as string | undefined,
-      product_id: body.filters?.product_id ? Number(body.filters.product_id) : undefined,
-      bdr_user_id: body.filters?.bdr_user_id ? Number(body.filters.bdr_user_id) : undefined,
-      phone_availability: (body.filters?.phone_availability as "" | "mobile" | "landline" | "none") ?? "",
-      search: body.filters?.search as string | undefined
-    });
+    clientIds = await queryAllMatchingClientIds(
+      clientFiltersFromOrganizacaoParams(organizacaoFiltersToRecord(body.filters ?? {}))
+    );
   }
 
   clientIds = [...new Set(clientIds.filter((id) => Number.isInteger(id)))];

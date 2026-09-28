@@ -11,10 +11,14 @@ export type ClientFilters = {
   city?: string;
   uf?: string;
   segment?: string;
-  product_id?: number;
+  product_id?: number | "none";
   company_id?: number;
-  bdr_user_id?: number;
+  bdr_user_id?: number | "none";
   phone_availability?: "mobile" | "landline" | "none" | "";
+  /** Tentativa de ligação (abordagem call ou registro API4COM). */
+  phone_contacted?: "yes" | "no" | "";
+  created_from?: string;
+  created_to?: string;
   queue_status?: ProspeccaoQueueStatus;
   prioridade?: ProspeccaoPrioridadeFilter | "";
   without_approach?: boolean;
@@ -41,15 +45,40 @@ function buildClientFilterSql(filters: ClientFilters) {
     where.push("lower(clients.segment) = lower(@segment)");
     params.segment = filters.segment;
   }
-  if (filters.bdr_user_id) {
+  if (filters.bdr_user_id === "none") {
+    where.push("clients.bdr_user_id IS NULL");
+  } else if (filters.bdr_user_id) {
     where.push("clients.bdr_user_id = @bdrUserId");
     params.bdrUserId = filters.bdr_user_id;
   }
-  if (filters.product_id) {
+  if (filters.product_id === "none") {
+    where.push(`NOT EXISTS (SELECT 1 FROM client_products cp0 WHERE cp0.client_id = clients.id)`);
+  } else if (filters.product_id) {
     where.push(
       `EXISTS (SELECT 1 FROM client_products cp WHERE cp.client_id = clients.id AND cp.product_id = @productId)`
     );
     params.productId = filters.product_id;
+  }
+  if (filters.created_from) {
+    where.push("clients.created_at::date >= @createdFrom::date");
+    params.createdFrom = filters.created_from;
+  }
+  if (filters.created_to) {
+    where.push("clients.created_at::date <= @createdTo::date");
+    params.createdTo = filters.created_to;
+  }
+  if (filters.phone_contacted === "no") {
+    where.push(`
+      NOT EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = clients.id AND a.channel = 'call')
+      AND NOT EXISTS (SELECT 1 FROM api4com_calls ac WHERE ac.client_id = clients.id)
+    `);
+  } else if (filters.phone_contacted === "yes") {
+    where.push(`
+      (
+        EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = clients.id AND a.channel = 'call')
+        OR EXISTS (SELECT 1 FROM api4com_calls ac WHERE ac.client_id = clients.id)
+      )
+    `);
   }
   if (filters.without_approach) {
     where.push(`NOT EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = clients.id)`);

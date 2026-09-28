@@ -8,13 +8,19 @@ export async function GET(request: Request) {
   if (!user) return jsonUnauthorized();
 
   const url = new URL(request.url);
+  const productParam = url.searchParams.get("product_id");
+  const bdrParam = url.searchParams.get("bdr_user_id");
   const filters = {
     city: url.searchParams.get("city") ?? undefined,
     uf: url.searchParams.get("uf") ?? undefined,
     segment: url.searchParams.get("segment") ?? undefined,
-    product_id: url.searchParams.get("product_id") ? Number(url.searchParams.get("product_id")) : undefined,
-    bdr_user_id: url.searchParams.get("bdr_user_id") ? Number(url.searchParams.get("bdr_user_id")) : undefined,
+    product_id:
+      productParam === "none" ? ("none" as const) : productParam ? Number(productParam) : undefined,
+    bdr_user_id: bdrParam === "none" ? ("none" as const) : bdrParam ? Number(bdrParam) : undefined,
     phone_availability: (url.searchParams.get("phone_availability") ?? "") as "" | "mobile" | "landline" | "none",
+    phone_contacted: (url.searchParams.get("phone_contacted") ?? "") as "" | "yes" | "no",
+    created_from: url.searchParams.get("created_from") ?? undefined,
+    created_to: url.searchParams.get("created_to") ?? undefined,
     without_approach: url.searchParams.get("without_approach") === "1",
     lead_qualification: (url.searchParams.get("lead_qualification") ?? "") as "" | "cold" | "warm" | "hot",
     search: url.searchParams.get("search") ?? undefined,

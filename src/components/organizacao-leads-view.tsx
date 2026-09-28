@@ -6,25 +6,32 @@ import { PageIntro } from "@/components/page-intro";
 import { formatCnpj } from "@/lib/format";
 import type { ClientListItem, User } from "@/lib/types";
 
+const defaultFilters = {
+  city: "",
+  uf: "",
+  segment: "",
+  product_id: "",
+  bdr_user_id: "",
+  phone_availability: "",
+  phone_contacted: "no",
+  created_from: "",
+  created_to: "",
+  search: ""
+};
+
 export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; products: Array<{ id: number; name: string }> }) {
   const [items, setItems] = useState<ClientListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [selectAllResults, setSelectAllResults] = useState(false);
   const [toBdr, setToBdr] = useState("");
+  const [toProduct, setToProduct] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmProductOpen, setConfirmProductOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState({
-    city: "",
-    uf: "",
-    segment: "",
-    product_id: "",
-    bdr_user_id: "",
-    phone_availability: "",
-    search: ""
-  });
+  const [filters, setFilters] = useState(defaultFilters);
   const [offset, setOffset] = useState(0);
   const limit = 50;
 
@@ -47,6 +54,12 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setOffset(0);
+    setSelected(new Set());
+    setSelectAllResults(false);
+  }, [filters]);
 
   function toggle(id: number) {
     setSelectAllResults(false);
@@ -72,6 +85,7 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
 
   const selectedCount = selectAllResults ? total : selected.size;
   const targetBdrName = bdrs.find((b) => String(b.id) === toBdr)?.name ?? "";
+  const targetProductName = products.find((p) => String(p.id) === toProduct)?.name ?? "";
   const productNameById = new Map(products.map((p) => [p.id, p.name]));
 
   function formatProducts(productIds: number[]) {
@@ -104,9 +118,39 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
     void load();
   }
 
+  async function executeProductLink() {
+    setMessage(null);
+    setError(null);
+    const res = await fetch("/api/clients/bulk-product-opportunity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        product_id: Number(toProduct),
+        select_all: selectAllResults,
+        client_ids: selectAllResults ? undefined : [...selected],
+        filters: selectAllResults ? filters : undefined
+      })
+    });
+    const data = (await res.json()) as { error?: string; opportunities_created?: number; product_name?: string };
+    if (!res.ok) {
+      setError(data.error ?? "Falha ao vincular produto");
+      return;
+    }
+    setMessage(
+      `${data.opportunities_created ?? 0} oportunidade(s) criada(s) com ${data.product_name ?? "produto"} (produtos anteriores mantidos).`
+    );
+    setConfirmProductOpen(false);
+    setSelected(new Set());
+    setSelectAllResults(false);
+    void load();
+  }
+
   return (
     <div>
-      <PageIntro>Filtre, selecione clientes e transfira a BDR responsável em lote.</PageIntro>
+      <PageIntro>
+        Filtre, selecione clientes, transfira BDR ou vincule um novo produto (cria oportunidade sem remover os já
+        cadastrados).
+      </PageIntro>
 
       <FilterBar>
         <FilterInput label="Cidade" value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} placeholder="—" />
@@ -114,6 +158,7 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
         <FilterInput label="Segmento" value={filters.segment} onChange={(e) => setFilters((f) => ({ ...f, segment: e.target.value }))} placeholder="—" />
         <FilterSelect label="Produto" value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}>
           <option value="">Todos</option>
+          <option value="none">Nenhum</option>
           {products.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -122,12 +167,34 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
         </FilterSelect>
         <FilterSelect label="BDR atual" value={filters.bdr_user_id} onChange={(e) => setFilters((f) => ({ ...f, bdr_user_id: e.target.value }))}>
           <option value="">Todas</option>
+          <option value="none">Nenhum</option>
           {bdrs.map((b) => (
             <option key={b.id} value={b.id}>
               {b.name}
             </option>
           ))}
         </FilterSelect>
+        <FilterSelect
+          label="Já telefonado"
+          value={filters.phone_contacted}
+          onChange={(e) => setFilters((f) => ({ ...f, phone_contacted: e.target.value }))}
+        >
+          <option value="no">Não (novos)</option>
+          <option value="yes">Sim</option>
+          <option value="">Todos</option>
+        </FilterSelect>
+        <FilterInput
+          label="Lead gerado de"
+          type="date"
+          value={filters.created_from}
+          onChange={(e) => setFilters((f) => ({ ...f, created_from: e.target.value }))}
+        />
+        <FilterInput
+          label="Lead gerado até"
+          type="date"
+          value={filters.created_to}
+          onChange={(e) => setFilters((f) => ({ ...f, created_to: e.target.value }))}
+        />
         <FilterSelect label="Telefone" value={filters.phone_availability} onChange={(e) => setFilters((f) => ({ ...f, phone_availability: e.target.value }))}>
           <option value="">Qualquer</option>
           <option value="mobile">Celular</option>
@@ -155,6 +222,24 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
             ))}
           </select>
         </div>
+        <div className="field organizacao-bulk-bar-field">
+          <label className="label" htmlFor="organizacao-new-product">
+            Vincular produto (oportunidade)
+          </label>
+          <select
+            id="organizacao-new-product"
+            className="select"
+            value={toProduct}
+            onChange={(e) => setToProduct(e.target.value)}
+          >
+            <option value="">Selecione</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="organizacao-bulk-bar-actions">
           <button
             className="btn btn-primary"
@@ -162,7 +247,15 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
             disabled={!toBdr || selectedCount === 0}
             onClick={() => setConfirmOpen(true)}
           >
-            Transferir selecionados
+            Transferir BDR
+          </button>
+          <button
+            className="btn btn-primary"
+            type="button"
+            disabled={!toProduct || selectedCount === 0}
+            onClick={() => setConfirmProductOpen(true)}
+          >
+            Vincular produto
           </button>
           <label className="organizacao-bulk-select-all">
             <input
@@ -249,6 +342,23 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
               Confirmar
             </button>
             <button className="btn" type="button" onClick={() => setConfirmOpen(false)}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmProductOpen ? (
+        <div className="panel" style={{ marginTop: "1rem", borderColor: "#404040" }}>
+          <p>
+            Vincular <strong>{targetProductName}</strong> a <strong>{selectedCount}</strong> cliente(s) e abrir
+            oportunidade? Os produtos já vinculados <strong>não serão removidos</strong>.
+          </p>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button className="btn btn-primary" type="button" onClick={() => void executeProductLink()}>
+              Confirmar
+            </button>
+            <button className="btn" type="button" onClick={() => setConfirmProductOpen(false)}>
               Cancelar
             </button>
           </div>
