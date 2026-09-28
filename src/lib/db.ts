@@ -50,10 +50,10 @@ function getDatabaseUrl() {
 function getSqlClient() {
   if (!global.__crmInliftSql) {
     global.__crmInliftSql = postgres(getDatabaseUrl(), {
-      max: 5,
+      max: 8,
       prepare: false,
       idle_timeout: 20,
-      connect_timeout: 10
+      connect_timeout: 15
     });
   }
   return global.__crmInliftSql;
@@ -85,10 +85,12 @@ async function runMigrations(sql: Sql) {
     .filter((f) => f.endsWith(".sql"))
     .sort();
 
+  const appliedRows = await sql<{ id: string }[]>`SELECT id FROM schema_migrations`;
+  const appliedSet = new Set(appliedRows.map((r) => r.id));
+
   for (const file of files) {
     const id = file;
-    const [applied] = await sql<{ id: string }[]>`SELECT id FROM schema_migrations WHERE id = ${id}`;
-    if (applied) continue;
+    if (appliedSet.has(id)) continue;
 
     const body = fs.readFileSync(path.join(migrationsDir, file), "utf-8");
     try {
@@ -96,6 +98,7 @@ async function runMigrations(sql: Sql) {
         await tx.unsafe(body);
         await tx`INSERT INTO schema_migrations (id) VALUES (${id})`;
       });
+      appliedSet.add(id);
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       throw new Error(`Migração ${id} falhou: ${detail}`);

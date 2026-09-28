@@ -1,5 +1,5 @@
 import { all, get } from "@/lib/db";
-import { bucketKeyForApproach, periodToRange, spDayEndUtcIso, spDayStartUtcIso, type DashboardPeriod } from "@/lib/datetime";
+import { periodToRange, spDayEndUtcIso, spDayStartUtcIso, type DashboardPeriod } from "@/lib/datetime";
 import { getOpportunityDashboardMetrics } from "@/lib/opportunity-pipeline";
 
 export type DashboardStatsFilters = {
@@ -96,6 +96,21 @@ function buildFilters(input: DashboardStatsFilters) {
   return { period, productId, bdrUserId, ownerUserId, clientFilter, approachFilter, meetingFilter, params };
 }
 
+/** Evita estourar o pool Postgres (serverless) com dezenas de queries simultâneas. */
+async function runQueriesLimited(tasks: Array<() => Promise<unknown>>, concurrency = 3): Promise<unknown[]> {
+  const results: unknown[] = new Array(tasks.length);
+  let next = 0;
+  async function worker() {
+    while (next < tasks.length) {
+      const i = next++;
+      results[i] = await tasks[i]();
+    }
+  }
+  const workers = Math.min(concurrency, tasks.length);
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+  return results;
+}
+
 export async function loadDashboardStats(input: DashboardStatsFilters = {}): Promise<DashboardStatsPayload> {
   const { period, productId, bdrUserId, ownerUserId, clientFilter, approachFilter, meetingFilter, params } =
     buildFilters(input);
@@ -105,6 +120,7 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
   const weekEnd = spDayEndUtcIso(new Date(Date.now() + 6 * 86400000));
   const focusParams = { ...params, todayStart, todayEnd };
   const upcomingParams = { ...focusParams, weekEnd };
+  const timelineParams = { ...params, useMonthBuckets: period === "all" ? 1 : 0 };
 
   const bdrActivitySql = `
     WITH bdr_users AS (
@@ -173,27 +189,30 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
     meetingsUpcomingRow,
     focusReturns,
     focusMeetings
-  ] = await Promise.all([
-    get<{ count: string }>(`SELECT COUNT(*)::text AS count FROM clients c WHERE ${clientFilter}`, params),
-    get<{ count: string }>(
-      `
+  ] = (await runQueriesLimited([
+    () => get<{ count: string }>(`SELECT COUNT(*)::text AS count FROM clients c WHERE ${clientFilter}`, params),
+    () =>
+      get<{ count: string }>(
+        `
         SELECT COUNT(DISTINCT c.id)::text AS count
         FROM clients c
         JOIN contacts ct ON ct.client_id = c.id AND ct.verification_status = 'confirmed'
         WHERE ${clientFilter}
       `,
-      params
-    ),
-    get<{ count: string }>(
-      `
+        params
+      ),
+    () =>
+      get<{ count: string }>(
+        `
         SELECT COUNT(*)::text AS count FROM clients c
         WHERE ${clientFilter}
           AND NOT EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = c.id)
       `,
-      params
-    ),
-    all<{ bdr_user_id: number | null; bdr_name: string | null; count: string }>(
-      `
+        params
+      ),
+    () =>
+      all<{ bdr_user_id: number | null; bdr_name: string | null; count: string }>(
+        `
         SELECT c.bdr_user_id, u.name AS bdr_name, COUNT(*)::text AS count
         FROM clients c
         LEFT JOIN users u ON u.id = c.bdr_user_id
@@ -201,29 +220,32 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
         GROUP BY c.bdr_user_id, u.name
         ORDER BY count DESC, u.name
       `,
-      params
-    ),
-    get<{ count: string }>(
-      `
+        params
+      ),
+    () =>
+      get<{ count: string }>(
+        `
         SELECT COUNT(DISTINCT a.client_id)::text AS count
         FROM approaches a
         JOIN clients c ON c.id = a.client_id
         WHERE ${approachFilter}
       `,
-      params
-    ),
-    all<{ channel: string; count: string }>(
-      `
+        params
+      ),
+    () =>
+      all<{ channel: string; count: string }>(
+        `
         SELECT a.channel, COUNT(*)::text AS count
         FROM approaches a
         JOIN clients c ON c.id = a.client_id
         WHERE ${approachFilter}
         GROUP BY a.channel
       `,
-      params
-    ),
-    all<{ result_name: string; count: string }>(
-      `
+        params
+      ),
+    () =>
+      all<{ result_name: string; count: string }>(
+        `
         SELECT COALESCE(rt.name, 'Sem resultado') AS result_name, COUNT(*)::text AS count
         FROM approaches a
         JOIN clients c ON c.id = a.client_id
@@ -232,20 +254,22 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
         GROUP BY rt.name
         ORDER BY count DESC
       `,
-      params
-    ),
-    get<{ count: string }>(
-      `
+        params
+      ),
+    () =>
+      get<{ count: string }>(
+        `
         SELECT COUNT(*)::text AS count FROM follow_ups f
         JOIN clients c ON c.id = f.client_id
         WHERE f.status = 'pending'
         ${productId ? " AND f.product_id = @productId" : ""}
         ${bdrUserId ? " AND f.assigned_user_id = @bdrUserId" : ""}
       `,
-      params
-    ),
-    all<{ user_name: string; count: string }>(
-      `
+        params
+      ),
+    () =>
+      all<{ user_name: string; count: string }>(
+        `
         SELECT u.name AS user_name, COUNT(*)::text AS count
         FROM approaches a
         JOIN users u ON u.id = a.user_id
@@ -254,19 +278,28 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
         GROUP BY u.name
         ORDER BY count DESC
       `,
-      params
-    ),
-    all<{ occurred_at: string; channel: string }>(
-      `
-        SELECT a.occurred_at, a.channel
+        params
+      ),
+    () =>
+      all<{ bucket_key: string; channel: string; count: string }>(
+        `
+        SELECT
+          CASE
+            WHEN @useMonthBuckets = 1 THEN to_char(a.occurred_at AT TIME ZONE 'America/Sao_Paulo', 'MM/YYYY')
+            ELSE to_char(a.occurred_at AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD')
+          END AS bucket_key,
+          COALESCE(a.channel, 'call') AS channel,
+          COUNT(*)::text AS count
         FROM approaches a
         JOIN clients c ON c.id = a.client_id
         WHERE ${approachFilter}
+        GROUP BY 1, 2
       `,
-      params
-    ),
-    get<{ count: string }>(
-      `
+        timelineParams
+      ),
+    () =>
+      get<{ count: string }>(
+        `
         SELECT COUNT(DISTINCT a.client_id)::text AS count
         FROM approaches a
         JOIN clients c ON c.id = a.client_id
@@ -277,36 +310,42 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
             'pediu_retorno', 'reuniao_agendada'
           )
       `,
-      params
-    ),
-    all<{ bdr_name: string; approaches: string; meetings: string; clients: string }>(bdrActivitySql, params),
-    get<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM meetings m WHERE ${meetingFilter} AND m.status IN ('scheduled', 'confirmed')`,
-      params
-    ),
-    get<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM meetings m WHERE ${meetingFilter} AND m.status = 'confirmed'`,
-      params
-    ),
-    get<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM meetings m WHERE ${meetingFilter} AND m.status = 'held'`,
-      params
-    ),
-    get<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM meetings m WHERE ${meetingFilter} AND m.status = 'no_show'`,
-      params
-    ),
-    all<{ lead_qualification: string; count: string }>(
-      `
+        params
+      ),
+    () => all<{ bdr_name: string; approaches: string; meetings: string; clients: string }>(bdrActivitySql, params),
+    () =>
+      get<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM meetings m WHERE ${meetingFilter} AND m.status IN ('scheduled', 'confirmed')`,
+        params
+      ),
+    () =>
+      get<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM meetings m WHERE ${meetingFilter} AND m.status = 'confirmed'`,
+        params
+      ),
+    () =>
+      get<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM meetings m WHERE ${meetingFilter} AND m.status = 'held'`,
+        params
+      ),
+    () =>
+      get<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM meetings m WHERE ${meetingFilter} AND m.status = 'no_show'`,
+        params
+      ),
+    () =>
+      all<{ lead_qualification: string; count: string }>(
+        `
         SELECT c.lead_qualification, COUNT(*)::text AS count
         FROM clients c
         WHERE ${clientFilter}
         GROUP BY c.lead_qualification
       `,
-      params
-    ).catch(() => [] as Array<{ lead_qualification: string; count: string }>),
-    get<{ count: string }>(
-      `
+        params
+      ).catch(() => [] as Array<{ lead_qualification: string; count: string }>),
+    () =>
+      get<{ count: string }>(
+        `
         SELECT COUNT(*)::text AS count FROM follow_ups f
         JOIN clients c ON c.id = f.client_id
         WHERE f.status = 'pending' AND f.scheduled_at < @todayStart
@@ -314,10 +353,11 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
         ${productId ? " AND f.product_id = @productId" : ""}
         ${bdrUserId ? " AND f.assigned_user_id = @bdrUserId" : ""}
       `,
-      focusParams
-    ),
-    get<{ count: string }>(
-      `
+        focusParams
+      ),
+    () =>
+      get<{ count: string }>(
+        `
         SELECT COUNT(*)::text AS count FROM follow_ups f
         JOIN clients c ON c.id = f.client_id
         WHERE f.status = 'pending' AND f.scheduled_at >= @todayStart AND f.scheduled_at <= @todayEnd
@@ -325,10 +365,11 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
         ${productId ? " AND f.product_id = @productId" : ""}
         ${bdrUserId ? " AND f.assigned_user_id = @bdrUserId" : ""}
       `,
-      focusParams
-    ),
-    get<{ count: string }>(
-      `
+        focusParams
+      ),
+    () =>
+      get<{ count: string }>(
+        `
         SELECT COUNT(*)::text AS count FROM meetings m
         JOIN clients c ON c.id = m.client_id
         WHERE m.starts_at >= @todayStart AND m.starts_at <= @todayEnd
@@ -337,10 +378,11 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
           ${productId ? " AND m.product_id = @productId" : ""}
           ${bdrUserId ? " AND m.bdr_user_id = @bdrUserId" : ""}
       `,
-      focusParams
-    ),
-    get<{ count: string }>(
-      `
+        focusParams
+      ),
+    () =>
+      get<{ count: string }>(
+        `
         SELECT COUNT(*)::text AS count FROM meetings m
         JOIN clients c ON c.id = m.client_id
         WHERE m.starts_at >= @todayStart AND m.starts_at <= @weekEnd
@@ -349,16 +391,17 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
           ${productId ? " AND m.product_id = @productId" : ""}
           ${bdrUserId ? " AND m.bdr_user_id = @bdrUserId" : ""}
       `,
-      upcomingParams
-    ),
-    all<{
-      id: number;
-      client_id: number;
-      client_name: string;
-      scheduled_at: string;
-      kind: string;
-    }>(
-      `
+        upcomingParams
+      ),
+    () =>
+      all<{
+        id: number;
+        client_id: number;
+        client_name: string;
+        scheduled_at: string;
+        kind: string;
+      }>(
+        `
         SELECT f.id, f.client_id,
           COALESCE(c.trade_name, c.legal_name, 'Cliente') AS client_name,
           f.scheduled_at, f.kind
@@ -372,16 +415,17 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
         ORDER BY f.scheduled_at ASC
         LIMIT 6
       `,
-      focusParams
-    ),
-    all<{
-      id: number;
-      client_id: number;
-      title: string;
-      client_name: string;
-      starts_at: string;
-    }>(
-      `
+        focusParams
+      ),
+    () =>
+      all<{
+        id: number;
+        client_id: number;
+        title: string;
+        client_name: string;
+        starts_at: string;
+      }>(
+        `
         SELECT m.id, m.client_id, m.title, m.starts_at,
           COALESCE(c.trade_name, c.legal_name, 'Cliente') AS client_name
         FROM meetings m
@@ -394,19 +438,44 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
         ORDER BY m.starts_at ASC
         LIMIT 4
       `,
-      focusParams
-    )
-  ]);
+        focusParams
+      )
+  ])) as [
+    { count: string } | undefined,
+    { count: string } | undefined,
+    { count: string } | undefined,
+    Array<{ bdr_user_id: number | null; bdr_name: string | null; count: string }>,
+    { count: string } | undefined,
+    Array<{ channel: string; count: string }>,
+    Array<{ result_name: string; count: string }>,
+    { count: string } | undefined,
+    Array<{ user_name: string; count: string }>,
+    Array<{ bucket_key: string; channel: string; count: string }>,
+    { count: string } | undefined,
+    Array<{ bdr_name: string; approaches: string; meetings: string; clients: string }>,
+    { count: string } | undefined,
+    { count: string } | undefined,
+    { count: string } | undefined,
+    { count: string } | undefined,
+    Array<{ lead_qualification: string; count: string }>,
+    { count: string } | undefined,
+    { count: string } | undefined,
+    { count: string } | undefined,
+    { count: string } | undefined,
+    Array<{ id: number; client_id: number; client_name: string; scheduled_at: string; kind: string }>,
+    Array<{ id: number; client_id: number; title: string; client_name: string; starts_at: string }>
+  ];
 
   const seriesMap = new Map<string, number>();
   const channelSeries = new Map<string, Map<string, number>>();
   for (const row of approachRows) {
-    const key = bucketKeyForApproach(row.occurred_at, period);
-    seriesMap.set(key, (seriesMap.get(key) ?? 0) + 1);
+    const key = row.bucket_key;
+    const n = Number(row.count);
+    seriesMap.set(key, (seriesMap.get(key) ?? 0) + n);
     const ch = row.channel || "call";
     if (!channelSeries.has(ch)) channelSeries.set(ch, new Map());
     const bucket = channelSeries.get(ch)!;
-    bucket.set(key, (bucket.get(key) ?? 0) + 1);
+    bucket.set(key, (bucket.get(key) ?? 0) + n);
   }
   const approaches_series = [...seriesMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -503,7 +572,7 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
     qualification: qualMap,
     focus_items,
     period,
-    activity_metrics_available: approachRows.length > 0
+    activity_metrics_available: approachesTotal > 0
   };
 }
 
