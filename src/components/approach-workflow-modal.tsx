@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import { CadastroModal } from "@/components/cadastro-ui";
 import type { Product } from "@/lib/types";
 import type { ClientContact } from "@/components/client-detail-view";
+import { ApproachNextStepField } from "@/components/approach-next-step-field";
+import {
+  type ApproachNextActionKey,
+  validateNextActionChoice
+} from "@/lib/approach-next-actions";
 import { confirmProceedIfClientHasAgenda } from "@/lib/client-agenda-warning";
 
 type ResultType = {
@@ -12,6 +17,7 @@ type ResultType = {
   suggest_follow_up: boolean;
   collect_notes?: boolean;
   require_schedule_return?: boolean;
+  allowed_next_actions?: unknown;
 };
 type ClosureReason = { id: number; name: string; kind: "pause" | "close" };
 
@@ -53,7 +59,7 @@ export function ApproachWorkflowModal({
   const [usePast, setUsePast] = useState(false);
   const [pastDate, setPastDate] = useState("");
   const [pastTime, setPastTime] = useState("");
-  const [nextType, setNextType] = useState<"none" | "schedule_return" | "schedule_meeting" | "pause" | "close">("none");
+  const [nextType, setNextType] = useState<ApproachNextActionKey>("none");
   const [nextDate, setNextDate] = useState("");
   const [nextTime, setNextTime] = useState("");
   const [nextNotes, setNextNotes] = useState("");
@@ -87,21 +93,18 @@ export function ApproachWorkflowModal({
 
   const selectedResult = resultTypes.find((r) => String(r.id) === resultTypeId);
   const showNotesField = selectedResult?.collect_notes !== false;
-  const requireReturn = selectedResult?.require_schedule_return === true;
-
-  useEffect(() => {
-    if (requireReturn) setNextType("schedule_return");
-  }, [requireReturn, resultTypeId]);
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    if (requireReturn && nextType !== "schedule_return") {
-      setError("Este resultado exige agendar retorno com data e hora.");
-      setLoading(false);
-      return;
+    if (selectedResult) {
+      const nextErr = validateNextActionChoice(selectedResult, nextType);
+      if (nextErr) {
+        setError(nextErr);
+        setLoading(false);
+        return;
+      }
     }
 
     let next_action: Record<string, unknown> = { type: "none" };
@@ -229,62 +232,21 @@ export function ApproachWorkflowModal({
         ) : null}
 
         <h4>Próxima ação</h4>
-        {requireReturn ? (
-          <p className="muted">Este resultado exige agendar retorno.</p>
-        ) : selectedResult?.suggest_follow_up ? (
-          <p className="muted">Este resultado sugere definir um próximo passo.</p>
-        ) : null}
-        <div className="field">
-          <select
-            className="select"
-            value={nextType}
-            onChange={(e) => setNextType(e.target.value as typeof nextType)}
-            disabled={requireReturn}
-          >
-            {!requireReturn ? <option value="none">Nenhuma</option> : null}
-            <option value="schedule_return">Agendar retorno</option>
-            {!requireReturn ? (
-              <>
-                <option value="schedule_meeting">Agendar reunião</option>
-                <option value="pause">Pausar</option>
-                <option value="close">Encerrar</option>
-              </>
-            ) : null}
-          </select>
-        </div>
-        {nextType === "schedule_return" || nextType === "schedule_meeting" ? (
-          <>
-            <div className="filters-row">
-              <div className="field">
-                <label className="label">Data</label>
-                <input className="input" type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} required />
-              </div>
-              <div className="field">
-                <label className="label">Horário</label>
-                <input className="input" type="time" value={nextTime} onChange={(e) => setNextTime(e.target.value)} required />
-              </div>
-            </div>
-            <div className="field">
-              <label className="label">Motivo / observação</label>
-              <textarea className="textarea" value={nextNotes} onChange={(e) => setNextNotes(e.target.value)} />
-            </div>
-          </>
-        ) : null}
-        {nextType === "pause" || nextType === "close" ? (
-          <div className="field">
-            <label className="label">Motivo</label>
-            <select className="select" value={reasonId} onChange={(e) => setReasonId(e.target.value)} required>
-              <option value="">Selecione</option>
-              {closureReasons
-                .filter((r) => r.kind === (nextType === "pause" ? "pause" : "close"))
-                .map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-            </select>
-          </div>
-        ) : null}
+        <ApproachNextStepField
+          result={selectedResult}
+          nextType={nextType}
+          onNextTypeChange={setNextType}
+          nextDate={nextDate}
+          nextTime={nextTime}
+          onNextDateChange={setNextDate}
+          onNextTimeChange={setNextTime}
+          nextNotes={nextNotes}
+          onNextNotesChange={setNextNotes}
+          reasonId={reasonId}
+          onReasonIdChange={setReasonId}
+          closureReasons={closureReasons}
+          showNotesForSchedule
+        />
 
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <button className="btn btn-primary" type="submit" disabled={loading}>

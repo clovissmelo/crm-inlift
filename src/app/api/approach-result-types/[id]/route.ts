@@ -1,3 +1,4 @@
+import { parseAllowedNextActions, serializeAllowedNextActions } from "@/lib/approach-next-actions";
 import { deleteBlockedMessage, requireAdminApi } from "@/lib/admin";
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { get, nowIso, run } from "@/lib/db";
@@ -14,6 +15,11 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!parsed.success) {
     return Response.json({ error: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   }
+  const allowedSet = parsed.data.allowed_next_actions !== undefined;
+  const allowedJson = allowedSet
+    ? serializeAllowedNextActions(parseAllowedNextActions(parsed.data.allowed_next_actions))
+    : null;
+
   await run(
     `
       UPDATE approach_result_types SET
@@ -23,6 +29,7 @@ export async function PATCH(request: Request, { params }: Params) {
         lead_qualification = CASE WHEN @leadQualificationSet THEN @leadQualification ELSE lead_qualification END,
         collect_notes = COALESCE(@collectNotes, collect_notes),
         require_schedule_return = COALESCE(@requireScheduleReturn, require_schedule_return),
+        allowed_next_actions = CASE WHEN @allowedSet THEN @allowedNextActions::jsonb ELSE allowed_next_actions END,
         updated_at = @now
       WHERE id = @id
     `,
@@ -35,6 +42,8 @@ export async function PATCH(request: Request, { params }: Params) {
       leadQualification: parsed.data.lead_qualification ?? null,
       collectNotes: parsed.data.collect_notes ?? null,
       requireScheduleReturn: parsed.data.require_schedule_return ?? null,
+      allowedSet,
+      allowedNextActions: allowedJson,
       now: nowIso()
     }
   );

@@ -1,3 +1,8 @@
+import {
+  serializeAllowedNextActions,
+  parseAllowedNextActions,
+  type ApproachNextActionKey
+} from "@/lib/approach-next-actions";
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { all, nowIso, run } from "@/lib/db";
 import { catalogItemSchema } from "@/lib/validators";
@@ -21,11 +26,14 @@ export async function POST(request: Request) {
   }
   const slug = body.slug as string | undefined;
   if (!slug?.trim()) return Response.json({ error: "Informe um identificador (slug)" }, { status: 400 });
+  const allowedKeys: ApproachNextActionKey[] = parsed.data.allowed_next_actions
+    ? parseAllowedNextActions(parsed.data.allowed_next_actions)
+    : ["none"];
   try {
     const result = await run(
       `
-        INSERT INTO approach_result_types (slug, name, status, suggest_follow_up, lead_qualification, collect_notes, require_schedule_return, created_at, updated_at)
-        VALUES (@slug, @name, @status, @suggestFollowUp, @leadQualification, @collectNotes, @requireScheduleReturn, @now, @now)
+        INSERT INTO approach_result_types (slug, name, status, suggest_follow_up, lead_qualification, collect_notes, require_schedule_return, allowed_next_actions, created_at, updated_at)
+        VALUES (@slug, @name, @status, @suggestFollowUp, @leadQualification, @collectNotes, @requireScheduleReturn, @allowedNextActions::jsonb, @now, @now)
       `,
       {
         slug: slug.trim(),
@@ -35,6 +43,7 @@ export async function POST(request: Request) {
         leadQualification: parsed.data.lead_qualification ?? null,
         collectNotes: parsed.data.collect_notes ?? true,
         requireScheduleReturn: parsed.data.require_schedule_return ?? false,
+        allowedNextActions: serializeAllowedNextActions(allowedKeys),
         now: nowIso()
       }
     );

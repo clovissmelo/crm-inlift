@@ -8,6 +8,11 @@ import type { Product } from "@/lib/types";
 import { formatPhoneDisplay } from "@/lib/format";
 import { inferApproachResultSlugFromCall } from "@/lib/api4com/infer-approach-result";
 import { formatCallScriptLogForNotes, normalizeCallScriptLog } from "@/lib/call-script-log";
+import { ApproachNextStepField } from "@/components/approach-next-step-field";
+import {
+  type ApproachNextActionKey,
+  validateNextActionChoice
+} from "@/lib/approach-next-actions";
 import { confirmProceedIfClientHasAgenda } from "@/lib/client-agenda-warning";
 
 type CallDetail = {
@@ -37,7 +42,10 @@ type ResultType = {
   lead_qualification: LeadQualification | null;
   collect_notes: boolean;
   require_schedule_return: boolean;
+  allowed_next_actions?: unknown;
 };
+
+type ClosureReason = { id: number; name: string; kind: "pause" | "close" };
 
 type DialOption = {
   contact_id: number;
@@ -92,7 +100,9 @@ export function Api4comCallResultForm({
   const [productId, setProductId] = useState("");
   const [notes, setNotes] = useState("");
   const [contextLoading, setContextLoading] = useState(false);
-  const [nextType, setNextType] = useState<"none" | "schedule_return" | "schedule_meeting">("none");
+  const [nextType, setNextType] = useState<ApproachNextActionKey>("none");
+  const [reasonId, setReasonId] = useState("");
+  const [closureReasons, setClosureReasons] = useState<ClosureReason[]>([]);
   const [nextDate, setNextDate] = useState("");
   const [nextTime, setNextTime] = useState("");
   const [loading, setLoading] = useState(false);
@@ -110,6 +120,7 @@ export function Api4comCallResultForm({
         slug?: string;
         collect_notes?: boolean;
         require_schedule_return?: boolean;
+        allowed_next_actions?: unknown;
       }
     >;
   }) {
@@ -125,7 +136,8 @@ export function Api4comCallResultForm({
             ? i.lead_qualification
             : null,
         collect_notes: i.collect_notes !== false,
-        require_schedule_return: i.require_schedule_return === true
+        require_schedule_return: i.require_schedule_return === true,
+        allowed_next_actions: i.allowed_next_actions
       }));
   }
 
@@ -159,11 +171,16 @@ export function Api4comCallResultForm({
     setError(null);
     setContextLoading(true);
     try {
-      const [ctxRes, rtRes, basicRes] = await Promise.all([
+      const [ctxRes, rtRes, basicRes, crRes] = await Promise.all([
         fetch(`/api/api4com/calls/${callId}/dial-context`),
         fetch("/api/approach-result-types"),
-        fetch(`/api/api4com/calls/${callId}`)
+        fetch(`/api/api4com/calls/${callId}`),
+        fetch("/api/closure-reason-types")
       ]);
+      if (crRes.ok) {
+        const cr = (await crRes.json()) as { items?: ClosureReason[] };
+        setClosureReasons(cr.items ?? []);
+      }
 
       const rt = (await rtRes.json()) as { items?: ResultType[]; error?: string };
       const activeResults = rtRes.ok ? parseResultTypes(rt) : [];
@@ -221,6 +238,7 @@ export function Api4comCallResultForm({
     setResultLockedByIntegration(false);
     setNotes("");
     setNextType("none");
+    setReasonId("");
     setNextDate("");
     setNextTime("");
     setStep("result");
@@ -249,12 +267,7 @@ export function Api4comCallResultForm({
   }, [effectiveProductId, products]);
 
   const showNotesField = selectedResult?.collect_notes !== false;
-  const requireReturn = selectedResult?.require_schedule_return === true;
   const nextDial = ctx?.remaining[0] ?? null;
-
-  useEffect(() => {
-    if (requireReturn) setNextType("schedule_return");
-  }, [requireReturn, resultTypeId]);
 
   async function dismissPending() {
     if (!callId) return;
@@ -355,13 +368,12 @@ export function Api4comCallResultForm({
       setError("Selecione o resultado comercial.");
       return;
     }
-    if (requireReturn && nextType !== "schedule_return") {
-      setError("Este resultado exige agendar retorno com data e hora.");
-      return;
-    }
-    if (selectedResult?.suggest_follow_up && nextType === "none") {
-      setError("Este resultado sugere agendar retorno, reunião ou outra próxima ação.");
-      return;
+    if (selectedResult) {
+      const nextErr = validateNextActionChoice(selectedResult, nextType);
+      if (nextErr) {
+        setError(nextErr);
+        return;
+      }
     }
     setLoading(true);
     setError(null);
@@ -388,6 +400,17 @@ export function Api4comCallResultForm({
         contact_id: call.contact_id,
         product_id: resolvedProductId,
         notes: null
+      };
+    } else if (nextType === "pause" || nextType === "close") {
+      if (!resolvedProductId || !reasonId) {
+        setError("Informe produto e motivo para pausar ou encerrar.");
+        setLoading(false);
+        return;
+      }
+      next_action = {
+        type: nextType,
+        product_id: resolvedProductId,
+        reason_id: Number(reasonId)
       };
     }
 
@@ -554,30 +577,18 @@ export function Api4comCallResultForm({
               <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
           ) : null}
-          <div className="field">
-            <label className="label">Próximo passo</label>
-            {requireReturn ? (
-              <p className="muted" style={{ fontSize: "0.75rem", margin: "0 0 6px" }}>
-                Este resultado exige agendar retorno.
-              </p>
-            ) : null}
-            <select
-              className="select"
-              value={nextType}
-              onChange={(e) => setNextType(e.target.value as "none" | "schedule_return" | "schedule_meeting")}
-              disabled={requireReturn}
-            >
-              {!requireReturn ? <option value="none">Nenhum</option> : null}
-              <option value="schedule_return">Agendar retorno</option>
-              {!requireReturn ? <option value="schedule_meeting">Agendar reunião</option> : null}
-            </select>
-          </div>
-          {nextType === "schedule_return" || nextType === "schedule_meeting" ? (
-            <div style={{ display: "flex", gap: 8 }}>
-              <input className="input" type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} required />
-              <input className="input" type="time" value={nextTime} onChange={(e) => setNextTime(e.target.value)} required />
-            </div>
-          ) : null}
+          <ApproachNextStepField
+            result={selectedResult}
+            nextType={nextType}
+            onNextTypeChange={setNextType}
+            nextDate={nextDate}
+            nextTime={nextTime}
+            onNextDateChange={setNextDate}
+            onNextTimeChange={setNextTime}
+            reasonId={reasonId}
+            onReasonIdChange={setReasonId}
+            closureReasons={closureReasons}
+          />
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12, flexWrap: "wrap" }}>
             {ctx && ctx.remaining.length > 0 ? (
               <button type="button" className="btn" onClick={() => setStep("next_dial")}>

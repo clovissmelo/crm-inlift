@@ -3,6 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
 import { PageIntro } from "@/components/page-intro";
+import {
+  APPROACH_NEXT_ACTION_KEYS,
+  APPROACH_NEXT_ACTION_LABELS,
+  formatAllowedNextActionsSummary,
+  parseAllowedNextActions,
+  resolveAllowedNextActions,
+  type ApproachNextActionKey
+} from "@/lib/approach-next-actions";
 import { LEAD_QUALIFICATION_LABELS, type LeadQualification } from "@/lib/lead-qualification";
 
 type ResultRow = {
@@ -13,6 +21,7 @@ type ResultRow = {
   lead_qualification: LeadQualification | null;
   collect_notes: boolean;
   require_schedule_return: boolean;
+  allowed_next_actions?: unknown;
 };
 
 type ResultForm = {
@@ -23,7 +32,14 @@ type ResultForm = {
   lead_qualification: LeadQualification | "";
   collect_notes: boolean;
   require_schedule_return: boolean;
+  allowed_next_actions: ApproachNextActionKey[];
 };
+
+function normalizeAllowedForForm(row: Pick<ResultRow, "allowed_next_actions" | "require_schedule_return" | "suggest_follow_up">) {
+  const parsed = parseAllowedNextActions(row.allowed_next_actions);
+  if (parsed.length > 0) return parsed;
+  return resolveAllowedNextActions(row);
+}
 
 export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boolean }) {
   const [results, setResults] = useState<ResultRow[]>([]);
@@ -38,7 +54,8 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
     suggest_follow_up: false,
     lead_qualification: "",
     collect_notes: true,
-    require_schedule_return: false
+    require_schedule_return: false,
+    allowed_next_actions: ["none"]
   });
   const [resultSaving, setResultSaving] = useState(false);
 
@@ -60,7 +77,8 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
       suggest_follow_up: false,
       lead_qualification: "",
       collect_notes: true,
-      require_schedule_return: false
+      require_schedule_return: false,
+      allowed_next_actions: ["none"]
     });
     setError(null);
     setResultModal(true);
@@ -75,10 +93,23 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
       suggest_follow_up: row.suggest_follow_up,
       lead_qualification: row.lead_qualification ?? "",
       collect_notes: row.collect_notes !== false,
-      require_schedule_return: row.require_schedule_return === true
+      require_schedule_return: row.require_schedule_return === true,
+      allowed_next_actions: normalizeAllowedForForm(row)
     });
     setError(null);
     setResultModal(true);
+  }
+
+  function toggleAllowedAction(key: ApproachNextActionKey) {
+    setResultForm((f) => {
+      if (f.require_schedule_return && key === "schedule_return") return f;
+      const set = new Set(f.allowed_next_actions);
+      if (set.has(key)) set.delete(key);
+      else set.add(key);
+      let next = APPROACH_NEXT_ACTION_KEYS.filter((k) => set.has(k));
+      if (next.length === 0) next = ["none"];
+      return { ...f, allowed_next_actions: next };
+    });
   }
 
   async function saveResult(e: React.FormEvent) {
@@ -93,6 +124,10 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
       resultForm.lead_qualification === "hot"
         ? resultForm.lead_qualification
         : null;
+    let allowed = [...resultForm.allowed_next_actions];
+    if (resultForm.require_schedule_return && !allowed.includes("schedule_return")) {
+      allowed = ["schedule_return", ...allowed.filter((k) => k !== "schedule_return")];
+    }
     const body = resultEditingId
       ? {
           name: resultForm.name,
@@ -100,9 +135,10 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
           suggest_follow_up: resultForm.suggest_follow_up,
           lead_qualification: qualPayload,
           collect_notes: resultForm.collect_notes,
-          require_schedule_return: resultForm.require_schedule_return
+          require_schedule_return: resultForm.require_schedule_return,
+          allowed_next_actions: allowed
         }
-      : { ...resultForm, lead_qualification: qualPayload };
+      : { ...resultForm, lead_qualification: qualPayload, allowed_next_actions: allowed };
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -150,7 +186,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
               <th>Qualificação</th>
               <th>Observações</th>
               <th>Retorno obrig.</th>
-              <th>Próxima ação</th>
+              <th>Próximos passos</th>
               <th style={{ width: canDelete ? 180 : 100 }} />
             </tr>
           </thead>
@@ -160,9 +196,9 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
                 <td>{r.name}</td>
                 <td>{r.status === "active" ? "Ativo" : "Inativo"}</td>
                 <td>{r.lead_qualification ? LEAD_QUALIFICATION_LABELS[r.lead_qualification] : "—"}</td>
-                <td>{r.collect_notes !== false ? "Sim" : "Não"}</td>
+                <td>{r.collect_notes !== false ? "Sim" : "—"}</td>
                 <td>{r.require_schedule_return ? "Sim" : "—"}</td>
-                <td>{r.suggest_follow_up ? "Sugere follow-up" : "—"}</td>
+                <td style={{ fontSize: "0.8125rem", maxWidth: 280 }}>{formatAllowedNextActionsSummary(r)}</td>
                 <td>
                   <CadastroRowActions
                     canDelete={canDelete}
@@ -236,19 +272,50 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
             <input
               type="checkbox"
               checked={resultForm.require_schedule_return}
-              onChange={(e) =>
-                setResultForm((f) => ({
-                  ...f,
-                  require_schedule_return: e.target.checked,
-                  suggest_follow_up: e.target.checked ? true : f.suggest_follow_up
-                }))
-              }
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setResultForm((f) => {
+                  let allowed = [...f.allowed_next_actions];
+                  if (checked && !allowed.includes("schedule_return")) {
+                    allowed = ["schedule_return", ...allowed];
+                  }
+                  return {
+                    ...f,
+                    require_schedule_return: checked,
+                    suggest_follow_up: checked ? true : f.suggest_follow_up,
+                    allowed_next_actions: allowed
+                  };
+                });
+              }}
             />
             Obrigar agendar retorno
           </label>
+          <div className="field">
+            <span className="label">Próximos passos disponíveis ao registrar</span>
+            <p className="muted" style={{ fontSize: "0.8125rem", margin: "0 0 8px" }}>
+              Marque o que o BDR pode escolher após selecionar este resultado (ex.: número inválido → só Nenhum).
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {APPROACH_NEXT_ACTION_KEYS.map((key) => (
+                <label key={key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={resultForm.allowed_next_actions.includes(key)}
+                    disabled={resultForm.require_schedule_return && key === "schedule_return"}
+                    onChange={() => toggleAllowedAction(key)}
+                  />
+                  {APPROACH_NEXT_ACTION_LABELS[key]}
+                </label>
+              ))}
+            </div>
+          </div>
           <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            <input type="checkbox" checked={resultForm.suggest_follow_up} onChange={(e) => setResultForm((f) => ({ ...f, suggest_follow_up: e.target.checked }))} />
-            Sugere próxima ação / follow-up
+            <input
+              type="checkbox"
+              checked={resultForm.suggest_follow_up}
+              onChange={(e) => setResultForm((f) => ({ ...f, suggest_follow_up: e.target.checked }))}
+            />
+            Exigir próximo passo (não aceitar Nenhum quando estiver marcado acima)
           </label>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <button type="button" className="btn" onClick={() => setResultModal(false)}>

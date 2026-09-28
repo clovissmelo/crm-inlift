@@ -187,6 +187,14 @@ export const meetingUpdateSchema = z.object({
   reschedule_reason: z.string().trim().optional().nullable()
 });
 
+const approachNextActionKeySchema = z.enum([
+  "none",
+  "schedule_return",
+  "schedule_meeting",
+  "pause",
+  "close"
+]);
+
 export const catalogItemSchema = z.object({
   name: z.string().trim().min(1),
   status: z.enum(["active", "inactive"]).optional(),
@@ -194,7 +202,8 @@ export const catalogItemSchema = z.object({
   kind: z.enum(["pause", "close"]).optional(),
   lead_qualification: z.enum(["cold", "warm", "hot"]).optional().nullable(),
   collect_notes: z.boolean().optional(),
-  require_schedule_return: z.boolean().optional()
+  require_schedule_return: z.boolean().optional(),
+  allowed_next_actions: z.array(approachNextActionKeySchema).optional().nullable()
 });
 
 export const contactSchema = z.object({

@@ -1,3 +1,4 @@
+import { validateNextActionChoice, type ApproachNextActionKey } from "@/lib/approach-next-actions";
 import { createApproach } from "@/lib/approaches";
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { get, nowIso, run } from "@/lib/db";
@@ -19,22 +20,15 @@ export async function POST(request: Request) {
     suggest_follow_up: boolean;
     lead_qualification: string | null;
     require_schedule_return: boolean;
+    allowed_next_actions: unknown;
   }>(
-    "SELECT suggest_follow_up, lead_qualification, require_schedule_return FROM approach_result_types WHERE id = @id AND status = 'active'",
+    "SELECT suggest_follow_up, lead_qualification, require_schedule_return, allowed_next_actions FROM approach_result_types WHERE id = @id AND status = 'active'",
     { id: data.result_type_id }
   );
   if (!resultType) return Response.json({ error: "Resultado inválido" }, { status: 400 });
 
-  if (resultType.require_schedule_return && data.next_action.type !== "schedule_return") {
-    return Response.json({ error: "Este resultado exige agendar retorno com data e hora." }, { status: 400 });
-  }
-
-  if (resultType.suggest_follow_up && data.next_action.type === "none") {
-    return Response.json(
-      { error: "Este resultado sugere uma próxima ação (retorno, reunião, pausa ou encerramento)." },
-      { status: 400 }
-    );
-  }
+  const nextValidation = validateNextActionChoice(resultType, data.next_action.type as ApproachNextActionKey);
+  if (nextValidation) return Response.json({ error: nextValidation }, { status: 400 });
 
   if (data.occurred_at) {
     const occurred = new Date(data.occurred_at);
