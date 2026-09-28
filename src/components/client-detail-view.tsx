@@ -245,6 +245,11 @@ export function ClientDetailView({
     setInProspeccao(Boolean(initialClient.in_prospeccao_queue ?? true));
   }, [initialClient.in_prospeccao_queue]);
 
+  useEffect(() => {
+    if (!oppModalOpen || linkedProducts.length === 0) return;
+    setNewOppProductId(String(linkedProducts[0]!.product_id));
+  }, [oppModalOpen, linkedProducts]);
+
   const opportunityProductOptions = useMemo(() => {
     const map = new Map<number, string>();
     for (const o of oppList) map.set(o.product_id, o.product_name);
@@ -426,7 +431,12 @@ export function ClientDetailView({
   }
 
   function openOppModal() {
-    setNewOppProductId(String(linkedProducts[0]?.product_id ?? ""));
+    setError(null);
+    if (linkedProducts.length === 0) {
+      setError("Vincule ao menos um produto em Empresa antes de criar a oportunidade.");
+      return;
+    }
+    setNewOppProductId(String(linkedProducts[0]!.product_id));
     setReturnToProspeccao(true);
     setOppModalOpen(true);
   }
@@ -476,8 +486,9 @@ export function ClientDetailView({
 
   async function createOpportunity() {
     setError(null);
-    if (!newOppProductId) {
-      setError("Selecione o produto.");
+    const productId = Number(newOppProductId) || linkedProducts[0]?.product_id;
+    if (!productId) {
+      setError("Vincule um produto ao cliente em Empresa.");
       return;
     }
     const res = await fetch("/api/opportunities", {
@@ -485,7 +496,7 @@ export function ClientDetailView({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         client_id: initialClient.id,
-        product_id: Number(newOppProductId),
+        product_id: productId,
         title: newOppTitle || undefined,
         origin_bdr_user_id: initialClient.bdr_user_id,
         return_to_prospection: returnToProspeccao
@@ -533,6 +544,8 @@ export function ClientDetailView({
   const localLabel = [initialClient.city, initialClient.uf].filter(Boolean).join(" / ");
   const websiteHref = externalWebHref(initialClient.website);
   const instagramLink = instagramHref(initialClient.instagram);
+  /** Produtos do cadastro do cliente (oportunidade sempre vinculada a eles). */
+  const oppProductOptions = linkedProducts;
   const productOptions =
     linkedProducts.length > 0 ? linkedProducts : allProducts.map((p) => ({ product_id: p.id, name: p.name }));
 
@@ -712,14 +725,20 @@ export function ClientDetailView({
       <CadastroModal open={oppModalOpen} title="Nova oportunidade" onClose={() => setOppModalOpen(false)}>
         <div className="field">
           <label className="label">Produto</label>
-          <select className="select" value={newOppProductId} onChange={(e) => setNewOppProductId(e.target.value)}>
-            <option value="">Selecione</option>
-            {productOptions.map((p) => (
-              <option key={p.product_id} value={p.product_id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          {oppProductOptions.length === 1 ? (
+            <p style={{ margin: "0.35rem 0 0", fontWeight: 600 }}>{oppProductOptions[0]!.name}</p>
+          ) : (
+            <select className="select" value={newOppProductId} onChange={(e) => setNewOppProductId(e.target.value)}>
+              {oppProductOptions.map((p) => (
+                <option key={p.product_id} value={p.product_id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <p className="muted" style={{ fontSize: "0.8125rem", marginTop: 6, marginBottom: 0 }}>
+            Produto(s) vinculado(s) ao cadastro da empresa.
+          </p>
         </div>
         <div className="field">
           <label className="label">Título (opcional)</label>
