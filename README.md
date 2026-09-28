@@ -101,7 +101,7 @@ Tokens ficam armazenados criptografados na tabela `google_calendar_connection`. 
 
 - **API4COM** — Admin → Integrações → API4COM (telefonia e webhook).
 - **Google Places** — Admin → Integrações → Google Places (chave criptografada em `system_settings`, limites diários/por execução).
-- **Novos leads (postos ANP)** — Admin → Novos leads. Motor portado de `contabilidade-leads-pilot` (RS/PR). Processamento em fila via cron (`/api/cron/lead-generation`, 1 tick/minuto na Vercel).
+- **Novos leads (postos ANP)** — Admin → Novos leads. Motor portado de `contabilidade-leads-pilot` (RS/PR). No plano Hobby, o progresso avança enquanto a tela faz polling da execução; opcionalmente use `/api/cron/lead-generation` (1×/dia no Hobby) ou cron frequente no Pro.
 
 ### Geração de leads — deploy
 

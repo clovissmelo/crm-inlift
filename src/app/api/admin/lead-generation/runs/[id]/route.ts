@@ -1,6 +1,9 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
+import { drainLeadGenerationTicks } from "@/lib/lead-generation/drain-ticks";
 import { getLeadGenerationRun, listRunItems } from "@/lib/lead-generation/runs-repo";
+
+export const maxDuration = 60;
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,8 +15,13 @@ export async function GET(_request: Request, { params }: Params) {
   const id = Number((await params).id);
   if (!Number.isFinite(id)) return Response.json({ error: "ID inválido" }, { status: 400 });
 
-  const run = await getLeadGenerationRun(id);
+  let run = await getLeadGenerationRun(id);
   if (!run) return Response.json({ error: "Execução não encontrada" }, { status: 404 });
+
+  if (["queued", "running"].includes(run.status)) {
+    await drainLeadGenerationTicks({ runId: id, maxTicks: 10, maxMs: 52_000 });
+    run = (await getLeadGenerationRun(id))!;
+  }
 
   const tab = new URL(_request.url).searchParams.get("tab");
   let items: Record<string, unknown>[] | undefined;
