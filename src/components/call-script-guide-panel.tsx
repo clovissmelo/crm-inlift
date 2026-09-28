@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { normalizeCallScriptLog, type CallScriptLogEntry } from "@/lib/call-script-log";
 import {
   parseCallScriptBody,
   renderStepContent,
@@ -18,6 +19,7 @@ export type ActiveCallForScript = {
   product_name: string | null;
   contact_name: string | null;
   status: string;
+  script_flow_log?: unknown;
 };
 
 type Props = {
@@ -26,6 +28,7 @@ type Props = {
   onCollapse?: () => void;
   collapsed?: boolean;
   onExpand?: () => void;
+  onLogUpdated?: (log: CallScriptLogEntry[]) => void;
 };
 
 function stepLabel(status: string) {
@@ -34,13 +37,36 @@ function stepLabel(status: string) {
   return "Ligação iniciada";
 }
 
-export function CallScriptGuidePanel({ call, scriptBody, collapsed, onCollapse, onExpand }: Props) {
+function stepIdFromLog(log: CallScriptLogEntry[], flow: ScriptFlow): string {
+  if (log.length === 0) return flow.start;
+  const last = log[log.length - 1]!;
+  if (last.action === "restart") return flow.start;
+  if (last.next_step_id && flow.steps[last.next_step_id]) return last.next_step_id;
+  if (last.step_id && flow.steps[last.step_id]) return last.step_id;
+  return flow.start;
+}
+
+export function CallScriptGuidePanel({
+  call,
+  scriptBody,
+  collapsed,
+  onCollapse,
+  onExpand,
+  onLogUpdated
+}: Props) {
   const flow = useMemo(() => (scriptBody ? parseCallScriptBody(scriptBody) : null), [scriptBody]);
+  const savedLog = useMemo(() => normalizeCallScriptLog(call.script_flow_log), [call.script_flow_log]);
   const [stepId, setStepId] = useState<string | null>(null);
+  const [logCount, setLogCount] = useState(savedLog.length);
 
   useEffect(() => {
-    setStepId(flow?.start ?? null);
-  }, [flow?.start, call.id, scriptBody]);
+    setLogCount(savedLog.length);
+    if (!flow) {
+      setStepId(null);
+      return;
+    }
+    setStepId(stepIdFromLog(savedLog, flow));
+  }, [flow, call.id, scriptBody, savedLog.length]);
 
   const vars = useMemo(
     () => ({
@@ -50,6 +76,20 @@ export function CallScriptGuidePanel({ call, scriptBody, collapsed, onCollapse, 
     }),
     [call.contact_name, call.client_name, call.product_name]
   );
+
+  async function persistLog(entry: Omit<CallScriptLogEntry, "at">) {
+    const res = await fetch(`/api/api4com/calls/${call.id}/script-log`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(entry)
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as { log?: CallScriptLogEntry[] };
+    if (data.log) {
+      setLogCount(data.log.length);
+      onLogUpdated?.(data.log);
+    }
+  }
 
   if (collapsed) {
     return (
@@ -64,9 +104,28 @@ export function CallScriptGuidePanel({ call, scriptBody, collapsed, onCollapse, 
 
   const step: ScriptFlowStep | null = flow && stepId ? (flow.steps[stepId] ?? null) : null;
 
-  function goNext(next: string | null) {
+  function goNext(next: string | null, action: "next" | "choice", choiceLabel?: string) {
+    if (!step || !stepId) return;
+    void persistLog({
+      step_id: stepId,
+      step_title: step.title,
+      action,
+      choice_label: choiceLabel ?? null,
+      next_step_id: next
+    });
     if (next && flow?.steps[next]) setStepId(next);
     else setStepId(null);
+  }
+
+  function restartFlow() {
+    if (!flow) return;
+    void persistLog({
+      step_id: stepId ?? flow.start,
+      step_title: step?.title ?? "Roteiro",
+      action: "restart",
+      next_step_id: flow.start
+    });
+    setStepId(flow.start);
   }
 
   return (
@@ -105,7 +164,7 @@ export function CallScriptGuidePanel({ call, scriptBody, collapsed, onCollapse, 
                         key={choice.label}
                         type="button"
                         className="btn btn-primary call-script-btn-choice"
-                        onClick={() => goNext(choice.next)}
+                        onClick={() => goNext(choice.next, "choice", choice.label)}
                       >
                         {choice.label}
                       </button>
@@ -117,7 +176,7 @@ export function CallScriptGuidePanel({ call, scriptBody, collapsed, onCollapse, 
                   <button
                     type="button"
                     className="btn btn-primary call-script-btn-next"
-                    onClick={() => goNext(step.type === "linear" ? step.next : null)}
+                    onClick={() => goNext(step.type === "linear" ? step.next : null, "next")}
                   >
                     Próximo
                     <ChevronRight size={20} style={{ marginLeft: 8, verticalAlign: "middle" }} aria-hidden />
@@ -133,16 +192,11 @@ export function CallScriptGuidePanel({ call, scriptBody, collapsed, onCollapse, 
         </div>
 
         <footer className="call-script-panel-foot">
-          <button
-            type="button"
-            className="btn"
-            disabled={!flow}
-            onClick={() => setStepId(flow?.start ?? null)}
-          >
+          <button type="button" className="btn" disabled={!flow} onClick={restartFlow}>
             Reiniciar etapas
           </button>
           <span className="muted" style={{ fontSize: "0.75rem" }}>
-            Guia · não grava abordagem
+            {logCount > 0 ? `${logCount} registro(s) na ligação` : "Seleções gravadas na ligação"}
           </span>
         </footer>
       </aside>

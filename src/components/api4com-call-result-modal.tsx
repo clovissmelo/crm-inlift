@@ -7,6 +7,7 @@ import { formatSpDateTime } from "@/lib/datetime";
 import type { Product } from "@/lib/types";
 import { formatPhoneDisplay } from "@/lib/format";
 import { inferApproachResultSlugFromCall } from "@/lib/api4com/infer-approach-result";
+import { formatCallScriptLogForNotes, normalizeCallScriptLog } from "@/lib/call-script-log";
 import { confirmProceedIfClientHasAgenda } from "@/lib/client-agenda-warning";
 
 type CallDetail = {
@@ -25,6 +26,7 @@ type CallDetail = {
   client_name: string | null;
   contact_name: string | null;
   record_url: string | null;
+  script_flow_log?: unknown;
 };
 
 type ResultType = {
@@ -325,9 +327,13 @@ export function Api4comCallResultModal({
         )
       );
     }
+    const scriptNotes = call?.script_flow_log
+      ? formatCallScriptLogForNotes(normalizeCallScriptLog(call.script_flow_log))
+      : null;
+    if (scriptNotes) lines.unshift(scriptNotes);
     const base = showNotesField ? notes.trim() : "";
     if (lines.length === 0) return base;
-    return [base, lines.join("\n")].filter(Boolean).join("\n\n");
+    return [base, lines.join("\n\n")].filter(Boolean).join("\n\n");
   }
 
   async function submit(e: React.FormEvent) {

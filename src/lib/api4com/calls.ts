@@ -3,6 +3,7 @@ import { api4comStartCall } from "@/lib/api4com/client";
 import { getApi4comConfig } from "@/lib/api4com/config";
 import { resolveApi4comApiTokenForUser } from "@/lib/api4com/user-token";
 import { normalizeApi4comCalledNumber, normalizeApi4comExtension } from "@/lib/api4com/phone";
+import { normalizeCallScriptLog, type CallScriptLogEntry } from "@/lib/call-script-log";
 
 export type Api4comCallRow = {
   id: number;
@@ -27,8 +28,39 @@ export type Api4comCallRow = {
   result_deferred_at: string | null;
   error_message: string | null;
   dial_session_root_id: number | null;
+  script_flow_log?: unknown;
   created_at: string;
 };
+
+export async function appendCallScriptLog(callId: number, userId: number, entry: Omit<CallScriptLogEntry, "at">) {
+  const row = await get<{ script_flow_log: unknown; status: string }>(
+    `
+      SELECT script_flow_log, status FROM api4com_calls
+      WHERE id = @id AND user_id = @userId
+    `,
+    { callId, userId }
+  );
+  if (!row) throw new Error("Chamada não encontrada");
+  if (!["initiating", "ringing", "in_progress"].includes(row.status)) {
+    throw new Error("O roteiro só pode ser atualizado enquanto a ligação estiver ativa.");
+  }
+  const prev = normalizeCallScriptLog(row.script_flow_log);
+  const next: CallScriptLogEntry[] = [
+    ...prev,
+    {
+      ...entry,
+      at: nowIso()
+    }
+  ];
+  await run(
+    `
+      UPDATE api4com_calls SET script_flow_log = @log::jsonb, updated_at = @now
+      WHERE id = @id AND user_id = @userId
+    `,
+    { id: callId, userId, log: JSON.stringify(next), now: nowIso() }
+  );
+  return next;
+}
 
 export async function assertExtensionUnique(extension: string, excludeUserId?: number) {
   const row = await get<{ id: number }>(
