@@ -11,6 +11,7 @@ import {
   resolveAllowedNextActions,
   type ApproachNextActionKey
 } from "@/lib/approach-next-actions";
+import { LeadQualificationBadge } from "@/components/lead-qualification-picker";
 import { LEAD_QUALIFICATION_LABELS, type LeadQualification } from "@/lib/lead-qualification";
 
 type ResultRow = {
@@ -195,7 +196,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
               <tr key={r.id}>
                 <td>{r.name}</td>
                 <td>{r.status === "active" ? "Ativo" : "Inativo"}</td>
-                <td>{r.lead_qualification ? LEAD_QUALIFICATION_LABELS[r.lead_qualification] : "—"}</td>
+                <td>{r.lead_qualification ? <LeadQualificationBadge value={r.lead_qualification} /> : "—"}</td>
                 <td>{r.collect_notes !== false ? "Sim" : "—"}</td>
                 <td>{r.require_schedule_return ? "Sim" : "—"}</td>
                 <td style={{ fontSize: "0.8125rem", maxWidth: 280 }}>{formatAllowedNextActionsSummary(r)}</td>
