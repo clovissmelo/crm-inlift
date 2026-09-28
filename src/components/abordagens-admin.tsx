@@ -4,7 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
 import { FilterBar, FilterSelect } from "@/components/filter-bar";
 import { PageIntro } from "@/components/page-intro";
+import { ScriptFlowEditor } from "@/components/script-flow-editor";
 import { PLACEHOLDER_HELP } from "@/lib/message-templates";
+import {
+  defaultEmptyCallFlow,
+  defaultPostoCredCallFlow,
+  parseCallScriptBody,
+  serializeCallScriptFlow
+} from "@/lib/script-flow";
 import type { Product } from "@/lib/types";
 
 type ScriptRow = {
@@ -27,8 +34,8 @@ type ScriptForm = {
 const emptyScriptForm = (): ScriptForm => ({
   title: "",
   product_id: "",
-  script_type: "whatsapp",
-  body: "",
+  script_type: "call",
+  body: serializeCallScriptFlow(defaultEmptyCallFlow()),
   status: "active"
 });
 
@@ -97,6 +104,11 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
     e.preventDefault();
     setScriptSaving(true);
     setError(null);
+    if (scriptForm.script_type === "call" && !parseCallScriptBody(scriptForm.body)) {
+      setScriptSaving(false);
+      setError("Configure ao menos uma etapa no fluxo de ligação.");
+      return;
+    }
     const payload = {
       ...scriptForm,
       product_id: scriptForm.product_id ? Number(scriptForm.product_id) : null
@@ -233,13 +245,44 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
               <option value="inactive">Inativo</option>
             </select>
           </div>
-          <div className="field">
-            <label className="label">Texto</label>
-            <textarea className="textarea" value={scriptForm.body} onChange={(e) => setScriptForm((f) => ({ ...f, body: e.target.value }))} required />
-          </div>
-          <p className="muted" style={{ fontSize: "0.75rem" }}>
-            Placeholders: {PLACEHOLDER_HELP.map((p) => p.key).join(", ")}
-          </p>
+          {scriptForm.script_type === "call" ? (
+            <div className="field">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+                <span className="label" style={{ margin: 0, alignSelf: "center" }}>
+                  Fluxo da ligação
+                </span>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() =>
+                    setScriptForm((f) => ({ ...f, body: serializeCallScriptFlow(defaultPostoCredCallFlow()) }))
+                  }
+                >
+                  Carregar modelo PostoCred
+                </button>
+              </div>
+              <ScriptFlowEditor
+                key={`flow-${scriptEditingId ?? "new"}-${scriptModal}`}
+                body={scriptForm.body}
+                onBodyChange={(body) => setScriptForm((f) => ({ ...f, body }))}
+              />
+            </div>
+          ) : (
+            <>
+              <div className="field">
+                <label className="label">Texto</label>
+                <textarea
+                  className="textarea"
+                  value={scriptForm.body}
+                  onChange={(e) => setScriptForm((f) => ({ ...f, body: e.target.value }))}
+                  required
+                />
+              </div>
+              <p className="muted" style={{ fontSize: "0.75rem" }}>
+                Placeholders: {PLACEHOLDER_HELP.map((p) => p.key).join(", ")}
+              </p>
+            </>
+          )}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <button type="button" className="btn" onClick={() => setScriptModal(false)}>
               Cancelar

@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Api4comCallResultModal } from "@/components/api4com-call-result-modal";
+import { CallScriptGuidePanel, type ActiveCallForScript } from "@/components/call-script-guide-panel";
 import type { Product, User } from "@/lib/types";
 
 function isProspeccaoPath(pathname: string | null) {
@@ -38,12 +39,29 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
   const [modalOpen, setModalOpen] = useState(false);
   const autoOpenedRef = useRef<Set<number>>(new Set());
 
+  const [activeCall, setActiveCall] = useState<ActiveCallForScript | null>(null);
+  const [callScriptBody, setCallScriptBody] = useState<string | null>(null);
+  const [scriptPanelCollapsed, setScriptPanelCollapsed] = useState(false);
+
   const refreshPending = useCallback(async () => {
     if (!canDial) return;
     const res = await fetch("/api/api4com/calls/pending");
     if (!res.ok) return;
     const data = (await res.json()) as { items: PendingCall[] };
     setPending(data.items ?? []);
+  }, [canDial]);
+
+  const refreshActiveCall = useCallback(async () => {
+    if (!canDial) {
+      setActiveCall(null);
+      return;
+    }
+    const res = await fetch("/api/api4com/calls/active");
+    if (!res.ok) return;
+    const data = (await res.json()) as { items: ActiveCallForScript[] };
+    const next = data.items?.[0] ?? null;
+    setActiveCall(next);
+    if (!next) setCallScriptBody(null);
   }, [canDial]);
 
   useEffect(() => {
@@ -60,6 +78,34 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
     const t = window.setInterval(() => void refreshPending(), 4000);
     return () => window.clearInterval(t);
   }, [canDial, refreshPending]);
+
+  useEffect(() => {
+    if (!canDial) return;
+    void refreshActiveCall();
+    const t = window.setInterval(() => void refreshActiveCall(), 2000);
+    return () => window.clearInterval(t);
+  }, [canDial, refreshActiveCall]);
+
+  useEffect(() => {
+    if (!activeCall?.product_id) {
+      setCallScriptBody(null);
+      return;
+    }
+    const params = new URLSearchParams({ type: "call", product_id: String(activeCall.product_id) });
+    void fetch(`/api/message-scripts?${params}`)
+      .then((r) => r.json())
+      .then((d: { items?: Array<{ body: string; script_type: string; product_id: number | null }> }) => {
+        const callScripts = (d.items ?? []).filter((s) => s.script_type === "call" && s.body?.trim());
+        const pid = activeCall.product_id;
+        const match =
+          callScripts.find((s) => s.product_id === pid) ??
+          callScripts.find((s) => s.product_id == null) ??
+          callScripts[0];
+        setCallScriptBody(match?.body ?? null);
+      })
+      .catch(() => setCallScriptBody(null));
+    setScriptPanelCollapsed(false);
+  }, [activeCall?.id, activeCall?.product_id]);
 
   useEffect(() => {
     if (!canDial || !onProspeccaoPage || modalOpen) return;
@@ -97,6 +143,8 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
     void refreshPending();
   }
 
+  const showScriptPanel = canDial && activeCall != null;
+
   return (
     <Api4comContext.Provider value={{ canDial }}>
       {showBanner ? (
@@ -126,6 +174,15 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
         </div>
       ) : null}
       {children}
+      {showScriptPanel ? (
+        <CallScriptGuidePanel
+          call={activeCall}
+          scriptBody={callScriptBody}
+          collapsed={scriptPanelCollapsed}
+          onCollapse={() => setScriptPanelCollapsed(true)}
+          onExpand={() => setScriptPanelCollapsed(false)}
+        />
+      ) : null}
       {showProspeccaoRegisterUi ? (
         <Api4comCallResultModal
           callId={modalCallId}

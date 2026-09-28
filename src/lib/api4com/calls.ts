@@ -200,6 +200,32 @@ export async function getCallDetailForUser(id: number, userId: number) {
   );
 }
 
+export async function listActiveCallsForUser(userId: number) {
+  return all<
+    Api4comCallRow & {
+      client_name: string | null;
+      contact_name: string | null;
+      product_name: string | null;
+    }
+  >(
+    `
+      SELECT c.*,
+        COALESCE(cl.trade_name, cl.legal_name) AS client_name,
+        ct.name AS contact_name,
+        p.name AS product_name
+      FROM api4com_calls c
+      LEFT JOIN clients cl ON cl.id = c.client_id
+      LEFT JOIN contacts ct ON ct.id = c.contact_id
+      LEFT JOIN products p ON p.id = c.product_id
+      WHERE c.user_id = @userId
+        AND c.status IN ('initiating', 'ringing', 'in_progress')
+      ORDER BY c.id DESC
+      LIMIT 1
+    `,
+    { userId }
+  );
+}
+
 export async function listPendingCallsForUser(userId: number) {
   return all<
     Api4comCallRow & {

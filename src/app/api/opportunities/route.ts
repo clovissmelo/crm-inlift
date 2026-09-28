@@ -1,5 +1,5 @@
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
-import { createOpportunity, findOpenOpportunitiesForProduct } from "@/lib/opportunity-pipeline";
+import { closeSupersededOpenOpportunities, createOpportunity } from "@/lib/opportunity-pipeline";
 import { returnClientToProspeccaoQueue } from "@/lib/prospeccao-return";
 import { opportunityCreateSchema } from "@/lib/validators";
 
@@ -12,17 +12,7 @@ export async function POST(request: Request) {
     return Response.json({ error: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   }
   const data = parsed.data;
-  const existing = await findOpenOpportunitiesForProduct(data.client_id, data.product_id);
-  if (existing.length && !data.force_create) {
-    return Response.json(
-      {
-        error: "duplicate_open",
-        message: "Já existe oportunidade aberta para este cliente e produto.",
-        existing
-      },
-      { status: 409 }
-    );
-  }
+  await closeSupersededOpenOpportunities(data.client_id, data.product_id, user.id);
   const id = await createOpportunity({
     ...data,
     title: data.title ?? "",

@@ -33,10 +33,62 @@ export async function findOpenOpportunitiesForProduct(clientId: number, productI
     `
       SELECT id, title, created_at FROM opportunities
       WHERE client_id = @clientId AND product_id = @productId AND outcome = 'open'
+        AND COALESCE(engagement_status, 'active') = 'active'
       ORDER BY updated_at DESC
     `,
     { clientId, productId }
   );
+}
+
+const SUPERSEDE_CLOSE_NOTE = "Encerrada ao criar nova oportunidade do mesmo produto.";
+
+/** Fecha oportunidades abertas do par cliente/produto antes de abrir outra. */
+export async function closeSupersededOpenOpportunities(clientId: number, productId: number, userId: number) {
+  const openOpps = await findOpenOpportunitiesForProduct(clientId, productId);
+  if (!openOpps.length) return;
+
+  const lostStageId =
+    (await getDefaultStageId("Perdido")) ??
+    (await get<{ id: number }>("SELECT id FROM pipeline_stages WHERE kind = 'lost' ORDER BY sort_order LIMIT 1"))?.id;
+  if (!lostStageId) throw new Error("Etapa comercial de encerramento não configurada");
+
+  const now = nowIso();
+  for (const opp of openOpps) {
+    const current = await get<{ pipeline_stage_id: number | null }>(
+      "SELECT pipeline_stage_id FROM opportunities WHERE id = @id",
+      { id: opp.id }
+    );
+    await run(
+      `
+        UPDATE opportunities SET
+          outcome = 'lost',
+          engagement_status = 'closed',
+          pipeline_stage_id = @stageId,
+          lost_notes = @notes,
+          closed_at = @now,
+          status_changed_at = @now,
+          status_changed_by_user_id = @userId,
+          updated_at = @now,
+          row_version = row_version + 1
+        WHERE id = @id
+      `,
+      { id: opp.id, stageId: lostStageId, notes: SUPERSEDE_CLOSE_NOTE, now, userId }
+    );
+    await run(
+      `
+        INSERT INTO opportunity_stage_logs (opportunity_id, from_stage_id, to_stage_id, user_id, notes, created_at)
+        VALUES (@oppId, @fromId, @toId, @userId, @notes, @now)
+      `,
+      {
+        oppId: opp.id,
+        fromId: current?.pipeline_stage_id ?? null,
+        toId: lostStageId,
+        userId,
+        notes: SUPERSEDE_CLOSE_NOTE,
+        now
+      }
+    );
+  }
 }
 
 export async function getDefaultStageId(name: string) {
@@ -270,6 +322,7 @@ export async function listClientOpportunityCards(clientId: number) {
     title: string;
     temperature: string | null;
     outcome: string;
+    engagement_status: string;
     stage_name: string | null;
     stage_color: string | null;
     owner_name: string | null;
@@ -277,6 +330,7 @@ export async function listClientOpportunityCards(clientId: number) {
   }>(
     `
       SELECT o.id, o.product_id, p.name AS product_name, o.title, o.temperature, o.outcome,
+        o.engagement_status,
         ps.name AS stage_name, ps.color AS stage_color, ow.name AS owner_name,
         o.created_at::text AS created_at
       FROM opportunities o

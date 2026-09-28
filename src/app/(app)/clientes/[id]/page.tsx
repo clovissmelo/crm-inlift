@@ -45,6 +45,7 @@ export default async function ClienteDetailPage({ params, searchParams }: Params
     notes: string | null;
     bdr_user_id: number | null;
     lead_qualification: string | null;
+    in_prospeccao_queue: boolean;
   };
 
   return (

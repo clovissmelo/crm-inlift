@@ -1,6 +1,40 @@
 import { get, nowIso, run } from "@/lib/db";
 import { spDayStartUtcIso } from "@/lib/datetime";
 
+/** Coloca o cliente na fila de prospecção (manual), com produto de oportunidade e BDR. */
+export async function enrollClientInProspeccaoQueue(
+  clientId: number,
+  actorUserId: number,
+  productId: number,
+  bdrUserId: number
+) {
+  const linked = await get<{ ok: number }>(
+    `
+      SELECT 1 AS ok FROM opportunities
+      WHERE client_id = @clientId AND product_id = @productId
+      LIMIT 1
+    `,
+    { clientId, productId }
+  );
+  if (!linked) {
+    throw new Error("Selecione um produto das oportunidades cadastradas neste cliente.");
+  }
+
+  const bdr = await get<{ id: number }>("SELECT id FROM users WHERE id = @id AND status = 'active'", { id: bdrUserId });
+  if (!bdr) throw new Error("BDR inválido.");
+
+  const now = nowIso();
+  await run(
+    `
+      UPDATE clients SET in_prospeccao_queue = true, bdr_user_id = @bdrUserId, updated_at = @now
+      WHERE id = @clientId
+    `,
+    { clientId, bdrUserId, now }
+  );
+
+  await returnClientToProspeccaoQueue(clientId, actorUserId, productId);
+}
+
 /** Recoloca o cliente na fila de prospecção; se já houve abordagem, agenda retorno para hoje. */
 export async function returnClientToProspeccaoQueue(
   clientId: number,

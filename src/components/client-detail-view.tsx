@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Mail, Phone, Plus, RefreshCw, Star, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ApproachWorkflowModal } from "@/components/approach-workflow-modal";
 import { CadastroModal, requestCadastroDelete } from "@/components/cadastro-ui";
 import { ClientContactShortcuts, type ContactDialOption } from "@/components/client-contact-shortcuts";
@@ -53,6 +53,7 @@ type ClientOpportunityListItem = {
   title: string;
   stage_name: string | null;
   outcome: string;
+  engagement_status?: string;
   owner_name: string | null;
   created_at: string;
 };
@@ -73,7 +74,14 @@ function formatOpportunityListLine(o: ClientOpportunityListItem) {
   const product = o.product_name.trim().toUpperCase();
   const title = o.title.trim() || "Sem título";
   const stage = o.stage_name?.trim() || "—";
-  const status = o.outcome === "open" ? "Aberta" : o.outcome === "won" ? "Ganha" : "Perdida";
+  const status =
+    o.engagement_status === "closed"
+      ? "Encerrada"
+      : o.outcome === "open"
+        ? "Aberta"
+        : o.outcome === "won"
+          ? "Ganha"
+          : "Perdida";
   const owner = o.owner_name?.trim();
   const when = formatOpportunityListDate(o.created_at);
   const middle = [title, stage, status, owner].filter(Boolean).join(" · ");
@@ -94,6 +102,7 @@ type Client = {
   notes: string | null;
   bdr_user_id: number | null;
   lead_qualification?: string | null;
+  in_prospeccao_queue?: boolean;
 };
 
 function hasText(value: string | null | undefined) {
@@ -139,6 +148,7 @@ export function ClientDetailView({
     title: string;
     temperature: string | null;
     outcome: string;
+    engagement_status?: string;
     stage_name: string | null;
     owner_name: string | null;
     created_at: string;
@@ -152,8 +162,12 @@ export function ClientDetailView({
   const [newOppProductId, setNewOppProductId] = useState("");
   const [newOppTitle, setNewOppTitle] = useState("");
   const [oppModalOpen, setOppModalOpen] = useState(false);
-  const [dupOpen, setDupOpen] = useState<Array<{ id: number; title: string }> | null>(null);
   const [returnToProspeccao, setReturnToProspeccao] = useState(true);
+  const [inProspeccao, setInProspeccao] = useState(Boolean(initialClient.in_prospeccao_queue ?? true));
+  const [prospeccaoModalOpen, setProspeccaoModalOpen] = useState(false);
+  const [prospeccaoProductId, setProspeccaoProductId] = useState("");
+  const [prospeccaoBdrId, setProspeccaoBdrId] = useState("");
+  const [savingProspeccao, setSavingProspeccao] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [approachOpen, setApproachOpen] = useState(!!followUpId);
   const [meetingOpen, setMeetingOpen] = useState(!!openMeetingForm);
@@ -226,6 +240,18 @@ export function ClientDetailView({
     setLeadQualification(q);
     setClientDraft((d) => ({ ...d, lead_qualification: q }));
   }, [initialClient.lead_qualification]);
+
+  useEffect(() => {
+    setInProspeccao(Boolean(initialClient.in_prospeccao_queue ?? true));
+  }, [initialClient.in_prospeccao_queue]);
+
+  const opportunityProductOptions = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const o of oppList) map.set(o.product_id, o.product_name);
+    return [...map.entries()]
+      .map(([product_id, name]) => ({ product_id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }, [oppList]);
 
   const [newContact, setNewContact] = useState({
     name: "",
@@ -402,11 +428,53 @@ export function ClientDetailView({
   function openOppModal() {
     setNewOppProductId(String(linkedProducts[0]?.product_id ?? ""));
     setReturnToProspeccao(true);
-    setDupOpen(null);
     setOppModalOpen(true);
   }
 
-  async function createOpportunity(force = false) {
+  function openEnrollProspeccaoModal() {
+    setError(null);
+    if (!opportunityProductOptions.length) {
+      setError("Cadastre uma oportunidade antes de colocar o cliente em prospecção.");
+      return;
+    }
+    setProspeccaoProductId(String(opportunityProductOptions[0].product_id));
+    const defaultBdr =
+      initialClient.bdr_user_id ?? bdr?.id ?? (bdrs[0]?.id != null ? bdrs[0].id : null);
+    setProspeccaoBdrId(defaultBdr != null ? String(defaultBdr) : "");
+    setProspeccaoModalOpen(true);
+  }
+
+  async function confirmEnrollProspeccao() {
+    if (!prospeccaoProductId) {
+      setError("Selecione o produto.");
+      return;
+    }
+    if (!prospeccaoBdrId) {
+      setError("Selecione a BDR.");
+      return;
+    }
+    setSavingProspeccao(true);
+    setError(null);
+    const res = await fetch(`/api/clients/${initialClient.id}/prospeccao-queue`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        product_id: Number(prospeccaoProductId),
+        bdr_user_id: Number(prospeccaoBdrId)
+      })
+    });
+    const data = (await res.json()) as { error?: string };
+    setSavingProspeccao(false);
+    if (!res.ok) {
+      setError(data.error ?? "Erro ao entrar na prospecção");
+      return;
+    }
+    setInProspeccao(true);
+    setProspeccaoModalOpen(false);
+    router.refresh();
+  }
+
+  async function createOpportunity() {
     setError(null);
     if (!newOppProductId) {
       setError("Selecione o produto.");
@@ -420,20 +488,14 @@ export function ClientDetailView({
         product_id: Number(newOppProductId),
         title: newOppTitle || undefined,
         origin_bdr_user_id: initialClient.bdr_user_id,
-        force_create: force,
         return_to_prospection: returnToProspeccao
       })
     });
-    const data = (await res.json()) as { error?: string; existing?: Array<{ id: number; title: string }>; id?: number };
-    if (res.status === 409 && data.existing) {
-      setDupOpen(data.existing);
-      return;
-    }
+    const data = (await res.json()) as { error?: string; id?: number };
     if (!res.ok) {
       setError(data.error ?? "Erro ao criar oportunidade");
       return;
     }
-    setDupOpen(null);
     setNewOppTitle("");
     setOppModalOpen(false);
     router.refresh();
@@ -484,6 +546,20 @@ export function ClientDetailView({
           onChange={(q) => void changeLeadQualification(q)}
           disabled={savingQualification}
         />
+      </div>
+
+      <div className="field" style={{ marginBottom: "1rem" }}>
+        <label className="label">Prospecção</label>
+        <p style={{ margin: "0.35rem 0 0", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem 0.75rem" }}>
+          <span>
+            Em prospecção: <strong>{inProspeccao ? "Sim" : "Não"}</strong>
+          </span>
+          {!inProspeccao ? (
+            <button type="button" className="btn" onClick={openEnrollProspeccaoModal}>
+              Colocar em prospecção
+            </button>
+          ) : null}
+        </p>
       </div>
 
       <div className="client-detail-actions">
@@ -573,6 +649,66 @@ export function ClientDetailView({
         followUpId={followUpId}
       />
 
+      <CadastroModal
+        open={prospeccaoModalOpen}
+        title="Entrar na prospecção"
+        onClose={() => !savingProspeccao && setProspeccaoModalOpen(false)}
+      >
+        <p className="muted" style={{ marginTop: 0, marginBottom: 12, fontSize: "0.875rem" }}>
+          O cliente voltará à fila de prospecção. Escolha o produto (das oportunidades deste cliente) e a BDR responsável.
+        </p>
+        <div className="field">
+          <label className="label">Produto</label>
+          <select
+            className="select"
+            value={prospeccaoProductId}
+            onChange={(e) => setProspeccaoProductId(e.target.value)}
+            disabled={savingProspeccao}
+          >
+            <option value="">Selecione</option>
+            {opportunityProductOptions.map((p) => (
+              <option key={p.product_id} value={p.product_id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label className="label">BDR</label>
+          <select
+            className="select"
+            value={prospeccaoBdrId}
+            onChange={(e) => setProspeccaoBdrId(e.target.value)}
+            disabled={savingProspeccao}
+          >
+            <option value="">Selecione</option>
+            {bdrs.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            className="btn"
+            disabled={savingProspeccao}
+            onClick={() => setProspeccaoModalOpen(false)}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={savingProspeccao}
+            onClick={() => void confirmEnrollProspeccao()}
+          >
+            {savingProspeccao ? "Salvando…" : "Confirmar"}
+          </button>
+        </div>
+      </CadastroModal>
+
       <CadastroModal open={oppModalOpen} title="Nova oportunidade" onClose={() => setOppModalOpen(false)}>
         <div className="field">
           <label className="label">Produto</label>
@@ -589,21 +725,6 @@ export function ClientDetailView({
           <label className="label">Título (opcional)</label>
           <input className="input" value={newOppTitle} onChange={(e) => setNewOppTitle(e.target.value)} />
         </div>
-        {dupOpen ? (
-          <div className="alert" style={{ marginBottom: 12 }}>
-            Já existe oportunidade aberta para este produto:
-            <ul>
-              {dupOpen.map((d) => (
-                <li key={d.id}>
-                  <Link href={`/oportunidades/${d.id}`}>{d.title}</Link>
-                </li>
-              ))}
-            </ul>
-            <button type="button" className="btn" onClick={() => void createOpportunity(true)}>
-              Criar nova mesmo assim
-            </button>
-          </div>
-        ) : null}
         <label style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "flex-start" }}>
           <input
             type="checkbox"
@@ -624,7 +745,7 @@ export function ClientDetailView({
           <button type="button" className="btn" onClick={() => setOppModalOpen(false)}>
             Cancelar
           </button>
-          <button type="button" className="btn btn-primary" onClick={() => void createOpportunity(false)}>
+          <button type="button" className="btn btn-primary" onClick={() => void createOpportunity()}>
             Criar oportunidade
           </button>
         </div>
