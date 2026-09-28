@@ -59,6 +59,10 @@ export function pageCrumbSegments(pathname: string): string[] {
     segments.push("abordagens");
     return segments;
   }
+  if (pathname.startsWith("/resultado-comercial")) {
+    segments.push("resultado comercial");
+    return segments;
+  }
   if (pathname.startsWith("/organizacao-leads")) {
     segments.push("organizar leads");
     return segments;

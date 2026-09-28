@@ -61,11 +61,16 @@ export function ApproachWorkflowModal({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const resolvedProductId =
+    defaultProductId ?? (products.length === 1 ? products[0].id : products.length > 0 ? products[0].id : null);
+  const productDisplayName =
+    resolvedProductId != null ? products.find((p) => p.id === resolvedProductId)?.name ?? null : null;
+
   useEffect(() => {
     if (!open) return;
     setChannel(defaultChannel);
     setContactId(defaultContactId ? String(defaultContactId) : "");
-    setProductId(defaultProductId ? String(defaultProductId) : "");
+    setProductId(resolvedProductId != null ? String(resolvedProductId) : "");
     void (async () => {
       const [rt, cr] = await Promise.all([
         fetch("/api/approach-result-types").then((r) => r.json()),
@@ -78,7 +83,7 @@ export function ApproachWorkflowModal({
       );
       setClosureReasons((cr as { items: ClosureReason[] }).items);
     })();
-  }, [open, defaultChannel, defaultContactId, defaultProductId]);
+  }, [open, defaultChannel, defaultContactId, defaultProductId, resolvedProductId]);
 
   const selectedResult = resultTypes.find((r) => String(r.id) === resultTypeId);
   const showNotesField = selectedResult?.collect_notes !== false;
@@ -175,14 +180,18 @@ export function ApproachWorkflowModal({
           </div>
           <div className="field">
             <label className="label">Produto</label>
-            <select className="select" value={productId} onChange={(e) => setProductId(e.target.value)}>
-              <option value="">—</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            {productDisplayName ? (
+              <p style={{ margin: 0, fontSize: "0.9375rem" }}>{productDisplayName}</p>
+            ) : (
+              <select className="select" value={productId} onChange={(e) => setProductId(e.target.value)}>
+                <option value="">—</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
         <div className="field">

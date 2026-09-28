@@ -94,18 +94,6 @@ export function Api4comCallResultModal({
 
   const call = ctx?.call ?? null;
 
-  const productChoices = useMemo(() => {
-    const ids = ctx?.client_product_ids ?? [];
-    if (ids.length === 0) return products;
-    const set = new Set(ids);
-    return products.filter((p) => set.has(p.id));
-  }, [ctx?.client_product_ids, products]);
-
-  const singleClientProductId =
-    ctx && ctx.client_product_ids.length === 1 ? String(ctx.client_product_ids[0]) : null;
-
-  const showProductField = !singleClientProductId;
-
   function parseResultTypes(rt: {
     items?: Array<
       ResultType & {
@@ -135,13 +123,10 @@ export function Api4comCallResultModal({
 
   function applyCallContext(ctxData: DialContext, activeResults: ResultType[]) {
     setCtx(ctxData);
-    const autoProduct =
-      ctxData.call.product_id != null
-        ? String(ctxData.call.product_id)
-        : ctxData.client_product_ids.length === 1
-          ? String(ctxData.client_product_ids[0])
-          : "";
-    setProductId(autoProduct);
+    const autoProductId =
+      ctxData.call.product_id ??
+      (ctxData.client_product_ids.length > 0 ? ctxData.client_product_ids[0] : null);
+    setProductId(autoProductId != null ? String(autoProductId) : "");
 
     const inferredSlug = inferApproachResultSlugFromCall({
       hangup_cause_code: ctxData.call.hangup_cause_code ?? null,
@@ -235,6 +220,19 @@ export function Api4comCallResultModal({
   }, [open, callId, loadContext]);
 
   const selectedResult = resultTypes.find((r) => String(r.id) === resultTypeId);
+  const effectiveProductId = useMemo(() => {
+    if (call?.product_id != null) return call.product_id;
+    const ids = ctx?.client_product_ids ?? [];
+    if (ids.length > 0) return ids[0];
+    if (productId) return Number(productId);
+    return null;
+  }, [call?.product_id, ctx?.client_product_ids, productId]);
+
+  const productDisplayName = useMemo(() => {
+    if (effectiveProductId == null) return null;
+    return products.find((p) => p.id === effectiveProductId)?.name ?? null;
+  }, [effectiveProductId, products]);
+
   const showNotesField = selectedResult?.collect_notes !== false;
   const requireReturn = selectedResult?.require_schedule_return === true;
   const nextDial = ctx?.remaining[0] ?? null;
@@ -351,7 +349,7 @@ export function Api4comCallResultModal({
 
     const finalNotes = buildSessionNotes();
 
-    const resolvedProductId = singleClientProductId ?? (productId ? Number(productId) : null);
+    const resolvedProductId = effectiveProductId ?? call.product_id;
 
     let next_action: Record<string, unknown> = { type: "none" };
     if (nextType === "schedule_return" || nextType === "schedule_meeting") {
@@ -415,7 +413,7 @@ export function Api4comCallResultModal({
       : "—";
 
   const modalTitle =
-    step === "next_dial" ? "Ligar para outro contato?" : "Registrar resultado da ligação";
+    step === "next_dial" ? "Ligar para outro contato?" : "COMPLEMENTAÇÃO DE REGISTRO DE RESULTADO";
 
   return (
     <CadastroModal open={open} title={modalTitle} onClose={onClose}>
@@ -481,37 +479,37 @@ export function Api4comCallResultModal({
           ) : null}
           <div className="field">
             <label className="label">Resultado comercial *</label>
-            <select
-              className="select"
-              value={resultTypeId}
-              onChange={(e) => setResultTypeId(e.target.value)}
-              required
-              disabled={resultLockedByIntegration || resultTypes.length === 0}
-            >
-              <option value="">Selecione…</option>
-              {(resultLockedByIntegration && selectedResult
-                ? [selectedResult]
-                : resultTypes
-              ).map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                  {r.lead_qualification ? ` · ${LEAD_QUALIFICATION_LABELS[r.lead_qualification]}` : ""}
-                </option>
-              ))}
-            </select>
+            {resultLockedByIntegration && selectedResult ? (
+              <p style={{ margin: 0, fontSize: "0.9375rem" }}>
+                <strong>{selectedResult.name}</strong>
+                {selectedResult.lead_qualification
+                  ? ` · ${LEAD_QUALIFICATION_LABELS[selectedResult.lead_qualification]}`
+                  : ""}
+              </p>
+            ) : (
+              <select
+                className="select"
+                value={resultTypeId}
+                onChange={(e) => setResultTypeId(e.target.value)}
+                required
+                disabled={resultTypes.length === 0}
+              >
+                <option value="">Selecione…</option>
+                {resultTypes.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                    {r.lead_qualification ? ` · ${LEAD_QUALIFICATION_LABELS[r.lead_qualification]}` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
             {resultTypes.length === 0 ? (
               <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
                 Nenhum resultado comercial disponível. Recarregue a página ou peça ao admin para revisar Abordagens →
                 Resultados.
               </p>
             ) : null}
-            {resultLockedByIntegration ? (
-              <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
-                Preenchido automaticamente com base no desligamento da operadora
-                {call?.hangup_cause_label ? ` (${call.hangup_cause_label})` : ""}. Não é possível alterar.
-              </p>
-            ) : null}
-            {selectedResult?.lead_qualification ? (
+            {selectedResult?.lead_qualification && !resultLockedByIntegration ? (
               <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
                 Qualificação do lead será definida automaticamente como{" "}
                 <strong>{LEAD_QUALIFICATION_LABELS[selectedResult.lead_qualification]}</strong>.
@@ -520,20 +518,18 @@ export function Api4comCallResultModal({
                   : " Leads mornos e quentes permanecem no funil e na prospecção."}
               </p>
             ) : null}
+            {selectedResult?.lead_qualification && resultLockedByIntegration ? (
+              <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
+                {selectedResult.lead_qualification === "cold"
+                  ? "Lead frio — sai da fila de prospecção após salvar."
+                  : "Permanece no funil e na prospecção após salvar."}
+              </p>
+            ) : null}
           </div>
-          {showProductField ? (
-            <div className="field">
-              <label className="label">Produto</label>
-              <select className="select" value={productId} onChange={(e) => setProductId(e.target.value)}>
-                <option value="">—</option>
-                {productChoices.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
+          <div className="field">
+            <label className="label">Produto</label>
+            <p style={{ margin: 0, fontSize: "0.9375rem" }}>{productDisplayName ?? "—"}</p>
+          </div>
           {showNotesField ? (
             <div className="field">
               <label className="label">Observações</label>

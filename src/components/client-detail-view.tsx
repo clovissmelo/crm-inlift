@@ -48,6 +48,38 @@ function pickPrimaryContact(list: ClientContact[]) {
   );
 }
 
+type ClientOpportunityListItem = {
+  product_name: string;
+  title: string;
+  stage_name: string | null;
+  outcome: string;
+  owner_name: string | null;
+  created_at: string;
+};
+
+function formatOpportunityListDate(iso: string) {
+  const formatted = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(iso));
+  return formatted.replace(", ", " ");
+}
+
+function formatOpportunityListLine(o: ClientOpportunityListItem) {
+  const product = o.product_name.trim().toUpperCase();
+  const title = o.title.trim() || "Sem título";
+  const stage = o.stage_name?.trim() || "—";
+  const status = o.outcome === "open" ? "Aberta" : o.outcome === "won" ? "Ganha" : "Perdida";
+  const owner = o.owner_name?.trim();
+  const when = formatOpportunityListDate(o.created_at);
+  const middle = [title, stage, status, owner].filter(Boolean).join(" · ");
+  return `${product}: ${middle} ${when}`;
+}
+
 type Client = {
   id: number;
   cnpj: string | null;
@@ -755,16 +787,8 @@ export function ClientDetailView({
           <ul style={{ paddingLeft: "1.1rem", margin: "0.75rem 0 0" }}>
             {oppList.map((o) => (
               <li key={o.id} style={{ marginBottom: 8, display: "flex", alignItems: "flex-start", gap: 8 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <span className="muted" style={{ fontSize: "0.8125rem", marginRight: "0.35rem" }}>
-                    {formatSpDateTime(o.created_at)}
-                  </span>
-                  <Link href={`/oportunidades/${o.id}`}>
-                    <strong>{o.title}</strong>
-                  </Link>{" "}
-                  — {o.product_name} · {o.stage_name ?? "—"} ·{" "}
-                  {o.outcome === "open" ? "Aberta" : o.outcome === "won" ? "Ganha" : "Perdida"}
-                  {o.owner_name ? ` · ${o.owner_name}` : ""}
+                <div style={{ flex: 1, minWidth: 0, fontSize: "0.9375rem" }}>
+                  <Link href={`/oportunidades/${o.id}`}>{formatOpportunityListLine(o)}</Link>
                 </div>
                 <button
                   type="button"

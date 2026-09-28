@@ -119,6 +119,7 @@ export function ClientListView({ initialItems, initialTotal, products, bdrs, def
                 <th>Empresa</th>
                 <th>Qualificação</th>
                 <th>CNPJ</th>
+                <th>Segmento</th>
                 <th>Cidade/UF</th>
                 <th>BDR</th>
                 <th>Telefone</th>
@@ -139,6 +140,7 @@ export function ClientListView({ initialItems, initialTotal, products, bdrs, def
                     <LeadQualificationBadge value={item.lead_qualification} />
                   </td>
                   <td>{formatCnpj(item.cnpj)}</td>
+                  <td>{item.segment?.trim() || "—"}</td>
                   <td>
                     {[item.city, item.uf].filter(Boolean).join(" / ") || "—"}
                   </td>

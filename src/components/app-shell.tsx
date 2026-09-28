@@ -14,6 +14,7 @@ import {
   GitBranch,
   LayoutDashboard,
   List,
+  ListChecks,
   Menu,
   PhoneCall,
   Package,
@@ -39,7 +40,8 @@ const navMain: NavItem[] = [
   { href: "/agendamentos", label: "Agendamentos", icon: Calendar },
   { href: "/negocios-convertidos", label: "Negócios convertidos", icon: Trophy },
   { href: "/clientes", label: "Clientes", icon: List },
-  { href: "/abordagens", label: "Abordagens", icon: Target }
+  { href: "/abordagens", label: "Abordagens", icon: Target },
+  { href: "/resultado-comercial", label: "Resultado comercial", icon: ListChecks }
 ];
 
 function navGestaoItems(admin: boolean): NavItem[] {
