@@ -2,46 +2,14 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { DashboardStatsPayload } from "@/lib/dashboard-stats";
 import { ArrowUpRight, Calendar, Gem, Target } from "lucide-react";
 import { FilterBar, FilterSelect } from "@/components/filter-bar";
 import { LEAD_QUALIFICATION_LABELS, LEAD_QUALIFICATION_ORDER } from "@/lib/lead-qualification";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
 import type { Product, User } from "@/lib/types";
 import "./dashboard-home.css";
-
-type FocusItem = {
-  type: "return" | "meeting";
-  id: number;
-  client_id: number;
-  label: string;
-  client_name: string;
-  at: string;
-  overdue: boolean;
-};
-
-type Stats = {
-  clients_with_verified_phone: number;
-  clients_without_approach: number;
-  unique_clients_attempted: number;
-  clients_reached: number;
-  approaches_total: number;
-  approaches_by_channel: Array<{ channel: string; count: number }>;
-  approaches_timeline: {
-    labels: string[];
-    series: Array<{ channel: string; values: number[] }>;
-  };
-  call_results: Array<{ result: string; count: number }>;
-  bdr_activity: Array<{ bdr_name: string; approaches: number; meetings: number; clients: number }>;
-  meetings_scheduled: number;
-  deals_converted: number;
-  returns_overdue: number;
-  returns_today: number;
-  meetings_upcoming: number;
-  qualification: { cold: number; warm: number; hot: number };
-  focus_items: FocusItem[];
-  period: string;
-};
 
 function periodFootnote(period: string) {
   if (period === "7d") return "Últimos 7 dias";
@@ -82,14 +50,25 @@ function QualDonut({ cold, warm, hot }: { cold: number; warm: number; hot: numbe
   );
 }
 
-export function DashboardView({ products, bdrs }: { products: Product[]; bdrs: User[] }) {
+export function DashboardView({
+  products,
+  bdrs,
+  initialStats = null,
+  initialError = null
+}: {
+  products: Product[];
+  bdrs: User[];
+  initialStats?: DashboardStatsPayload | null;
+  initialError?: string | null;
+}) {
   const [productId, setProductId] = useState("");
   const [bdrUserId, setBdrUserId] = useState("");
   const [period, setPeriod] = useState("7d");
   const [leadQualification, setLeadQualification] = useState("");
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<DashboardStatsPayload | null>(initialStats);
+  const [loading, setLoading] = useState(!initialStats && !initialError);
+  const [error, setError] = useState<string | null>(initialError);
+  const skipInitialFetch = useRef(Boolean(initialStats || initialError));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,22 +78,30 @@ export function DashboardView({ products, bdrs }: { products: Product[]; bdrs: U
     if (bdrUserId) params.set("bdr_user_id", bdrUserId);
     if (leadQualification) params.set("lead_qualification", leadQualification);
     params.set("period", period);
-    const res = await fetch(`/api/dashboard/stats?${params.toString()}`, { credentials: "same-origin" });
-    const payload = (await res.json().catch(() => ({}))) as Stats & { error?: string };
-    if (!res.ok) {
-      if (res.status === 401) {
-        setError("Sessão expirada. Atualize a página ou faça login novamente.");
-      } else {
-        setError(payload.error ?? "Não foi possível carregar indicadores.");
+    try {
+      const res = await fetch(`/api/dashboard/stats?${params.toString()}`, { credentials: "same-origin" });
+      const payload = (await res.json().catch(() => ({}))) as DashboardStatsPayload & { error?: string };
+      if (!res.ok) {
+        if (res.status === 401) {
+          setError("Sessão expirada. Atualize a página ou faça login novamente.");
+        } else {
+          setError(payload.error ?? `Não foi possível carregar indicadores (HTTP ${res.status}).`);
+        }
+        setLoading(false);
+        return;
       }
-      setLoading(false);
-      return;
+      setStats(payload);
+    } catch {
+      setError("Falha de rede ao carregar indicadores.");
     }
-    setStats(payload);
     setLoading(false);
   }, [productId, bdrUserId, period, leadQualification]);
 
   useEffect(() => {
+    if (skipInitialFetch.current) {
+      skipInitialFetch.current = false;
+      return;
+    }
     void load();
   }, [load]);
 
