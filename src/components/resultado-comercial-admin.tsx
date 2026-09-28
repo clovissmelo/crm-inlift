@@ -6,6 +6,7 @@ import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroD
 import { LeadQualificationBadge } from "@/components/lead-qualification-picker";
 import { PageIntro } from "@/components/page-intro";
 import {
+  deriveSuggestFollowUpFromRules,
   formatAllowedNextActionsSummary,
   parseAllowedNextActions,
   resolveAllowedNextActions,
@@ -141,18 +142,29 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
     if (resultForm.require_schedule_return && !allowed.includes("schedule_return")) {
       allowed = ["schedule_return", ...allowed.filter((k) => k !== "schedule_return")];
     }
+    const rulesPayload = {
+      require_schedule_return: resultForm.require_schedule_return,
+      require_final_registration: resultForm.require_final_registration,
+      allowed_next_actions: allowed
+    };
+    const suggestFollowUp = deriveSuggestFollowUpFromRules(rulesPayload);
     const body = resultEditingId
       ? {
           name: resultForm.name,
           status: resultForm.status,
-          suggest_follow_up: resultForm.suggest_follow_up,
+          suggest_follow_up: suggestFollowUp,
           lead_qualification: qualPayload,
           collect_notes: resultForm.collect_notes,
           require_schedule_return: resultForm.require_schedule_return,
           require_final_registration: resultForm.require_final_registration,
           allowed_next_actions: allowed
         }
-      : { ...resultForm, lead_qualification: qualPayload, allowed_next_actions: allowed };
+      : {
+          ...resultForm,
+          lead_qualification: qualPayload,
+          allowed_next_actions: allowed,
+          suggest_follow_up: suggestFollowUp
+        };
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -313,6 +325,31 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
               <label className="resultado-check-row">
                 <input
                   type="checkbox"
+                  checked={resultForm.require_schedule_return}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setResultForm((f) => {
+                      let allowed = [...f.allowed_next_actions];
+                      if (checked) {
+                        if (!allowed.includes("schedule_return")) {
+                          allowed = ["schedule_return", ...allowed];
+                        }
+                        allowed = allowed.filter((k) => k !== "none");
+                      }
+                      return {
+                        ...f,
+                        require_schedule_return: checked,
+                        require_final_registration: checked ? true : f.require_final_registration,
+                        allowed_next_actions: allowed
+                      };
+                    });
+                  }}
+                />
+                <span>Obrigar agendar retorno</span>
+              </label>
+              <label className="resultado-check-row">
+                <input
+                  type="checkbox"
                   checked={resultForm.collect_notes}
                   onChange={(e) => setResultForm((f) => ({ ...f, collect_notes: e.target.checked }))}
                 />
@@ -336,36 +373,6 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
                 </label>
               ))}
             </div>
-            <label className="resultado-check-row" style={{ marginTop: 10 }}>
-              <input
-                type="checkbox"
-                checked={resultForm.require_schedule_return}
-                onChange={(e) => {
-                  const checked = e.target.checked;
-                  setResultForm((f) => {
-                    let allowed = [...f.allowed_next_actions];
-                    if (checked && !allowed.includes("schedule_return")) {
-                      allowed = ["schedule_return", ...allowed];
-                    }
-                    return {
-                      ...f,
-                      require_schedule_return: checked,
-                      suggest_follow_up: checked ? true : f.suggest_follow_up,
-                      allowed_next_actions: allowed
-                    };
-                  });
-                }}
-              />
-              <span>Obrigar agendar retorno</span>
-            </label>
-            <label className="resultado-check-row">
-              <input
-                type="checkbox"
-                checked={resultForm.suggest_follow_up}
-                onChange={(e) => setResultForm((f) => ({ ...f, suggest_follow_up: e.target.checked }))}
-              />
-              <span>Exigir próximo passo (não aceitar Nenhum)</span>
-            </label>
           </div>
 
           <div className="resultado-modal-actions">

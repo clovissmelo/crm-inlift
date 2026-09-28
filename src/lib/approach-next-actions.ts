@@ -27,8 +27,24 @@ export const RESULT_REGISTRATION_ACTION_KEYS: ApproachNextActionKey[] = [
 export type ApproachResultNextRules = {
   allowed_next_actions?: unknown;
   require_schedule_return?: boolean;
+  require_final_registration?: boolean;
   suggest_follow_up?: boolean;
 };
+
+/** Exige escolher um próximo passo diferente de Nenhum (quando Nenhum ainda está entre as opções). */
+export function requiresNonNoneNextStep(row: ApproachResultNextRules): boolean {
+  if (row.require_schedule_return) return true;
+  const allowed = resolveAllowedNextActions(row);
+  const hasAlternatives = allowed.some((k) => k !== "none");
+  if (!hasAlternatives) return false;
+  if (row.require_final_registration && allowed.includes("none")) return true;
+  if (row.suggest_follow_up && allowed.includes("none")) return true;
+  return false;
+}
+
+export function deriveSuggestFollowUpFromRules(row: ApproachResultNextRules): boolean {
+  return requiresNonNoneNextStep(row);
+}
 
 export function parseAllowedNextActions(raw: unknown): ApproachNextActionKey[] {
   if (!Array.isArray(raw)) return [];
@@ -68,7 +84,7 @@ export function validateNextActionChoice(
   if (row.require_schedule_return && nextType !== "schedule_return") {
     return "Este resultado exige agendar retorno com data e hora.";
   }
-  if (row.suggest_follow_up && nextType === "none" && allowed.includes("none")) {
+  if (requiresNonNoneNextStep(row) && nextType === "none") {
     return "Este resultado exige definir um próximo passo além de Nenhum.";
   }
   if (!allowed.includes("none") && nextType === "none") {

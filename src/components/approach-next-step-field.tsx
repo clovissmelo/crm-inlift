@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import {
   APPROACH_NEXT_ACTION_LABELS,
   defaultNextTypeForResult,
+  requiresNonNoneNextStep,
   resolveAllowedNextActions,
   type ApproachNextActionKey,
   type ApproachResultNextRules
@@ -67,8 +68,7 @@ export function ApproachNextStepField({
 
   const allowed = result ? resolveAllowedNextActions(result) : (["none"] as ApproachNextActionKey[]);
   const requireReturn = result?.require_schedule_return === true;
-  const mustPick =
-    result?.suggest_follow_up === true && allowed.includes("none") && allowed.some((k) => k !== "none");
+  const mustPick = result ? requiresNonNoneNextStep(result) : false;
 
   if (allowed.length === 1 && allowed[0] === "none") {
     return (
