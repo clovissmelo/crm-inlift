@@ -413,7 +413,7 @@ export function Api4comCallResultModal({
       : "—";
 
   const modalTitle =
-    step === "next_dial" ? "Ligar para outro contato?" : "COMPLEMENTAÇÃO DE REGISTRO DE RESULTADO";
+    step === "next_dial" ? "Ligar para outro contato?" : "COMPLEMENTO DE REGISTRO";
 
   return (
     <CadastroModal open={open} title={modalTitle} onClose={onClose}>
@@ -582,9 +582,6 @@ export function Api4comCallResultModal({
               {loading ? "Salvando…" : "Salvar resultado"}
             </button>
           </div>
-          <p className="muted" style={{ fontSize: "0.75rem", margin: "10px 0 0", textAlign: "right" }}>
-            Fechar sem salvar mantém o lead na prospecção. Use o aviso no topo da tela para registrar depois.
-          </p>
         </form>
       ) : null}
     </CadastroModal>
