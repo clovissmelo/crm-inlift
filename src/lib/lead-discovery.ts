@@ -21,6 +21,8 @@ export type DiscoveredLead = {
   phone?: string | null;
   website?: string | null;
   instagram?: string | null;
+  /** Rótulo gravado em contacts.origin ao importar o telefone do lead */
+  contact_origin?: string | null;
 };
 
 export type LeadDiscoveryResult = {

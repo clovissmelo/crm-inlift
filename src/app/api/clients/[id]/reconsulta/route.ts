@@ -1,6 +1,7 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { get, run, nowIso } from "@/lib/db";
+import { CONTACT_ORIGIN } from "@/lib/contact-origin";
 import { previewClientReconsult } from "@/lib/lead-discovery";
 import { z } from "zod";
 
@@ -24,7 +25,8 @@ const applySchema = z.object({
       field: z.enum(["phone", "whatsapp", "website", "instagram", "email", "address"]),
       action: z.enum(["add_contact", "replace_client", "replace_contact"]),
       contact_id: z.number().int().positive().optional(),
-      value: z.string().min(1)
+      value: z.string().min(1),
+      contact_origin: z.string().trim().min(1).optional()
     })
   )
 });
@@ -62,14 +64,19 @@ export async function POST(request: Request, { params }: Params) {
     } else if (item.action === "add_contact" && (item.field === "phone" || item.field === "whatsapp")) {
       await run(
         `
-          INSERT INTO contacts (client_id, name, phone, whatsapp, verification_status, created_at, updated_at)
-          VALUES (@clientId, @name, @phone, @whatsapp, 'unverified', @now, @now)
+          INSERT INTO contacts (
+            client_id, name, phone, whatsapp, verification_status, origin, created_at, updated_at
+          )
+          VALUES (
+            @clientId, @name, @phone, @whatsapp, 'unverified', @origin, @now, @now
+          )
         `,
         {
           clientId,
           name: "Contato (reconsulta)",
           phone: item.field === "phone" ? item.value : null,
           whatsapp: item.field === "whatsapp" ? item.value : null,
+          origin: item.contact_origin?.trim() || CONTACT_ORIGIN.googlePlaces,
           now: nowIso()
         }
       );

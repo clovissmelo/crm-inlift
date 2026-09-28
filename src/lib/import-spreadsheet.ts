@@ -1,5 +1,6 @@
 import { read, utils } from "xlsx";
 import { normalizeCnpj } from "@/lib/format";
+import { CONTACT_ORIGIN } from "@/lib/contact-origin";
 import { all, get, nowIso, run } from "@/lib/db";
 
 export type ImportColumnKey =
@@ -206,8 +207,8 @@ export async function executeImport(options: {
         if (contactName || contactPhone || contactWhatsapp || contactEmail) {
           await run(
             `
-              INSERT INTO contacts (client_id, name, phone, whatsapp, email, created_at, updated_at)
-              VALUES (@clientId, @name, @phone, @whatsapp, @email, @createdAt, @updatedAt)
+              INSERT INTO contacts (client_id, name, phone, whatsapp, email, origin, created_at, updated_at)
+              VALUES (@clientId, @name, @phone, @whatsapp, @email, @origin, @createdAt, @updatedAt)
             `,
             {
               clientId,
@@ -215,6 +216,7 @@ export async function executeImport(options: {
               phone: contactPhone || null,
               whatsapp: contactWhatsapp || null,
               email: contactEmail || null,
+              origin: CONTACT_ORIGIN.importSpreadsheet,
               createdAt: nowIso(),
               updatedAt: nowIso()
             }

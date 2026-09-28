@@ -797,3 +797,9 @@ export async function getOpportunityDashboardMetrics(filters: {
     converted_basis: "Negócios convertidos (data de fechamento registrada na conversão)"
   };
 }
+
+export async function deleteOpportunity(opportunityId: number) {
+  const row = await get<{ id: number }>("SELECT id FROM opportunities WHERE id = @id", { id: opportunityId });
+  if (!row) throw new Error("Oportunidade não encontrada");
+  await run("DELETE FROM opportunities WHERE id = @id", { id: opportunityId });
+}

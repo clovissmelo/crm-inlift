@@ -89,6 +89,7 @@ INSERT INTO contacts (
   whatsapp,
   email,
   verification_status,
+  origin,
   created_at,
   updated_at
 )
@@ -100,6 +101,7 @@ SELECT
   '19987654321',
   'contato@postohorizonte-exemplo.com.br',
   'unverified',
+  'Google Places',
   now(),
   now()
 FROM clients c

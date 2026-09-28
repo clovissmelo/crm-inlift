@@ -3,9 +3,23 @@ import { all, get } from "@/lib/db";
 import { bucketKeyForApproach, periodToRange, spDayEndUtcIso, spDayStartUtcIso, type DashboardPeriod } from "@/lib/datetime";
 import { getOpportunityDashboardMetrics } from "@/lib/opportunity-pipeline";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
 export async function GET(request: Request) {
   const user = await requireApiUser();
   if (!user) return jsonUnauthorized();
+
+  try {
+    return await buildDashboardStatsResponse(request);
+  } catch (e) {
+    console.error("[api/dashboard/stats]", e);
+    const message = e instanceof Error ? e.message : "Erro ao carregar indicadores";
+    return Response.json({ error: message }, { status: 500 });
+  }
+}
+
+async function buildDashboardStatsResponse(request: Request) {
 
   const url = new URL(request.url);
   const productId = url.searchParams.get("product_id");
@@ -49,83 +63,87 @@ export async function GET(request: Request) {
     params.to = range.to;
   }
 
-  const totalRow = await get<{ count: string }>(`SELECT COUNT(*)::text AS count FROM clients c WHERE ${clientFilter}`, params);
-
-  const verifiedRow = await get<{ count: string }>(
-    `
-      SELECT COUNT(DISTINCT c.id)::text AS count
-      FROM clients c
-      JOIN contacts ct ON ct.client_id = c.id AND ct.verification_status = 'confirmed'
-      WHERE ${clientFilter}
-    `,
-    params
-  );
-
-  const withoutApproachRow = await get<{ count: string }>(
-    `
-      SELECT COUNT(*)::text AS count FROM clients c
-      WHERE ${clientFilter}
-        AND NOT EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = c.id)
-    `,
-    params
-  );
-
-  const byBdr = await all<{ bdr_user_id: number | null; bdr_name: string | null; count: string }>(
-    `
-      SELECT c.bdr_user_id, u.name AS bdr_name, COUNT(*)::text AS count
-      FROM clients c
-      LEFT JOIN users u ON u.id = c.bdr_user_id
-      WHERE ${clientFilter}
-      GROUP BY c.bdr_user_id, u.name
-      ORDER BY count DESC, u.name
-    `,
-    params
-  );
-
-  const uniqueClientsTried = await get<{ count: string }>(
-    `
-      SELECT COUNT(DISTINCT a.client_id)::text AS count
-      FROM approaches a
-      JOIN clients c ON c.id = a.client_id
-      WHERE ${approachFilter}
-    `,
-    params
-  );
-
-  const byChannel = await all<{ channel: string; count: string }>(
-    `
-      SELECT a.channel, COUNT(*)::text AS count
-      FROM approaches a
-      JOIN clients c ON c.id = a.client_id
-      WHERE ${approachFilter}
-      GROUP BY a.channel
-    `,
-    params
-  );
-
-  const byResult = await all<{ result_name: string; count: string }>(
-    `
-      SELECT COALESCE(rt.name, 'Sem resultado') AS result_name, COUNT(*)::text AS count
-      FROM approaches a
-      JOIN clients c ON c.id = a.client_id
-      LEFT JOIN approach_result_types rt ON rt.id = a.result_type_id
-      WHERE ${approachFilter} AND a.channel = 'call'
-      GROUP BY rt.name
-      ORDER BY count DESC
-    `,
-    params
-  );
-
-  const pendingReturns = await get<{ count: string }>(
-    `
-      SELECT COUNT(*)::text AS count FROM follow_ups f
-      JOIN clients c ON c.id = f.client_id
-      WHERE f.status = 'pending'
-      ${productId ? " AND f.product_id = @productId" : ""}
-      ${bdrUserId ? " AND f.assigned_user_id = @bdrUserId" : ""}
-    `,
-    params
-  );
+  const [
+    totalRow,
+    verifiedRow,
+    withoutApproachRow,
+    byBdr,
+    uniqueClientsTried,
+    byChannel,
+    byResult,
+    pendingReturns
+  ] = await Promise.all([
+    get<{ count: string }>(`SELECT COUNT(*)::text AS count FROM clients c WHERE ${clientFilter}`, params),
+    get<{ count: string }>(
+      `
+        SELECT COUNT(DISTINCT c.id)::text AS count
+        FROM clients c
+        JOIN contacts ct ON ct.client_id = c.id AND ct.verification_status = 'confirmed'
+        WHERE ${clientFilter}
+      `,
+      params
+    ),
+    get<{ count: string }>(
+      `
+        SELECT COUNT(*)::text AS count FROM clients c
+        WHERE ${clientFilter}
+          AND NOT EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = c.id)
+      `,
+      params
+    ),
+    all<{ bdr_user_id: number | null; bdr_name: string | null; count: string }>(
+      `
+        SELECT c.bdr_user_id, u.name AS bdr_name, COUNT(*)::text AS count
+        FROM clients c
+        LEFT JOIN users u ON u.id = c.bdr_user_id
+        WHERE ${clientFilter}
+        GROUP BY c.bdr_user_id, u.name
+        ORDER BY count DESC, u.name
+      `,
+      params
+    ),
+    get<{ count: string }>(
+      `
+        SELECT COUNT(DISTINCT a.client_id)::text AS count
+        FROM approaches a
+        JOIN clients c ON c.id = a.client_id
+        WHERE ${approachFilter}
+      `,
+      params
+    ),
+    all<{ channel: string; count: string }>(
+      `
+        SELECT a.channel, COUNT(*)::text AS count
+        FROM approaches a
+        JOIN clients c ON c.id = a.client_id
+        WHERE ${approachFilter}
+        GROUP BY a.channel
+      `,
+      params
+    ),
+    all<{ result_name: string; count: string }>(
+      `
+        SELECT COALESCE(rt.name, 'Sem resultado') AS result_name, COUNT(*)::text AS count
+        FROM approaches a
+        JOIN clients c ON c.id = a.client_id
+        LEFT JOIN approach_result_types rt ON rt.id = a.result_type_id
+        WHERE ${approachFilter} AND a.channel = 'call'
+        GROUP BY rt.name
+        ORDER BY count DESC
+      `,
+      params
+    ),
+    get<{ count: string }>(
+      `
+        SELECT COUNT(*)::text AS count FROM follow_ups f
+        JOIN clients c ON c.id = f.client_id
+        WHERE f.status = 'pending'
+        ${productId ? " AND f.product_id = @productId" : ""}
+        ${bdrUserId ? " AND f.assigned_user_id = @bdrUserId" : ""}
+      `,
+      params
+    )
+  ]);
 
   const approachesByBdr = await all<{ user_name: string; count: string }>(
     `
@@ -245,11 +263,23 @@ export async function GET(request: Request) {
     params
   );
 
-  const oppMetrics = await getOpportunityDashboardMetrics({
-    period,
-    product_id: productId ? Number(productId) : undefined,
-    owner_user_id: ownerUserId ? Number(ownerUserId) : bdrUserId ? Number(bdrUserId) : undefined
-  });
+  let oppMetrics = {
+    open_opportunities: 0,
+    proposals_sent: 0,
+    deals_converted: 0,
+    open_count_basis: "",
+    proposals_sent_basis: "",
+    converted_basis: ""
+  };
+  try {
+    oppMetrics = await getOpportunityDashboardMetrics({
+      period,
+      product_id: productId ? Number(productId) : undefined,
+      owner_user_id: ownerUserId ? Number(ownerUserId) : bdrUserId ? Number(bdrUserId) : undefined
+    });
+  } catch (e) {
+    console.error("[api/dashboard/stats] opportunity metrics", e);
+  }
 
   const approachesTotal = byChannel.reduce((sum, r) => sum + Number(r.count), 0);
 

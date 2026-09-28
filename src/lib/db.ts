@@ -91,16 +91,24 @@ async function runMigrations(sql: Sql) {
     if (applied) continue;
 
     const body = fs.readFileSync(path.join(migrationsDir, file), "utf-8");
-    await sql.begin(async (tx) => {
-      await tx.unsafe(body);
-      await tx`INSERT INTO schema_migrations (id) VALUES (${id})`;
-    });
+    try {
+      await sql.begin(async (tx) => {
+        await tx.unsafe(body);
+        await tx`INSERT INTO schema_migrations (id) VALUES (${id})`;
+      });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(`Migração ${id} falhou: ${detail}`);
+    }
   }
 }
 
 async function initDb() {
   if (!global.__crmInliftDbInitPromise) {
-    global.__crmInliftDbInitPromise = runMigrations(getSqlClient());
+    global.__crmInliftDbInitPromise = runMigrations(getSqlClient()).catch((err) => {
+      global.__crmInliftDbInitPromise = undefined;
+      throw err;
+    });
   }
   await global.__crmInliftDbInitPromise;
 }

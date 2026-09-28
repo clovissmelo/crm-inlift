@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Mail, Phone, Plus, RefreshCw, Star } from "lucide-react";
+import { Mail, Phone, Plus, RefreshCw, Star, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { ApproachWorkflowModal } from "@/components/approach-workflow-modal";
-import { CadastroModal } from "@/components/cadastro-ui";
+import { CadastroModal, requestCadastroDelete } from "@/components/cadastro-ui";
 import { ClientContactShortcuts, type ContactDialOption } from "@/components/client-contact-shortcuts";
 import { MeetingFormModal } from "@/components/meeting-form-modal";
 import { ClientTimeline } from "@/components/client-timeline";
@@ -14,6 +14,7 @@ import { formatSpDateTime } from "@/lib/datetime";
 import { externalWebHref, formatCnpj, instagramHref } from "@/lib/format";
 import { LeadQualificationPicker } from "@/components/lead-qualification-picker";
 import { parseLeadQualification, type LeadQualification } from "@/lib/lead-qualification";
+import { CONTACT_ORIGIN, formatContactOrigin } from "@/lib/contact-origin";
 import { VERIFICATION_LABELS, type ContactVerification, type Product, type User } from "@/lib/types";
 
 export type ClientContact = {
@@ -26,6 +27,7 @@ export type ClientContact = {
   notes: string | null;
   verification_status: ContactVerification;
   is_primary_phone?: boolean;
+  origin?: string | null;
 };
 
 function sortContactsForDisplay(list: ClientContact[]) {
@@ -86,6 +88,7 @@ export function ClientDetailView({
   followUpId,
   openMeetingForm,
   opportunities,
+  hasApproach = false,
   canReconsult
 }: {
   initialClient: Client;
@@ -108,6 +111,7 @@ export function ClientDetailView({
     owner_name: string | null;
     created_at: string;
   }>;
+  hasApproach?: boolean;
   canReconsult?: boolean;
 }) {
   const router = useRouter();
@@ -117,6 +121,7 @@ export function ClientDetailView({
   const [newOppTitle, setNewOppTitle] = useState("");
   const [oppModalOpen, setOppModalOpen] = useState(false);
   const [dupOpen, setDupOpen] = useState<Array<{ id: number; title: string }> | null>(null);
+  const [returnToProspeccao, setReturnToProspeccao] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [approachOpen, setApproachOpen] = useState(!!followUpId);
   const [meetingOpen, setMeetingOpen] = useState(!!openMeetingForm);
@@ -227,7 +232,8 @@ export function ClientDetailView({
         whatsapp: newContact.whatsapp || null,
         email: newContact.email || null,
         notes: null,
-        verification_status: "unverified"
+        verification_status: "unverified",
+        origin: CONTACT_ORIGIN.manual
       }
     ]);
     setNewContact({ name: "", job_title: "", phone: "", whatsapp: "", email: "" });
@@ -363,6 +369,7 @@ export function ClientDetailView({
 
   function openOppModal() {
     setNewOppProductId(String(linkedProducts[0]?.product_id ?? ""));
+    setReturnToProspeccao(true);
     setDupOpen(null);
     setOppModalOpen(true);
   }
@@ -381,7 +388,8 @@ export function ClientDetailView({
         product_id: Number(newOppProductId),
         title: newOppTitle || undefined,
         origin_bdr_user_id: initialClient.bdr_user_id,
-        force_create: force
+        force_create: force,
+        return_to_prospection: returnToProspeccao
       })
     });
     const data = (await res.json()) as { error?: string; existing?: Array<{ id: number; title: string }>; id?: number };
@@ -396,6 +404,19 @@ export function ClientDetailView({
     setDupOpen(null);
     setNewOppTitle("");
     setOppModalOpen(false);
+    router.refresh();
+  }
+
+  async function removeOpportunity(opp: (typeof oppList)[0]) {
+    if (!(await requestCadastroDelete(opp.title))) return;
+    setError(null);
+    const res = await fetch(`/api/opportunities/${opp.id}`, { method: "DELETE" });
+    const data = (await res.json()) as { error?: string };
+    if (!res.ok) {
+      setError(data.error ?? "Não foi possível excluir a oportunidade");
+      return;
+    }
+    setOppList((list) => list.filter((o) => o.id !== opp.id));
     router.refresh();
   }
 
@@ -551,6 +572,22 @@ export function ClientDetailView({
             </button>
           </div>
         ) : null}
+        <label style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "flex-start" }}>
+          <input
+            type="checkbox"
+            checked={returnToProspeccao}
+            onChange={(e) => setReturnToProspeccao(e.target.checked)}
+            style={{ marginTop: 4 }}
+          />
+          <span>
+            Retornar o cliente para a lista de prospecção (nova ligação)
+            <span className="muted" style={{ display: "block", fontSize: "0.8125rem", marginTop: 4 }}>
+              {hasApproach
+                ? "Como já houve tentativa de contato, ele entrará na fila como Retorno."
+                : "Entrará na prospecção para primeiro contato."}
+            </span>
+          </span>
+        </label>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="btn" onClick={() => setOppModalOpen(false)}>
             Cancelar
@@ -717,15 +754,27 @@ export function ClientDetailView({
         {oppList.length > 0 ? (
           <ul style={{ paddingLeft: "1.1rem", margin: "0.75rem 0 0" }}>
             {oppList.map((o) => (
-              <li key={o.id} style={{ marginBottom: 8 }}>
-                <span className="muted" style={{ fontSize: "0.8125rem", marginRight: "0.35rem" }}>
-                  {formatSpDateTime(o.created_at)}
-                </span>
-                <Link href={`/oportunidades/${o.id}`}>
-                  <strong>{o.title}</strong>
-                </Link>{" "}
-                — {o.product_name} · {o.stage_name ?? "—"} · {o.outcome === "open" ? "Aberta" : o.outcome === "won" ? "Ganha" : "Perdida"}
-                {o.owner_name ? ` · ${o.owner_name}` : ""}
+              <li key={o.id} style={{ marginBottom: 8, display: "flex", alignItems: "flex-start", gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span className="muted" style={{ fontSize: "0.8125rem", marginRight: "0.35rem" }}>
+                    {formatSpDateTime(o.created_at)}
+                  </span>
+                  <Link href={`/oportunidades/${o.id}`}>
+                    <strong>{o.title}</strong>
+                  </Link>{" "}
+                  — {o.product_name} · {o.stage_name ?? "—"} ·{" "}
+                  {o.outcome === "open" ? "Aberta" : o.outcome === "won" ? "Ganha" : "Perdida"}
+                  {o.owner_name ? ` · ${o.owner_name}` : ""}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-icon-sm"
+                  title="Excluir oportunidade"
+                  aria-label={`Excluir oportunidade ${o.title}`}
+                  onClick={() => void removeOpportunity(o)}
+                >
+                  <Trash2 size={16} />
+                </button>
               </li>
             ))}
           </ul>
@@ -886,6 +935,7 @@ function ContactReadOnly({
               <Mail size={14} aria-hidden /> {contact.email}
             </span>
           ) : null}
+          <span className="muted">Origem: {formatContactOrigin(contact.origin)}</span>
         </div>
       </div>
       <div className="client-contact-readonly-actions" style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
@@ -1020,6 +1070,9 @@ function ContactEditor({
         }}
         onChange={(patch) => onChange({ ...contact, ...patch })}
       />
+      <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.875rem" }}>
+        Origem: {formatContactOrigin(contact.origin)}
+      </p>
       {contact.verification_status === "confirmed" ? <span className="badge badge-verified">Verificado</span> : null}
       <div className="field" style={{ maxWidth: 280, marginTop: 8 }}>
         <label className="label">Verificação do número</label>

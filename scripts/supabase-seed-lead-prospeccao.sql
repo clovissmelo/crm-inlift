@@ -46,6 +46,7 @@ INSERT INTO contacts (
   whatsapp,
   email,
   verification_status,
+  origin,
   created_at,
   updated_at
 )
@@ -57,6 +58,7 @@ SELECT
   '11999998888',
   'maria.teste@lead-inlift.com.br',
   'confirmed',
+  'Receita Federal',
   now(),
   now()
 FROM clients c

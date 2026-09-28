@@ -204,7 +204,8 @@ export const contactSchema = z.object({
   whatsapp: z.string().trim().optional().nullable(),
   email: z.string().trim().email().optional().nullable().or(z.literal("")),
   notes: z.string().trim().optional().nullable(),
-  verification_status: z.enum(["unverified", "confirmed", "invalid_number", "wrong_contact"])
+  verification_status: z.enum(["unverified", "confirmed", "invalid_number", "wrong_contact"]),
+  origin: z.string().trim().min(1).optional().nullable()
 });
 
 export const opportunityCreateSchema = z.object({
@@ -220,7 +221,8 @@ export const opportunityCreateSchema = z.object({
   estimated_value_tbd: z.boolean().optional(),
   expected_close_date: z.string().optional().nullable(),
   notes: z.string().trim().optional().nullable(),
-  force_create: z.boolean().optional()
+  force_create: z.boolean().optional(),
+  return_to_prospection: z.boolean().optional()
 });
 
 export const opportunityUpdateSchema = z.object({

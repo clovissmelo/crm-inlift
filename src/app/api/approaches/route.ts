@@ -67,8 +67,19 @@ export async function POST(request: Request) {
       resultType.lead_qualification === "hot"
     ) {
       await run(
-        "UPDATE clients SET lead_qualification = @qual, updated_at = @now WHERE id = @clientId",
-        { qual: resultType.lead_qualification, clientId: data.client_id, now: nowIso() }
+        `
+          UPDATE clients SET
+            lead_qualification = @qual,
+            in_prospeccao_queue = @inQueue,
+            updated_at = @now
+          WHERE id = @clientId
+        `,
+        {
+          qual: resultType.lead_qualification,
+          inQueue: resultType.lead_qualification === "cold" ? false : true,
+          clientId: data.client_id,
+          now: nowIso()
+        }
       );
     }
 

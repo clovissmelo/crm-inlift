@@ -1,5 +1,6 @@
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
-import { getOpportunityDetail, updateOpportunityFields } from "@/lib/opportunity-pipeline";
+import { deleteBlockedMessage } from "@/lib/admin";
+import { deleteOpportunity, getOpportunityDetail, updateOpportunityFields } from "@/lib/opportunity-pipeline";
 import { opportunityUpdateSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
@@ -30,5 +31,18 @@ export async function PATCH(request: Request, { params }: Params) {
       return Response.json({ error: "Outro usuário alterou esta oportunidade. Recarregue e tente novamente." }, { status: 409 });
     }
     return Response.json({ error: e instanceof Error ? e.message : "Erro ao salvar" }, { status: 400 });
+  }
+}
+
+export async function DELETE(_request: Request, { params }: Params) {
+  const user = await requireApiUser();
+  if (!user) return jsonUnauthorized();
+  const { id } = await params;
+  const opportunityId = Number(id);
+  try {
+    await deleteOpportunity(opportunityId);
+    return Response.json({ ok: true });
+  } catch (err) {
+    return Response.json({ error: deleteBlockedMessage(err) }, { status: 409 });
   }
 }

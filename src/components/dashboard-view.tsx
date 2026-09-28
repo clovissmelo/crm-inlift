@@ -99,13 +99,18 @@ export function DashboardView({ products, bdrs }: { products: Product[]; bdrs: U
     if (bdrUserId) params.set("bdr_user_id", bdrUserId);
     if (leadQualification) params.set("lead_qualification", leadQualification);
     params.set("period", period);
-    const res = await fetch(`/api/dashboard/stats?${params.toString()}`);
+    const res = await fetch(`/api/dashboard/stats?${params.toString()}`, { credentials: "same-origin" });
+    const payload = (await res.json().catch(() => ({}))) as Stats & { error?: string };
     if (!res.ok) {
-      setError("Não foi possível carregar indicadores.");
+      if (res.status === 401) {
+        setError("Sessão expirada. Atualize a página ou faça login novamente.");
+      } else {
+        setError(payload.error ?? "Não foi possível carregar indicadores.");
+      }
       setLoading(false);
       return;
     }
-    setStats((await res.json()) as Stats);
+    setStats(payload);
     setLoading(false);
   }, [productId, bdrUserId, period, leadQualification]);
 

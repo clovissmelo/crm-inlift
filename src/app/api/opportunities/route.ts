@@ -1,5 +1,6 @@
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { createOpportunity, findOpenOpportunitiesForProduct } from "@/lib/opportunity-pipeline";
+import { returnClientToProspeccaoQueue } from "@/lib/prospeccao-return";
 import { opportunityCreateSchema } from "@/lib/validators";
 
 export async function POST(request: Request) {
@@ -27,5 +28,10 @@ export async function POST(request: Request) {
     title: data.title ?? "",
     created_by_user_id: user.id
   });
+
+  if (data.return_to_prospection !== false) {
+    await returnClientToProspeccaoQueue(data.client_id, user.id, data.product_id);
+  }
+
   return Response.json({ id }, { status: 201 });
 }

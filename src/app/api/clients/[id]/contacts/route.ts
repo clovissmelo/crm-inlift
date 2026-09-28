@@ -1,4 +1,5 @@
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
+import { CONTACT_ORIGIN } from "@/lib/contact-origin";
 import { all, nowIso, run } from "@/lib/db";
 import { contactSchema } from "@/lib/validators";
 
@@ -26,10 +27,15 @@ export async function POST(request: Request, { params }: Params) {
     return Response.json({ error: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   }
   const data = parsed.data;
+  const origin = data.origin?.trim() || CONTACT_ORIGIN.manual;
   const result = await run(
     `
-      INSERT INTO contacts (client_id, name, job_title, phone, whatsapp, email, notes, verification_status, created_at, updated_at)
-      VALUES (@clientId, @name, @jobTitle, @phone, @whatsapp, @email, @notes, @status, @createdAt, @updatedAt)
+      INSERT INTO contacts (
+        client_id, name, job_title, phone, whatsapp, email, notes, verification_status, origin, created_at, updated_at
+      )
+      VALUES (
+        @clientId, @name, @jobTitle, @phone, @whatsapp, @email, @notes, @status, @origin, @createdAt, @updatedAt
+      )
     `,
     {
       clientId,
@@ -40,6 +46,7 @@ export async function POST(request: Request, { params }: Params) {
       email: data.email || null,
       notes: data.notes ?? null,
       status: data.verification_status,
+      origin,
       createdAt: nowIso(),
       updatedAt: nowIso()
     }

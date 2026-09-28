@@ -3,6 +3,7 @@ import { ClientDetailView, type ClientContact } from "@/components/client-detail
 import { isAdmin } from "@/lib/admin";
 import { requireUser } from "@/lib/auth";
 import { loadCatalog } from "@/lib/catalog";
+import { get } from "@/lib/db";
 import { getClientDetail } from "@/lib/clients";
 import { listClientOpportunities } from "@/lib/opportunities";
 
@@ -22,6 +23,11 @@ export default async function ClienteDetailPage({ params, searchParams }: Params
 
   const { products, bdrs, users } = await loadCatalog();
   const opportunities = await listClientOpportunities(clientId);
+  const hasApproachRow = await get<{ ok: number | null }>(
+    "SELECT 1 AS ok FROM approaches WHERE client_id = @clientId LIMIT 1",
+    { clientId }
+  );
+  const hasApproach = Boolean(hasApproachRow?.ok);
   const followUpId = sp.follow_up ? Number(sp.follow_up) : undefined;
   const openMeeting = sp.agendar === "1";
 
@@ -53,6 +59,7 @@ export default async function ClienteDetailPage({ params, searchParams }: Params
       followUpId={Number.isFinite(followUpId) ? followUpId : undefined}
       openMeetingForm={openMeeting}
       opportunities={opportunities}
+      hasApproach={hasApproach}
       canReconsult={isAdmin(user)}
     />
   );
