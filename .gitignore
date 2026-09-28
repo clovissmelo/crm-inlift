@@ -12,6 +12,8 @@ public/uploads/avatars/*
 storage/proposals/*
 !storage/proposals/.gitkeep
 
+tsconfig.tsbuildinfo
+
 *.log
 .DS_Store
 Thumbs.db

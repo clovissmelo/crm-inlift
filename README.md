@@ -90,20 +90,28 @@ Os agendamentos funcionam **localmente** sem Google. Para criar eventos no calen
 4. **URIs de redirecionamento autorizados** (exemplo em desenvolvimento):
    - `http://localhost:3000/api/integrations/google/callback`
    - Em produção, use a URL HTTPS do seu domínio com o mesmo caminho `/api/integrations/google/callback`.
-5. Defina no `.env.local` (somente no servidor, nunca no repositório):
-   - `GOOGLE_CLIENT_ID` — ID do cliente OAuth
-   - `GOOGLE_CLIENT_SECRET` — segredo do cliente
-   - `GOOGLE_REDIRECT_URI` — deve coincidir **exatamente** com a URI cadastrada no Google (ex.: `http://localhost:3000/api/integrations/google/callback`)
-   - `GOOGLE_TOKEN_SECRET` (recomendado) — chave para criptografar refresh tokens no banco; se omitida, usa `SESSION_SECRET`
-6. Escopo OAuth usado pelo app: `https://www.googleapis.com/auth/calendar.events` (criar/editar/cancelar eventos e solicitar Google Meet).
-7. Reinicie o servidor, acesse **Cadastros → Integrações** e clique em **Conectar conta Google**. A conta conectada passa a ser usada para sincronizar reuniões criadas no CRM.
+5. Em **Admin → Integrações → Google Agenda**, informe **Client ID** e **Client Secret** (gravados criptografados no banco, não na Vercel). Redirect URI pode ficar em branco: o CRM monta `https://seu-dominio/api/integrations/google/callback` a partir da URL do site (cadastre essa URI no Google Cloud).
+6. `SESSION_SECRET` (ou `GOOGLE_TOKEN_SECRET`) na Vercel/ambiente serve só para **criptografia** de tokens/chaves no Postgres — não são as credenciais Google.
+7. Escopo OAuth: `https://www.googleapis.com/auth/calendar.events`.
+8. Na mesma página, clique em **Conectar conta Google** para autorizar a conta que sincroniza reuniões.
 
 Tokens ficam armazenados criptografados na tabela `google_calendar_connection`. Falhas de sync não apagam o agendamento local; é possível tentar sincronizar novamente na tela de Agendamentos.
 
 ## Outras integrações
 
-- **API4COM** — botão Ligar usa `tel:` provisoriamente; não registra chamada concluída.
+- **API4COM** — Admin → Integrações → API4COM (telefonia e webhook).
+- **Google Places** — Admin → Integrações → Google Places (chave criptografada em `system_settings`, limites diários/por execução).
+- **Novos leads (postos ANP)** — Admin → Novos leads. Motor portado de `contabilidade-leads-pilot` (RS/PR). Processamento em fila via cron (`/api/cron/lead-generation`, 1 tick/minuto na Vercel).
+
+### Geração de leads — deploy
+
+1. Aplique a migração `migrations/023_lead_generation_pipeline.sql` (ou rode `npm run migrate` apontando para o Supabase).
+2. **Vercel:** defina `CRON_SECRET` e `SESSION_SECRET` (sessão + criptografia de segredos no banco). Chaves Google vão pelo admin, não por env.
+3. **Supabase:** apenas `POSTGRES_URL`; nenhuma extensão extra.
+4. **Interface:** configure Google Places (opcional) → Novos leads → prévia ANP → iniciar. Modo simulação padrão (`lead_generation_simulation_default=1`) evita Google até você desmarcar na tela e confirmar cobranças.
+5. **Piloto real (ex.: 5 postos):** desative simulação, `max_stations=5`, `max_google_calls=10`, confirme cobranças. Custo Google ≈ 2 chamadas/posto (Find + Details; valores na tabela de preços Places do Google).
+6. **Verificação:** execução #id com progresso &lt; 100% até `finalizing`; novos clientes em abas “Novos” e fila **Prospecção** (`in_prospeccao_queue`).
 
 ## Produção
 
-Defina `SESSION_SECRET` e **`POSTGRES_URL`** (ou `DATABASE_URL`) no ambiente. Na Vercel com integração Supabase, `POSTGRES_URL` costuma ser preenchida automaticamente. Use HTTPS para cookies seguros (`NODE_ENV=production`) e configure `GOOGLE_REDIRECT_URI` com HTTPS.
+Defina `SESSION_SECRET`, **`CRON_SECRET`** (cron de leads) e **`POSTGRES_URL`** (ou `DATABASE_URL`) no ambiente. Na Vercel com integração Supabase, `POSTGRES_URL` costuma ser preenchida automaticamente. Credenciais Google (Agenda e Places) ficam em **Admin → Integrações**.

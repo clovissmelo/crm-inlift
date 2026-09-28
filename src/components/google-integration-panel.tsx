@@ -31,7 +31,7 @@ export function GoogleIntegrationPanel() {
   useEffect(() => {
     const err = searchParams.get("error");
     const ok = searchParams.get("connected");
-    if (err === "not_configured") setError("Credenciais Google não configuradas no servidor.");
+    if (err === "not_configured") setError("Credenciais OAuth não configuradas. Salve Client ID e Secret acima.");
     else if (err === "oauth_denied") setError("Autorização cancelada no Google.");
     else if (err === "invalid_state") setError("Sessão OAuth expirada. Tente conectar novamente.");
     else if (err === "token_failed") setError("Não foi possível salvar os tokens. Tente novamente.");
@@ -56,7 +56,7 @@ export function GoogleIntegrationPanel() {
       {status && !loading ? (
         <>
           <p>
-            <span className="muted">Configuração no servidor:</span> {status.configured ? "OK" : "Pendente (variáveis de ambiente)"}
+            <span className="muted">Credenciais OAuth (banco):</span> {status.configured ? "OK" : "Pendente"}
           </p>
           <p>
             <span className="muted">Conexão:</span>{" "}

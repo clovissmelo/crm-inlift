@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "migrate": "tsx src/scripts/migrate.ts",
-    "create-admin": "tsx src/scripts/create-admin.ts"
+    "create-admin": "tsx src/scripts/create-admin.ts",
+    "test:lead-generation": "tsx scripts/lead-generation-tests.ts"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.2",

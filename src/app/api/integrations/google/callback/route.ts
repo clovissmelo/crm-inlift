@@ -1,24 +1,27 @@
+import type { Route } from "next";
 import { redirect } from "next/navigation";
 import { consumeOAuthState, saveTokensFromCode, isGoogleOAuthConfigured } from "@/lib/google-calendar";
+import { getRequestOrigin } from "@/lib/request-origin";
 
 export async function GET(request: Request) {
-  if (!isGoogleOAuthConfigured()) {
-    redirect("/admin/variaveis?error=not_configured");
+  const origin = getRequestOrigin(request);
+  if (!(await isGoogleOAuthConfigured(origin))) {
+    redirect("/admin/integracoes/google-agenda?error=not_configured" as Route);
   }
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   if (!code || !state) {
-    redirect("/admin/variaveis?error=oauth_denied");
+    redirect("/admin/integracoes/google-agenda?error=oauth_denied" as Route);
   }
   const userId = await consumeOAuthState(state);
   if (!userId) {
-    redirect("/admin/variaveis?error=invalid_state");
+    redirect("/admin/integracoes/google-agenda?error=invalid_state" as Route);
   }
   try {
-    await saveTokensFromCode(code, userId);
-    redirect("/admin/variaveis?connected=1");
+    await saveTokensFromCode(code, userId, origin);
+    redirect("/admin/integracoes/google-agenda?connected=1" as Route);
   } catch {
-    redirect("/admin/variaveis?error=token_failed");
+    redirect("/admin/integracoes/google-agenda?error=token_failed" as Route);
   }
 }

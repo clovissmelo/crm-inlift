@@ -1,61 +1,15 @@
-import Link from "next/link";
+import { AdminConfigCardGrid } from "@/components/admin-config-card-grid";
 import { PageIntro } from "@/components/page-intro";
-import type { LucideIcon } from "lucide-react";
-import { FileSpreadsheet, PhoneCall, SlidersHorizontal } from "lucide-react";
-import type { Route } from "next";
-
-type HubItem = {
-  href: Route;
-  icon: LucideIcon;
-  title: string;
-  description: string;
-};
-
-const ADMIN_ITEMS: HubItem[] = [
-  {
-    href: "/admin/integracoes",
-    icon: PhoneCall,
-    title: "Integrações",
-    description: "API4COM (telefonia), webhooks e instruções de configuração."
-  },
-  {
-    href: "/admin/variaveis",
-    icon: SlidersHorizontal,
-    title: "Variáveis para as APIs",
-    description: "Google Agenda, Places, chaves e tokens no servidor."
-  },
-  {
-    href: "/admin/importacao",
-    icon: FileSpreadsheet,
-    title: "Importação de planilhas",
-    description: "Carga em massa de clientes e contatos."
-  }
-];
 
 export function AdminHub() {
   return (
     <div className="hub-page">
       <header className="hub-page-header">
         <PageIntro>
-          Integrações, variáveis de ambiente e importação em massa. Demais cadastros estão no menu Gestão.
+          Escolha uma configuração abaixo. Chaves Google e credenciais ficam no banco (Integrações), não na Vercel.
         </PageIntro>
       </header>
-      <ul className="hub-card-grid">
-        {ADMIN_ITEMS.map((item) => {
-          const Icon = item.icon;
-          return (
-            <li key={item.href}>
-              <Link href={item.href} className="hub-card">
-                <span className="hub-card-icon" aria-hidden>
-                  <Icon size={22} strokeWidth={1.75} />
-                </span>
-                <span className="hub-card-title">{item.title}</span>
-                <span className="hub-card-desc">{item.description}</span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+      <AdminConfigCardGrid />
     </div>
   );
 }

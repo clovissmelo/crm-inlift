@@ -3,7 +3,6 @@
 import { PageIntro } from "@/components/page-intro";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { GoogleIntegrationPanel } from "@/components/google-integration-panel";
 
 type Setting = {
   key: string;
@@ -15,11 +14,11 @@ type Setting = {
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
-  google_calendar: "Google Agenda / Meet",
-  google_places: "Google Places (novos leads)",
   lead_discovery: "Motor de leads",
   api4com: "API4COM (telefonia)"
 };
+
+const HIDDEN_CATEGORIES = new Set(["google_calendar", "google_places"]);
 
 export function AdminApiVariables() {
   const [settings, setSettings] = useState<Setting[]>([]);
@@ -38,7 +37,7 @@ export function AdminApiVariables() {
       setLoading(false);
       return;
     }
-    setSettings(data.settings);
+    setSettings(data.settings.filter((s) => !HIDDEN_CATEGORIES.has(s.category)));
     const initial: Record<string, string> = {};
     for (const s of data.settings) initial[s.key] = s.value ?? "";
     setDraft(initial);
@@ -82,7 +81,8 @@ export function AdminApiVariables() {
         <Link href="/admin">← Admin</Link>
       </p>
       <PageIntro>
-        Valores usados pelo CRM e pelo motor de novos leads. Podem ser alterados ao longo do projeto (ex.: e-mail que agenda Meet, chave Places).
+        Parâmetros gerais do CRM. Chaves Google (Agenda e Places) ficam em{" "}
+        <Link href="/admin/integracoes">Admin → Integrações</Link>.
       </PageIntro>
 
       {message ? <div className="alert alert-info">{message}</div> : null}
@@ -117,10 +117,6 @@ export function AdminApiVariables() {
           {saving ? "Salvando…" : "Salvar variáveis"}
         </button>
       </form>
-
-      <div style={{ marginTop: "1.5rem" }}>
-        <GoogleIntegrationPanel />
-      </div>
     </div>
   );
 }

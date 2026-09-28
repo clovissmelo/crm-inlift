@@ -1,14 +1,17 @@
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { getGooglePublicStatus, isGoogleOAuthConfigured } from "@/lib/google-calendar";
+import { getRequestOrigin } from "@/lib/request-origin";
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await requireApiUser();
   if (!user) return jsonUnauthorized();
-  const status = await getGooglePublicStatus();
+  const origin = getRequestOrigin(request);
+  const status = await getGooglePublicStatus(origin);
+  const configured = await isGoogleOAuthConfigured(origin);
   return Response.json({
     ...status,
-    message: !isGoogleOAuthConfigured()
-      ? "Configure GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET e GOOGLE_REDIRECT_URI no servidor."
+    message: !configured
+      ? "Configure Client ID e Client Secret em Admin → Integrações → Google Agenda."
       : status.connected
         ? null
         : "Google Agenda não conectado"

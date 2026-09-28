@@ -3,6 +3,11 @@ import { google } from "googleapis";
 import { get, nowIso, run } from "@/lib/db";
 import { decryptSecret, encryptSecret } from "@/lib/token-crypto";
 import { meetingEndIso } from "@/lib/datetime";
+import {
+  getGoogleOAuthClientCredentials,
+  isGoogleOAuthConfiguredInApp,
+  resolveGoogleOAuthRedirectUri
+} from "@/lib/google-oauth-settings";
 
 export type GooglePublicStatus = {
   configured: boolean;
@@ -11,20 +16,19 @@ export type GooglePublicStatus = {
   calendar_id: string | null;
 };
 
-function getOAuthConfig() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
-  if (!clientId || !clientSecret || !redirectUri) return null;
-  return { clientId, clientSecret, redirectUri };
+async function getOAuthConfig(requestOrigin?: string) {
+  const creds = await getGoogleOAuthClientCredentials();
+  const redirectUri = await resolveGoogleOAuthRedirectUri(requestOrigin);
+  if (!creds || !redirectUri) return null;
+  return { clientId: creds.clientId, clientSecret: creds.clientSecret, redirectUri };
 }
 
-export function isGoogleOAuthConfigured() {
-  return Boolean(getOAuthConfig());
+export async function isGoogleOAuthConfigured(requestOrigin?: string) {
+  return isGoogleOAuthConfiguredInApp(requestOrigin);
 }
 
-export async function getGooglePublicStatus(): Promise<GooglePublicStatus> {
-  const configured = isGoogleOAuthConfigured();
+export async function getGooglePublicStatus(requestOrigin?: string): Promise<GooglePublicStatus> {
+  const configured = await isGoogleOAuthConfigured(requestOrigin);
   const row = await get<{ account_email: string | null; calendar_id: string | null; refresh_token_encrypted: string | null }>(
     "SELECT account_email, calendar_id, refresh_token_encrypted FROM google_calendar_connection WHERE id = 1"
   );
@@ -58,8 +62,8 @@ export async function consumeOAuthState(state: string) {
   return row.user_id;
 }
 
-export function buildGoogleAuthUrl(state: string) {
-  const cfg = getOAuthConfig();
+export async function buildGoogleAuthUrl(state: string, requestOrigin?: string) {
+  const cfg = await getOAuthConfig(requestOrigin);
   if (!cfg) throw new Error("Google OAuth não configurado");
   const oauth2 = new google.auth.OAuth2(cfg.clientId, cfg.clientSecret, cfg.redirectUri);
   return oauth2.generateAuthUrl({
@@ -70,8 +74,8 @@ export function buildGoogleAuthUrl(state: string) {
   });
 }
 
-export async function saveTokensFromCode(code: string, userId: number) {
-  const cfg = getOAuthConfig();
+export async function saveTokensFromCode(code: string, userId: number, requestOrigin?: string) {
+  const cfg = await getOAuthConfig(requestOrigin);
   if (!cfg) throw new Error("Google OAuth não configurado");
   const oauth2 = new google.auth.OAuth2(cfg.clientId, cfg.clientSecret, cfg.redirectUri);
   const { tokens } = await oauth2.getToken(code);
@@ -127,7 +131,7 @@ export async function disconnectGoogle() {
 }
 
 async function getAuthorizedClient() {
-  const cfg = getOAuthConfig();
+  const cfg = await getOAuthConfig();
   if (!cfg) return null;
   const row = await get<{
     refresh_token_encrypted: string | null;

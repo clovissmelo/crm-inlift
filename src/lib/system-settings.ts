@@ -1,4 +1,6 @@
 import { all, get, nowIso, run } from "@/lib/db";
+import { encryptGoogleOAuthSecretForStorage } from "@/lib/google-oauth-settings";
+import { encryptGooglePlacesApiKeyForStorage } from "@/lib/google-places-settings";
 
 export type SystemSettingRow = {
   key: string;
@@ -32,12 +34,19 @@ export async function updateSystemSettings(
   userId: number
 ) {
   for (const row of updates) {
+    let value = row.value;
+    if (row.key === "google_places_api_key" && value && value.trim()) {
+      value = encryptGooglePlacesApiKeyForStorage(value);
+    }
+    if (row.key === "google_oauth_client_secret" && value && value.trim()) {
+      value = encryptGoogleOAuthSecretForStorage(value);
+    }
     await run(
       `
         UPDATE system_settings SET value = @value, updated_at = @now, updated_by_user_id = @userId
         WHERE key = @key
       `,
-      { key: row.key, value: row.value, now: nowIso(), userId }
+      { key: row.key, value, now: nowIso(), userId }
     );
   }
 }
