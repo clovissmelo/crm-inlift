@@ -2,6 +2,11 @@ import { all, get } from "@/lib/db";
 import { periodToRange, spDayEndUtcIso, spDayStartUtcIso, type DashboardPeriod } from "@/lib/datetime";
 import { getOpportunityDashboardMetrics } from "@/lib/opportunity-pipeline";
 
+function timestampIso(value: string | Date | null | undefined): string {
+  if (value == null) return "";
+  return typeof value === "string" ? value : new Date(value).toISOString();
+}
+
 export type DashboardStatsFilters = {
   period?: DashboardPeriod;
   product_id?: string | null;
@@ -404,7 +409,7 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
         `
         SELECT f.id, f.client_id,
           COALESCE(c.trade_name, c.legal_name, 'Cliente') AS client_name,
-          f.scheduled_at, f.kind
+          f.scheduled_at::text AS scheduled_at, f.kind
         FROM follow_ups f
         JOIN clients c ON c.id = f.client_id
         WHERE f.status = 'pending'
@@ -426,7 +431,7 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
         starts_at: string;
       }>(
         `
-        SELECT m.id, m.client_id, m.title, m.starts_at,
+        SELECT m.id, m.client_id, m.title, m.starts_at::text AS starts_at,
           COALESCE(c.trade_name, c.legal_name, 'Cliente') AS client_name
         FROM meetings m
         JOIN clients c ON c.id = m.client_id
@@ -518,8 +523,8 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
       client_id: f.client_id,
       label: f.kind === "meeting" ? "Retorno reunião" : "Retomar conversa",
       client_name: f.client_name,
-      at: f.scheduled_at,
-      overdue: f.scheduled_at < todayStart
+      at: timestampIso(f.scheduled_at),
+      overdue: timestampIso(f.scheduled_at) < todayStart
     })),
     ...focusMeetings.map((m) => ({
       type: "meeting" as const,
@@ -527,7 +532,7 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
       client_id: m.client_id,
       label: "Reunião",
       client_name: m.client_name,
-      at: m.starts_at,
+      at: timestampIso(m.starts_at),
       overdue: false
     }))
   ]
