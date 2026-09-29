@@ -19,6 +19,7 @@ import {
   updateRun,
   upsertGoogleCache
 } from "@/lib/lead-generation/runs-repo";
+import { computeRunProgressPct } from "@/lib/lead-generation/run-progress";
 import type { LeadGenCounts } from "@/lib/lead-generation/types";
 import { createClientFromLead, findExistingClientIdByCnpj } from "@/lib/lead-motor/persist-client";
 import { getGooglePlacesApiKey } from "@/lib/google-places-settings";
@@ -77,6 +78,18 @@ async function tickAnpLoad(runId: number) {
   const pairs = resolveCityPairs(runRow.uf, runRow.filters_json);
   const counts = { ...runRow.counts_json };
   counts.cities_total = pairs.length;
+  if ((runRow.counts_json?.cities_total ?? 0) !== pairs.length) {
+    const progress_pct = computeRunProgressPct({
+      phase: runRow.phase,
+      status: runRow.status,
+      max_stations: runRow.max_stations,
+      counts_json: { ...counts, cities_loaded: counts.cities_loaded ?? 0 }
+    });
+    await updateRun(runId, {
+      counts_json: { ...counts, cities_loaded: counts.cities_loaded ?? 0 },
+      progress_pct
+    });
+  }
   if (pairs.length === 0) {
     const hint = runRow.filters_json.all_cities_in_uf
       ? `UF ${runRow.uf} sem cidades no mapa ANP.`
@@ -139,7 +152,12 @@ async function tickAnpLoad(runId: number) {
   const byStatus = await countItemsByStatus(runId);
   counts.items_total = Object.values(byStatus).reduce((a, b) => a + b, 0);
   const pending = byStatus.pending ?? 0;
-  const pct = Math.min(15, Math.round((counts.cities_loaded / pairs.length) * 15));
+  const progress_pct = computeRunProgressPct({
+    phase: runRow.phase,
+    status: runRow.status,
+    max_stations: runRow.max_stations,
+    counts_json: counts
+  });
 
   if (idx >= pairs.length) {
     await finishAnpLoadPhase(runId, counts);
@@ -148,21 +166,36 @@ async function tickAnpLoad(runId: number) {
 
   const buffer = Math.max(15, runRow.max_stations * 8);
   if (pending >= buffer) {
-    await updateRun(runId, { phase: "processing", counts_json: counts, progress_pct: Math.max(pct, 1) });
+    await updateRun(runId, {
+      phase: "processing",
+      counts_json: counts,
+      progress_pct: computeRunProgressPct({
+        phase: "processing",
+        status: runRow.status,
+        max_stations: runRow.max_stations,
+        counts_json: counts
+      })
+    });
     return;
   }
 
-  await updateRun(runId, { counts_json: counts, progress_pct: pct });
+  await updateRun(runId, { counts_json: counts, progress_pct });
 }
 
 async function finishAnpLoadPhase(runId: number, counts: LeadGenCounts) {
   const items = await listRunItems(runId);
   counts.anp_found = items.length;
   counts.items_total = items.length;
+  const runRow = await getLeadGenerationRun(runId);
   await updateRun(runId, {
     phase: "processing",
     counts_json: counts,
-    progress_pct: items.length ? 1 : 99
+    progress_pct: computeRunProgressPct({
+      phase: "processing",
+      status: runRow?.status,
+      max_stations: runRow?.max_stations ?? 1,
+      counts_json: counts
+    })
   });
 }
 
@@ -359,19 +392,29 @@ async function tickProcessing(runId: number) {
     const { counts } = await recomputeCounts(runId, freshRun);
     counts.google_matched = counts.created + counts.ambiguous;
     counts.enriched = counts.created;
-    const pct = Math.min(99, Math.round((counts.created / freshRun.max_stations) * 100));
-    await updateRun(runId, { counts_json: counts, progress_pct: pct, phase: "finalizing" });
+    const progress_pct = computeRunProgressPct({
+      phase: "finalizing",
+      status: freshRun.status,
+      max_stations: freshRun.max_stations,
+      counts_json: counts
+    });
+    await updateRun(runId, { counts_json: counts, progress_pct, phase: "finalizing" });
     return;
   }
 
-  const { counts, pct: itemPct } = await recomputeCounts(runId, freshRun);
+  const { counts } = await recomputeCounts(runId, freshRun);
   counts.google_matched = counts.created + counts.ambiguous;
   counts.enriched = counts.created;
-  let pct = itemPct;
-  if (freshRun.max_stations > 0) {
-    pct = Math.min(99, Math.round((counts.created / freshRun.max_stations) * 100));
-  }
-  await updateRun(runId, { counts_json: counts, progress_pct: Math.max(pct, freshRun.progress_pct) });
+  const progress_pct = Math.max(
+    freshRun.progress_pct,
+    computeRunProgressPct({
+      phase: freshRun.phase,
+      status: freshRun.status,
+      max_stations: freshRun.max_stations,
+      counts_json: counts
+    })
+  );
+  await updateRun(runId, { counts_json: counts, progress_pct });
 }
 
 async function tickFinalizing(runId: number) {

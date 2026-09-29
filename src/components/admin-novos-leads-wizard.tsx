@@ -8,6 +8,7 @@ import {
   type UfOption
 } from "@/components/admin-novos-leads-city-picker";
 import { normalizeLeadGenFilters } from "@/lib/lead-generation/city-resolve";
+import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
 import { LEAD_GEN_SEGMENT_OPTIONS, type LeadGenSegmentFilter } from "@/lib/lead-motor/lead-gen-segments";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -80,16 +81,32 @@ function formatRunGeo(filters: RunFilters, uf: string): { line: string; title?: 
   return { line: "—" };
 }
 
-function formatActiveRunProgress(r: { phase: string; progress_pct: number; max_stations: number; counts_json: Record<string, number> }): string {
-  if (r.phase === "anp_load") {
-    const loaded = r.counts_json?.cities_loaded ?? 0;
-    const total = r.counts_json?.cities_total ?? 0;
-    if (total > 0) return `ANP: ${loaded}/${total} cidades`;
-    return "Carregando ANP…";
-  }
-  const created = r.counts_json?.created ?? 0;
-  if (created > 0) return `${created}/${r.max_stations} novos`;
-  return `${Math.round(r.progress_pct)}%`;
+function LeadGenRunProgressBar({
+  run,
+  compact = false
+}: {
+  run: {
+    phase: string;
+    status: string;
+    progress_pct: number;
+    max_stations: number;
+    counts_json: Record<string, number>;
+  };
+  compact?: boolean;
+}) {
+  const pct = computeRunProgressPct(run);
+  const detail = runProgressDetail(run);
+  return (
+    <div className={`lead-gen-progress${compact ? " lead-gen-progress--compact" : ""}`}>
+      <div className="lead-gen-progress-head">
+        <span className="lead-gen-progress-pct">{pct}%</span>
+        <span className="lead-gen-progress-detail muted">{detail}</span>
+      </div>
+      <div className="lead-gen-progress-track" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+        <div className="lead-gen-progress-fill" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
 }
 
 function formatRunResults(counts: Record<string, number>): string {
@@ -193,6 +210,7 @@ export function AdminNovosLeadsWizard() {
       if (!res.ok) return;
       const data = (await res.json()) as { run: RunDetail; items?: typeof resultItems };
       setActiveRun(data.run);
+      setRuns((prev) => prev.map((row) => (row.id === data.run.id ? { ...row, ...data.run } : row)));
       if (data.items) setResultItems(data.items as typeof resultItems);
     },
     []
@@ -432,10 +450,12 @@ export function AdminNovosLeadsWizard() {
             {RUN_STATUS_LABEL[activeRun.status] ?? activeRun.status}
             {["queued", "running", "paused"].includes(activeRun.status)
               ? ` · ${PHASE_LABEL[activeRun.phase] ?? activeRun.phase}`
-              : null}{" "}
-            · Progresso: {formatActiveRunProgress(activeRun)}
+              : null}
             {activeRun.simulation ? " · Sem Google (sem chave ou quota)" : ""}
           </p>
+          {["queued", "running", "paused"].includes(activeRun.status) ? (
+            <LeadGenRunProgressBar run={activeRun} />
+          ) : null}
           {activeRun.error_message ? <p className="alert alert-error">{activeRun.error_message}</p> : null}
           <ul className="muted" style={{ columns: 2, fontSize: "0.9rem" }}>
             <li>ANP: {counts.anp_found ?? 0}</li>
@@ -562,7 +582,7 @@ export function AdminNovosLeadsWizard() {
                         {(r.counts_json?.processed ?? 0) > 0 || r.status === "completed" ? (
                           formatRunResults(r.counts_json ?? {})
                         ) : active ? (
-                          <span className="muted">{formatActiveRunProgress(r)}</span>
+                          <LeadGenRunProgressBar run={r} compact />
                         ) : (
                           <span className="muted">—</span>
                         )}
@@ -578,7 +598,9 @@ export function AdminNovosLeadsWizard() {
                           {RUN_STATUS_LABEL[r.status] ?? r.status}
                         </span>
                         {active ? (
-                          <span className="lead-gen-history-sub muted">{formatActiveRunProgress(r)}</span>
+                          <span className="lead-gen-history-sub muted">
+                            {computeRunProgressPct(r)}% · {runProgressDetail(r)}
+                          </span>
                         ) : null}
                         {r.error_message ? (
                           <span className="lead-gen-history-sub lead-gen-history-error" title={r.error_message}>
