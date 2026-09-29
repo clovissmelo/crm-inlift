@@ -4,8 +4,7 @@ export const ANP_API_BASE = "https://revendedoresapi.anp.gov.br/v1/combustivel";
 
 export const WHITE_FLAG_DISTRIBUTORS = new Set(["BANDEIRA BRANCA", "SEM BANDEIRA", ""]);
 
-export const GOOGLE_PLACES_FIND_URL = "https://maps.googleapis.com/maps/api/place/findplacefromtext/json";
-export const GOOGLE_PLACES_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json";
+/** Places API (New) — https://places.googleapis.com/v1 */
 export const GOOGLE_PLACES_BIAS_RADIUS_M = 200;
 export const GOOGLE_PLACES_MIN_INTERVAL_MS = 250;
 

@@ -1,7 +1,7 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { getGooglePlacesApiKey } from "@/lib/google-places-settings";
-import { GOOGLE_PLACES_FIND_URL } from "@/lib/lead-motor/motor-config";
+import { placesTestConnection } from "@/lib/lead-motor/places-api-new";
 
 export async function POST() {
   const user = await requireApiUser();
@@ -13,27 +13,15 @@ export async function POST() {
     return Response.json({ ok: false, error: "Chave Google Places não configurada." }, { status: 400 });
   }
 
-  const params = new URLSearchParams({
-    input: "ANP Agência Nacional do Petróleo Brasília",
-    inputtype: "textquery",
-    fields: "place_id,name",
-    language: "pt-BR",
-    key
-  });
-
-  const res = await fetch(`${GOOGLE_PLACES_FIND_URL}?${params}`, { signal: AbortSignal.timeout(15000) });
-  const payload = (await res.json()) as { status?: string; error_message?: string; candidates?: unknown[] };
-  const status = payload.status ?? "UNKNOWN";
-  if (status !== "OK" && status !== "ZERO_RESULTS") {
-    return Response.json({
-      ok: false,
-      error: payload.error_message ?? `Google retornou status ${status}`
-    });
+  const result = await placesTestConnection(key);
+  if (!result.ok) {
+    return Response.json({ ok: false, error: result.message, kind: result.kind }, { status: 400 });
   }
 
+  const count = result.data.places.length;
   return Response.json({
     ok: true,
-    message: "Conexão OK (1 consulta Find Place de teste).",
-    candidates: payload.candidates?.length ?? 0
+    message: `Places API (New) OK — 1 Text Search (máscara places.id). ${count ? `${count} resultado(s).` : "Zero resultados (chave válida)."}`,
+    places_found: count
   });
 }

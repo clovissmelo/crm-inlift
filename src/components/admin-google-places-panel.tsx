@@ -100,7 +100,8 @@ export function AdminGooglePlacesPanel() {
         <strong className={hasKey ? "text-success" : "text-warning"}>{hasKey ? "Configurado" : "Não configurado"}</strong>
       </p>
       <p className="muted">
-        A chave é armazenada criptografada no banco. Use limites diários e por execução para controlar custos (Find Place + Details ≈ 2 chamadas por posto).
+        A chave é armazenada criptografada no banco. O CRM usa <strong>Places API (New)</strong> (Text Search + Place Details).
+        Ative “Places API (New)” no Google Cloud e billing. Custo ≈ 2 requisições por posto enriquecido (busca + detalhes).
       </p>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
@@ -137,7 +138,7 @@ export function AdminGooglePlacesPanel() {
             {saving ? "Salvando…" : "Salvar"}
           </button>
           <button className="btn" type="button" disabled={testing || !hasKey} onClick={() => void testConnection()}>
-            {testing ? "Testando…" : "Testar conexão (1 consulta)"}
+            {testing ? "Testando…" : "Testar conexão (Places API New)"}
           </button>
         </div>
       </form>

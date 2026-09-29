@@ -91,7 +91,53 @@ export function ImportWizard({ products, bdrs }: { products: Product[]; bdrs: Us
 
   return (
     <div>
-      <PageIntro>Arquivos .xlsx ou .csv. O sistema registra nome do arquivo e data da importação.</PageIntro>
+      <PageIntro>
+        Arquivos <strong>.xlsx</strong> ou <strong>.csv</strong>, primeira aba/planilha, <strong>linha 1 = cabeçalhos</strong> e uma
+        linha por estabelecimento. Após enviar o arquivo, você associa cada coluna aos campos do CRM. O sistema registra nome do
+        arquivo e data da importação.
+      </PageIntro>
+
+      <div className="panel import-format-hint" style={{ marginBottom: "1rem" }}>
+        <p style={{ marginTop: 0, fontWeight: 600 }}>Formato esperado</p>
+        <ul className="muted" style={{ margin: "0.5rem 0 0.75rem", paddingLeft: "1.25rem", lineHeight: 1.5 }}>
+          <li>
+            <strong>Identificação:</strong> CNPJ (14 dígitos, com ou sem máscara). Se já existir no CRM, a linha{" "}
+            <strong>atualiza</strong> o cliente (campos vazios não apagam o que já estava cadastrado).
+          </li>
+          <li>
+            <strong>Obrigatório por linha:</strong> CNPJ ou razão social ou nome fantasia — linhas totalmente vazias são ignoradas.
+          </li>
+          <li>
+            <strong>Cliente (opcional):</strong> segmento, cidade, UF (2 letras), endereço, site, Instagram, observações.
+          </li>
+          <li>
+            <strong>Contato (opcional, 1 por linha):</strong> nome, telefone, telefone adicional (WhatsApp), e-mail — origem
+            &quot;Importação planilha&quot;.
+          </li>
+          <li>
+            <strong>Padrões abaixo:</strong> produto e BDR vinculados a clientes novos; BDR em clientes existentes só se ainda não
+            tiver responsável.
+          </li>
+        </ul>
+        <p className="muted" style={{ margin: "0 0 0.35rem", fontSize: "0.8125rem" }}>
+          Exemplo de cabeçalho (nomes livres — na prévia você escolhe o significado de cada coluna):
+        </p>
+        <pre
+          className="import-format-example"
+          style={{
+            margin: 0,
+            padding: "0.65rem 0.75rem",
+            borderRadius: "0.5rem",
+            border: "1px solid var(--border)",
+            background: "rgba(0,0,0,0.25)",
+            fontSize: "0.75rem",
+            overflowX: "auto",
+            whiteSpace: "pre-wrap"
+          }}
+        >
+          {`CNPJ | Razão social | Nome fantasia | Segmento | Cidade | UF | Endereço | Site | Contato | Telefone | E-mail`}
+        </pre>
+      </div>
 
       <div className="panel">
         <div className="field">

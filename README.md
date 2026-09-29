@@ -106,7 +106,7 @@ Tokens ficam armazenados criptografados na tabela `google_calendar_connection`. 
 ### Geração de leads — deploy
 
 1. Aplique a migração `migrations/023_lead_generation_pipeline.sql` (ou rode `npm run migrate` apontando para o Supabase).
-2. **Vercel:** defina `CRON_SECRET` e `SESSION_SECRET` (sessão + criptografia de segredos no banco). Chaves Google vão pelo admin, não por env.
+2. **Vercel:** defina `SESSION_SECRET` (sessão + criptografia no banco). `CRON_SECRET` só se configurar cron manual (ex. Pro). Chaves Google vão pelo admin, não por env.
 3. **Supabase:** apenas `POSTGRES_URL`; nenhuma extensão extra.
 4. **Interface:** configure Google Places (opcional) → Novos leads → prévia ANP → iniciar. Modo simulação padrão (`lead_generation_simulation_default=1`) evita Google até você desmarcar na tela e confirmar cobranças.
 5. **Piloto real (ex.: 5 postos):** desative simulação, `max_stations=5`, `max_google_calls=10`, confirme cobranças. Custo Google ≈ 2 chamadas/posto (Find + Details; valores na tabela de preços Places do Google).
@@ -114,4 +114,4 @@ Tokens ficam armazenados criptografados na tabela `google_calendar_connection`. 
 
 ## Produção
 
-Defina `SESSION_SECRET`, **`CRON_SECRET`** (cron de leads) e **`POSTGRES_URL`** (ou `DATABASE_URL`) no ambiente. Na Vercel com integração Supabase, `POSTGRES_URL` costuma ser preenchida automaticamente. Credenciais Google (Agenda e Places) ficam em **Admin → Integrações**.
+Defina `SESSION_SECRET` e **`POSTGRES_URL`** (ou `DATABASE_URL`) no ambiente. Na Vercel com integração Supabase, `POSTGRES_URL` costuma ser preenchida automaticamente. Credenciais Google (Agenda e Places) ficam em **Admin → Integrações**.
