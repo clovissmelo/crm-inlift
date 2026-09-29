@@ -140,9 +140,23 @@ export function AdminNovosLeadsWizard() {
   const [products, setProducts] = useState<Array<{ id: number; name: string }>>([]);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [leadsRequested, setLeadsRequested] = useState(1);
 
   const maxLeadsRequested = quota?.per_run_limit ?? 100;
+
+  const listActiveRun = useMemo(
+    () => runs.find((r) => ["queued", "running", "paused"].includes(r.status)) ?? null,
+    [runs]
+  );
+
+  const shownRun = useMemo(() => {
+    if (activeRun && listActiveRun && activeRun.id === listActiveRun.id) return activeRun;
+    if (activeRun && !listActiveRun) return activeRun;
+    return listActiveRun;
+  }, [activeRun, listActiveRun]);
+
+  const shownRunActive = shownRun != null && ["queued", "running", "paused"].includes(shownRun.status);
 
   function clampLeadsRequested(value: number) {
     const max = maxLeadsRequested;
@@ -231,6 +245,12 @@ export function AdminNovosLeadsWizard() {
   );
 
   useEffect(() => {
+    if (listActiveRun && activeRunId !== listActiveRun.id) {
+      setActiveRunId(listActiveRun.id);
+    }
+  }, [listActiveRun, activeRunId]);
+
+  useEffect(() => {
     if (!activeRunId) return;
     void tickActiveRun(activeRunId);
     const pollMs = ["queued", "running"].includes(activeRun?.status ?? "") ? 3000 : 4000;
@@ -280,11 +300,22 @@ export function AdminNovosLeadsWizard() {
     }
   }
 
-  async function cancelRun(runId = activeRunId) {
+  async function cancelRun(runId = activeRunId ?? listActiveRun?.id) {
     if (!runId) return;
-    await fetch(`/api/admin/lead-generation/runs/${runId}/cancel`, { method: "POST" });
-    void tickActiveRun(runId);
-    void loadMeta();
+    setCancelling(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/lead-generation/runs/${runId}/cancel`, { method: "POST" });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        setError(data.error ?? "Não foi possível cancelar");
+        return;
+      }
+      void tickActiveRun(runId);
+      void loadMeta();
+    } finally {
+      setCancelling(false);
+    }
   }
 
   async function resumeRun(runId = activeRunId) {
@@ -319,7 +350,7 @@ export function AdminNovosLeadsWizard() {
     void loadMeta();
   }
 
-  const counts = activeRun?.counts_json ?? {};
+  const counts = shownRun?.counts_json ?? {};
 
   return (
     <div>
@@ -446,9 +477,24 @@ export function AdminNovosLeadsWizard() {
             </div>
             <span className="muted lead-gen-qty-hint">Máx. {maxLeadsRequested} por execução</span>
           </div>
-          <button className="btn btn-primary" type="button" disabled={starting} onClick={() => void startRun()}>
+          <button
+            className="btn btn-primary"
+            type="button"
+            disabled={starting || shownRunActive}
+            onClick={() => void startRun()}
+          >
             {starting ? "Iniciando…" : "Iniciar geração"}
           </button>
+          {shownRunActive && shownRun ? (
+            <button
+              className="btn lead-gen-cancel-exec-btn"
+              type="button"
+              disabled={cancelling}
+              onClick={() => void cancelRun(shownRun.id)}
+            >
+              {cancelling ? "Cancelando…" : "Cancelar execução"}
+            </button>
+          ) : null}
         </div>
         <p className="muted lead-gen-qty-note">
           A execução percorre na ANP até a quantidade solicitada;
@@ -457,21 +503,29 @@ export function AdminNovosLeadsWizard() {
         </p>
       </div>
 
-      {activeRun ? (
-        <div className="panel" style={{ marginTop: "1rem" }}>
-          <h3 className="panel-title">Execução em andamento</h3>
+      {shownRun ? (
+        <div className="panel lead-gen-active-panel" style={{ marginTop: "1rem" }}>
+          <div className="lead-gen-active-panel-head">
+            <h3 className="panel-title">Execução em andamento</h3>
+            {shownRunActive ? (
+              <button
+                className="btn lead-gen-cancel-exec-btn"
+                type="button"
+                disabled={cancelling}
+                onClick={() => void cancelRun(shownRun.id)}
+              >
+                {cancelling ? "Cancelando…" : "Cancelar execução"}
+              </button>
+            ) : null}
+          </div>
           <p>
-            Meta: {activeRun.max_stations} novo{activeRun.max_stations === 1 ? "" : "s"} ·{" "}
-            {RUN_STATUS_LABEL[activeRun.status] ?? activeRun.status}
-            {["queued", "running", "paused"].includes(activeRun.status)
-              ? ` · ${PHASE_LABEL[activeRun.phase] ?? activeRun.phase}`
-              : null}
-            {activeRun.simulation ? " · Sem Google (sem chave ou quota)" : ""}
+            Meta: {shownRun.max_stations} novo{shownRun.max_stations === 1 ? "" : "s"} ·{" "}
+            {RUN_STATUS_LABEL[shownRun.status] ?? shownRun.status}
+            {shownRunActive ? ` · ${PHASE_LABEL[shownRun.phase] ?? shownRun.phase}` : null}
+            {shownRun.simulation ? " · Sem Google (sem chave ou quota)" : ""}
           </p>
-          {["queued", "running", "paused"].includes(activeRun.status) ? (
-            <LeadGenRunProgressBar run={activeRun} />
-          ) : null}
-          {activeRun.error_message ? <p className="alert alert-error">{activeRun.error_message}</p> : null}
+          {shownRunActive ? <LeadGenRunProgressBar run={shownRun} /> : null}
+          {shownRun.error_message ? <p className="alert alert-error">{shownRun.error_message}</p> : null}
           <ul className="muted" style={{ columns: 2, fontSize: "0.9rem" }}>
             <li>ANP: {counts.anp_found ?? 0}</li>
             <li>Itens: {counts.items_total ?? 0}</li>
@@ -482,20 +536,25 @@ export function AdminNovosLeadsWizard() {
             <li>Sem Google: {counts.no_google_match ?? 0}</li>
             <li>Erros: {counts.errors ?? 0}</li>
           </ul>
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            {activeRun.status === "paused" ? (
-              <button className="btn btn-primary" type="button" onClick={() => void resumeRun()}>
-                Retomar
+          {shownRunActive ? (
+            <div className="lead-gen-active-actions">
+              {shownRun.status === "paused" ? (
+                <button className="btn btn-primary" type="button" onClick={() => void resumeRun(shownRun.id)}>
+                  Retomar
+                </button>
+              ) : null}
+              <button
+                className="btn lead-gen-cancel-exec-btn"
+                type="button"
+                disabled={cancelling}
+                onClick={() => void cancelRun(shownRun.id)}
+              >
+                {cancelling ? "Cancelando…" : "Cancelar execução"}
               </button>
-            ) : null}
-            {["queued", "running", "paused"].includes(activeRun.status) ? (
-              <button className="btn" type="button" onClick={() => void cancelRun()}>
-                Cancelar
-              </button>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
 
-          {["completed", "failed", "cancelled"].includes(activeRun.status) ? (
+          {["completed", "failed", "cancelled"].includes(shownRun.status) ? (
             <div style={{ marginTop: "1rem" }}>
               <h4>Resultados</h4>
               <div className="filters-row" style={{ marginBottom: 8 }}>
@@ -506,7 +565,7 @@ export function AdminNovosLeadsWizard() {
                     className={`btn ${resultTab === t ? "btn-primary" : ""}`}
                     onClick={() => {
                       setResultTab(t);
-                      void fetchRunDetail(activeRun.id, t);
+                      void fetchRunDetail(shownRun.id, t);
                     }}
                   >
                     {t === "created" ? "Novos" : t === "existing" ? "Já existentes" : t === "ambiguous" ? "Revisão" : "Erros"}

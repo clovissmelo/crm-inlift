@@ -2351,6 +2351,36 @@ table.data-table tbody tr.is-selected {
   margin-top: 0.5rem;
 }
 
+.lead-gen-cancel-exec-btn {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+  color: var(--danger);
+}
+
+.lead-gen-cancel-exec-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: var(--danger);
+}
+
+.lead-gen-active-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+
+.lead-gen-active-panel-head .panel-title {
+  margin: 0;
+}
+
+.lead-gen-active-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
 .lead-gen-qty-field {
   margin: 0;
   min-width: 12rem;
