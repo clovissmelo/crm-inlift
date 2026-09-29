@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { Api4comBdrFields } from "@/components/api4com-bdr-fields";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
+import { UserRolePicker } from "@/components/user-role-picker";
 import { ROLE_LABELS, type User, type UserRole } from "@/lib/types";
-
-const ALL_ROLES: UserRole[] = ["bdr", "product_owner", "manager", "admin"];
 
 type UserForm = {
   name: string;
@@ -86,13 +85,6 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
     setForm(emptyForm());
   }
 
-  function toggleRole(role: UserRole) {
-    setForm((f) => ({
-      ...f,
-      roles: f.roles.includes(role) ? f.roles.filter((r) => r !== role) : [...f.roles, role]
-    }));
-  }
-
   async function saveUser(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -110,6 +102,12 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
       payload.api4com_api_token = form.api4com_api_token.trim();
     }
     if (form.password.trim()) payload.password = form.password;
+
+    if (form.roles.length === 0) {
+      setError("Selecione ao menos um perfil.");
+      setSaving(false);
+      return;
+    }
 
     if (!editingId) {
       if (!form.password.trim()) {
@@ -191,8 +189,8 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
         ) : null}
       </div>
 
-      <CadastroModal open={modalOpen} title={editingId ? "Editar usuário" : "Novo usuário"} onClose={closeModal}>
-        <form onSubmit={saveUser}>
+      <CadastroModal open={modalOpen} title={editingId ? "Editar usuário" : "Novo usuário"} onClose={closeModal} wide>
+        <form className="product-form" onSubmit={saveUser}>
           {error ? <div className="alert alert-error">{error}</div> : null}
           <div className="field">
             <label className="label">Nome</label>
@@ -268,15 +266,12 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
               hasApiToken={editingHasApiToken}
             />
           ) : null}
-          <div className="field">
-            <span className="label">Perfis</span>
-            {ALL_ROLES.map((role) => (
-              <label key={role} style={{ display: "block", marginBottom: 4 }}>
-                <input type="checkbox" checked={form.roles.includes(role)} onChange={() => toggleRole(role)} /> {ROLE_LABELS[role]}
-              </label>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+          <UserRolePicker
+            selected={form.roles}
+            disabled={saving}
+            onChange={(roles) => setForm((f) => ({ ...f, roles }))}
+          />
+          <div className="product-form-actions">
             <button type="button" className="btn" onClick={closeModal}>
               Cancelar
             </button>

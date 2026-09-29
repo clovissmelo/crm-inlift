@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
+import { ProductOwnerPicker } from "@/components/product-owner-picker";
 import { formatCnpj } from "@/lib/format";
 import type { Company, User } from "@/lib/types";
 
@@ -9,7 +10,7 @@ type CompanyForm = {
   name: string;
   legal_name: string;
   cnpj: string;
-  responsible_user_id: string;
+  responsible_user_ids: number[];
   status: "active" | "inactive";
 };
 
@@ -17,7 +18,7 @@ const emptyForm = (): CompanyForm => ({
   name: "",
   legal_name: "",
   cnpj: "",
-  responsible_user_id: "",
+  responsible_user_ids: [],
   status: "active"
 });
 
@@ -55,7 +56,7 @@ export function CompaniesAdmin({ users, canDelete = false }: { users: User[]; ca
       name: company.name,
       legal_name: company.legal_name ?? "",
       cnpj: company.cnpj ? formatCnpj(company.cnpj) : "",
-      responsible_user_id: company.responsible_user_id ? String(company.responsible_user_id) : "",
+      responsible_user_ids: company.responsible_user_id ? [company.responsible_user_id] : [],
       status: company.status
     });
     setError(null);
@@ -76,7 +77,7 @@ export function CompaniesAdmin({ users, canDelete = false }: { users: User[]; ca
       name: form.name,
       legal_name: form.legal_name || null,
       cnpj: form.cnpj || null,
-      responsible_user_id: form.responsible_user_id ? Number(form.responsible_user_id) : null,
+      responsible_user_id: form.responsible_user_ids[0] ?? null,
       status: form.status
     };
     const url = editingId ? `/api/companies/${editingId}` : "/api/companies";
@@ -152,52 +153,43 @@ export function CompaniesAdmin({ users, canDelete = false }: { users: User[]; ca
         ) : null}
       </div>
 
-      <CadastroModal open={modalOpen} title={editingId ? "Editar empresa" : "Nova empresa"} onClose={closeModal}>
-        <form onSubmit={saveCompany}>
+      <CadastroModal open={modalOpen} title={editingId ? "Editar empresa" : "Nova empresa"} onClose={closeModal} wide>
+        <form className="product-form" onSubmit={saveCompany}>
           {error ? <div className="alert alert-error">{error}</div> : null}
-          <div className="field">
-            <label className="label">Nome *</label>
-            <input className="input" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
+          <div className="product-form-grid">
+            <div className="field">
+              <label className="label">Nome *</label>
+              <input className="input" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
+            </div>
+            <div className="field">
+              <label className="label">Situação</label>
+              <select
+                className="select"
+                value={form.status}
+                onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as "active" | "inactive" }))}
+              >
+                <option value="active">Ativo</option>
+                <option value="inactive">Inativo</option>
+              </select>
+            </div>
           </div>
           <div className="field">
             <label className="label">Razão social</label>
-            <input
-              className="input"
-              value={form.legal_name}
-              onChange={(e) => setForm((f) => ({ ...f, legal_name: e.target.value }))}
-            />
+            <input className="input" value={form.legal_name} onChange={(e) => setForm((f) => ({ ...f, legal_name: e.target.value }))} />
           </div>
           <div className="field">
             <label className="label">CNPJ</label>
             <input className="input" value={form.cnpj} onChange={(e) => setForm((f) => ({ ...f, cnpj: e.target.value }))} />
           </div>
-          <div className="field">
-            <label className="label">Responsável</label>
-            <select
-              className="select"
-              value={form.responsible_user_id}
-              onChange={(e) => setForm((f) => ({ ...f, responsible_user_id: e.target.value }))}
-            >
-              <option value="">Nenhum</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label className="label">Situação</label>
-            <select
-              className="select"
-              value={form.status}
-              onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as "active" | "inactive" }))}
-            >
-              <option value="active">Ativo</option>
-              <option value="inactive">Inativo</option>
-            </select>
-          </div>
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+          <ProductOwnerPicker
+            users={users}
+            label="Responsável"
+            maxSelection={1}
+            selectedIds={form.responsible_user_ids}
+            disabled={saving}
+            onChange={(responsible_user_ids) => setForm((f) => ({ ...f, responsible_user_ids }))}
+          />
+          <div className="product-form-actions">
             <button type="button" className="btn" onClick={closeModal}>
               Cancelar
             </button>

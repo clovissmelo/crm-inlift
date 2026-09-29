@@ -8,16 +8,32 @@ type Props = {
   selectedIds: number[];
   onChange: (ids: number[]) => void;
   disabled?: boolean;
+  /** Título do bloco (padrão: Donos do produto) */
+  label?: string;
+  /** 1 = apenas um responsável (empresa); omitido = vários (produto) */
+  maxSelection?: number;
 };
 
 function isProductOwner(u: User): boolean {
   return u.status === "active" && u.roles.includes("product_owner");
 }
 
-export function ProductOwnerPicker({ users, selectedIds, onChange, disabled }: Props) {
+export function ProductOwnerPicker({
+  users,
+  selectedIds,
+  onChange,
+  disabled,
+  label = "Donos do produto",
+  maxSelection
+}: Props) {
   const [query, setQuery] = useState("");
 
-  const owners = useMemo(() => users.filter(isProductOwner), [users]);
+  const owners = useMemo(() => {
+    const base = users.filter(isProductOwner);
+    const extras = selectedIds.filter((id) => !base.some((u) => u.id === id));
+    const extraUsers = extras.map((id) => users.find((u) => u.id === id)).filter(Boolean) as User[];
+    return [...extraUsers, ...base];
+  }, [users, selectedIds]);
 
   const q = query.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -31,9 +47,11 @@ export function ProductOwnerPicker({ users, selectedIds, onChange, disabled }: P
 
   function toggle(id: number) {
     if (disabled) return;
-    onChange(
-      selectedSet.has(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]
-    );
+    if (maxSelection === 1) {
+      onChange(selectedSet.has(id) ? [] : [id]);
+      return;
+    }
+    onChange(selectedSet.has(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
   }
 
   function removeChip(id: number) {
@@ -47,10 +65,15 @@ export function ProductOwnerPicker({ users, selectedIds, onChange, disabled }: P
     <div className="product-owner-picker">
       <div className="product-owner-picker-head">
         <span className="label" style={{ margin: 0 }}>
-          Donos do produto
+          {label}
         </span>
         <span className="muted product-owner-picker-meta">
-          {selectedIds.length} selecionado{selectedIds.length === 1 ? "" : "s"} · {owners.length} com perfil
+          {maxSelection === 1
+            ? selectedIds.length
+              ? "1 selecionado"
+              : "Opcional · nenhum"
+            : `${selectedIds.length} selecionado${selectedIds.length === 1 ? "" : "s"}`}{" "}
+          · {users.filter(isProductOwner).length} com perfil
         </span>
       </div>
 
