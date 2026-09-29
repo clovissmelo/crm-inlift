@@ -156,7 +156,6 @@ async function tickAnpLoad(runId: number) {
   }
 
   const end = Math.min(idx + ANP_CITIES_PER_TICK, pairs.length);
-  let addedStations = 0;
   for (; idx < end; idx++) {
     const pair = pairs[idx]!;
     let rawRows: Record<string, unknown>[];
@@ -193,7 +192,6 @@ async function tickAnpLoad(runId: number) {
       runId,
       filtered.map((s) => ({ cnpj: s.cnpj, station_json: s, anp_raw: s }))
     );
-    addedStations += filtered.length;
     counts.cities_loaded = idx + 1;
     counts.anp_found = (counts.anp_found ?? 0) + filtered.length;
     const byStatusMid = await countItemsByStatus(runId);

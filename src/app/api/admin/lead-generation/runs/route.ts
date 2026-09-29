@@ -61,7 +61,7 @@ export async function POST(request: Request) {
   const segment_filter_kind = await resolveSegmentFilterKind(segmentSlug);
   const ibge = await getMunicipalitiesForUf(uf);
 
-  let selected: LeadGenMunicipalityRef[] = parsed.data.municipalities.map((m) => ({
+  const selected: LeadGenMunicipalityRef[] = parsed.data.municipalities.map((m) => ({
     ibge_code: m.ibge_code,
     name: m.name,
     commercial_zone_id: m.commercial_zone_id ?? null

@@ -202,6 +202,8 @@ export function AdminNovosLeadsCityPicker({
     [filteredCities]
   );
 
+  const visibleCodesKey = useMemo(() => visibleCodes.join(","), [visibleCodes]);
+
   useEffect(() => {
     if (productId === "" || visibleCodes.length === 0) {
       setIndicators({});
@@ -231,7 +233,7 @@ export function AdminNovosLeadsCityPicker({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [uf, productId, segment, visibleCodes.join(",")]);
+  }, [uf, productId, segment, visibleCodes, visibleCodesKey]);
 
   const ufList =
     ufOptions.length > 0 ? ufOptions : [{ code: "RS", name: "Rio Grande do Sul", has_motor_mapping: true }];

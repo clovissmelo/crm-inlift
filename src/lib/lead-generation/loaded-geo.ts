@@ -1,5 +1,5 @@
 import { all } from "@/lib/db";
-import { citiesForRegionIds, listRegionsForUf } from "@/lib/lead-motor/anp-regions";
+import { listRegionsForUf } from "@/lib/lead-motor/anp-regions";
 import { listOfficialCitiesForUf } from "@/lib/lead-motor/anp-cities";
 import type { LeadGenFilters } from "@/lib/lead-generation/types";
 import { normalizeSegmentFilter } from "@/lib/lead-motor/lead-gen-segments";
