@@ -6,6 +6,50 @@ import { validateGoogleMatch } from "@/lib/lead-motor/google-validate";
 import { enrichFromReceita, mergeEnrichment } from "@/lib/lead-motor/enrichment";
 import { isValidCnpjDigits } from "@/lib/lead-motor/utils";
 import { resolveCityPairs, type CityPair } from "@/lib/lead-generation/city-resolve";
+
+const STALE_RUN_MS = 25 * 60 * 1000;
+
+/** Corrige metadados de execuções antigas; pausa se ficou horas sem tick. */
+async function syncRunProgressMetadata(
+  runId: number,
+  runRow: NonNullable<Awaited<ReturnType<typeof getLeadGenerationRun>>>
+): Promise<{ paused: boolean }> {
+  const pairs = resolveCityPairs(runRow.uf, runRow.filters_json);
+  const counts = { ...runRow.counts_json };
+  let dirty = false;
+  if (pairs.length > 0 && (counts.cities_total ?? 0) !== pairs.length) {
+    counts.cities_total = pairs.length;
+    dirty = true;
+  }
+
+  const updatedMs = Date.parse(runRow.updated_at);
+  const stale =
+    runRow.status === "running" &&
+    Number.isFinite(updatedMs) &&
+    Date.now() - updatedMs > STALE_RUN_MS;
+
+  if (stale) {
+    await updateRun(runId, {
+      status: "paused",
+      error_message:
+        "Execução ficou sem atividade (aba fechada ou timeout). Clique Retomar com esta página aberta ou cancele e inicie outra."
+    });
+    return { paused: true };
+  }
+
+  if (dirty) {
+    await updateRun(runId, {
+      counts_json: counts,
+      progress_pct: computeRunProgressPct({
+        phase: runRow.phase,
+        status: runRow.status,
+        max_stations: runRow.max_stations,
+        counts_json: counts
+      })
+    });
+  }
+  return { paused: false };
+}
 import { canSpendGoogleCalls, touchRunGoogleUsage } from "@/lib/lead-generation/quota";
 import {
   countItemsByStatus,
@@ -457,7 +501,7 @@ export async function processLeadGenerationTick(
   let runId = preferredRunId ?? null;
   if (runId != null) {
     const row = await getRun(runId);
-    if (!row || !["queued", "running", "paused"].includes(row.status) || row.status === "paused") {
+    if (!row || !["queued", "running", "paused"].includes(row.status)) {
       runId = null;
     }
   }
@@ -471,6 +515,12 @@ export async function processLeadGenerationTick(
     await updateRun(runId, { status: "cancelled", phase: "done", completed_at: nowIso() });
     return { processedRunId: runId, action: "cancelled" };
   }
+
+  const meta = await syncRunProgressMetadata(runId, runRow);
+  if (meta.paused) {
+    return { processedRunId: runId, action: "stale_paused" };
+  }
+  runRow = (await getLeadGenerationRun(runId))!;
 
   if (runRow.status === "queued") {
     await updateRun(runId, { status: "running", started_at: nowIso() });

@@ -19,6 +19,10 @@ export async function POST(_request: Request, { params }: Params) {
   const before = await getLeadGenerationRun(id);
   if (!before) return Response.json({ error: "Execução não encontrada" }, { status: 404 });
 
+  if (before.status === "paused") {
+    return Response.json({ run: before });
+  }
+
   if (["queued", "running"].includes(before.status)) {
     await drainLeadGenerationTicks({ runId: id, maxTicks: 6, maxMs: 50_000 });
   }

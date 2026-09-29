@@ -280,17 +280,17 @@ export function AdminNovosLeadsWizard() {
     }
   }
 
-  async function cancelRun() {
-    if (!activeRunId) return;
-    await fetch(`/api/admin/lead-generation/runs/${activeRunId}/cancel`, { method: "POST" });
-    void fetchRunDetail(activeRunId);
+  async function cancelRun(runId = activeRunId) {
+    if (!runId) return;
+    await fetch(`/api/admin/lead-generation/runs/${runId}/cancel`, { method: "POST" });
+    void tickActiveRun(runId);
     void loadMeta();
   }
 
-  async function resumeRun() {
-    if (!activeRunId) return;
-    await fetch(`/api/admin/lead-generation/runs/${activeRunId}/resume`, { method: "POST" });
-    void fetchRunDetail(activeRunId);
+  async function resumeRun(runId = activeRunId) {
+    if (!runId) return;
+    await fetch(`/api/admin/lead-generation/runs/${runId}/resume`, { method: "POST" });
+    void tickActiveRun(runId);
   }
 
   async function deleteHistoryRun(r: RunRow) {
@@ -625,7 +625,32 @@ export function AdminNovosLeadsWizard() {
                       </td>
                       <td className="muted">{r.requested_by_name ?? "—"}</td>
                       <td className="lead-gen-history-actions">
-                        {!active ? (
+                        {active ? (
+                          <div className="lead-gen-history-active-actions">
+                            {r.status === "paused" ? (
+                              <button
+                                type="button"
+                                className="btn btn-sm"
+                                onClick={() => {
+                                  setActiveRunId(r.id);
+                                  void resumeRun(r.id);
+                                }}
+                              >
+                                Retomar
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              onClick={() => {
+                                setActiveRunId(r.id);
+                                void cancelRun(r.id);
+                              }}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : (
                           <button
                             type="button"
                             className="btn btn-icon-sm lead-gen-history-delete"
@@ -635,7 +660,7 @@ export function AdminNovosLeadsWizard() {
                           >
                             <Trash2 size={16} />
                           </button>
-                        ) : null}
+                        )}
                       </td>
                     </tr>
                   );

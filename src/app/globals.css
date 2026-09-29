@@ -2547,6 +2547,18 @@ table.data-table tbody tr.is-selected {
   vertical-align: middle;
 }
 
+.lead-gen-history-active-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 5.5rem;
+}
+
+.lead-gen-history-active-actions .btn-sm {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.45rem;
+}
+
 .lead-gen-history-delete:hover {
   color: var(--danger);
   border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
