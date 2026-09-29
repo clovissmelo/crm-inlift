@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     : Math.min(perRunLimit, availableToday, Math.max(1, maxStations * 2));
 
   const filters: LeadGenFilters = {
-    cities: parsed.data.cities,
+    cities: filtersNormalized.cities,
     regions: parsed.data.regions,
     all_cities_in_uf: parsed.data.all_cities_in_uf,
     segment: parsed.data.segment

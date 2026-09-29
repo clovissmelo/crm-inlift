@@ -50,7 +50,8 @@ export function AdminNovosLeadsCityPicker({
     setCheckedCities(new Set());
     setCityFilter("");
     onAllCitiesChange(false);
-  }, [uf, onAllCitiesChange]);
+    onSelectionChange({ regions: [], cities: [] });
+  }, [uf, onAllCitiesChange, onSelectionChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,11 +80,9 @@ export function AdminNovosLeadsCityPicker({
 
   const emitPayload = useCallback(
     (regions: Set<string>, cities: Set<string>) => {
-      const regionCitySet = new Set(citiesForRegionIds(uf, [...regions]));
-      const cityOnly = [...cities].filter((c) => !regionCitySet.has(c));
-      onSelectionChange({ regions: [...regions], cities: cityOnly });
+      onSelectionChange({ regions: [...regions], cities: [...cities] });
     },
-    [uf, onSelectionChange]
+    [onSelectionChange]
   );
 
   const toggleRegion = (id: string, on: boolean) => {

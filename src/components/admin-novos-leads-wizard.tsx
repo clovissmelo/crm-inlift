@@ -7,8 +7,9 @@ import {
   type CitySelectionPayload,
   type UfOption
 } from "@/components/admin-novos-leads-city-picker";
+import { normalizeLeadGenFilters } from "@/lib/lead-generation/city-resolve";
 import { LEAD_GEN_SEGMENT_OPTIONS, type LeadGenSegmentFilter } from "@/lib/lead-motor/lead-gen-segments";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type RunRow = {
   id: number;
@@ -63,7 +64,18 @@ export function AdminNovosLeadsWizard() {
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
-  const hasGeoSelection = allCities || citySelection.regions.length > 0 || citySelection.cities.length > 0;
+  const resolvedGeo = useMemo(
+    () =>
+      normalizeLeadGenFilters(uf, {
+        cities: citySelection.cities,
+        regions: citySelection.regions,
+        all_cities_in_uf: allCities,
+        segment
+      }),
+    [uf, citySelection, allCities, segment]
+  );
+
+  const hasGeoSelection = allCities || resolvedGeo.cities.length > 0;
 
   const loadMeta = useCallback(async () => {
     const [uRes, pRes, rRes, geoRes, quotaRes] = await Promise.all([
