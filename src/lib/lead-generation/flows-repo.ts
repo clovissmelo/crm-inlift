@@ -1,0 +1,193 @@
+import { all, get, run, nowIso } from "@/lib/db";
+import { FLOW_STEP_CATALOG, isFlowStepKey, type FlowInitialSource, type FlowStepKey } from "@/lib/lead-generation/flow-modules";
+
+export type FlowStepRow = {
+  id: number;
+  step_key: FlowStepKey;
+  sort_order: number;
+  enabled: boolean;
+  on_fail: "continue" | "stop";
+  max_api_calls: number | null;
+  config_json: Record<string, unknown>;
+};
+
+export type LeadGenerationFlowRow = {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  active: boolean;
+  initial_source: FlowInitialSource;
+  steps: FlowStepRow[];
+};
+
+export type FlowSnapshot = {
+  flow_id: number;
+  slug: string;
+  name: string;
+  initial_source: FlowInitialSource;
+  captured_at: string;
+  steps: Array<{
+    step_key: FlowStepKey;
+    sort_order: number;
+    enabled: boolean;
+    on_fail: "continue" | "stop";
+    max_api_calls: number | null;
+    config_json: Record<string, unknown>;
+    label: string;
+  }>;
+};
+
+function mapSteps(rows: Array<Record<string, unknown>>): FlowStepRow[] {
+  return rows
+    .filter((r) => isFlowStepKey(String(r.step_key)))
+    .map((r) => ({
+      id: Number(r.id),
+      step_key: String(r.step_key) as FlowStepKey,
+      sort_order: Number(r.sort_order),
+      enabled: Boolean(r.enabled),
+      on_fail: (r.on_fail === "stop" ? "stop" : "continue") as "continue" | "stop",
+      max_api_calls: r.max_api_calls != null ? Number(r.max_api_calls) : null,
+      config_json: (r.config_json as Record<string, unknown>) ?? {}
+    }))
+    .sort((a, b) => a.sort_order - b.sort_order);
+}
+
+export async function listLeadGenerationFlows(opts?: { activeOnly?: boolean }): Promise<LeadGenerationFlowRow[]> {
+  const flows = await all<Record<string, unknown>>(
+    `
+      SELECT id, slug, name, description, active, initial_source
+      FROM lead_generation_flows
+      ${opts?.activeOnly ? "WHERE active = true" : ""}
+      ORDER BY name ASC
+    `
+  );
+  const out: LeadGenerationFlowRow[] = [];
+  for (const f of flows) {
+    const steps = await all<Record<string, unknown>>(
+      "SELECT * FROM lead_generation_flow_steps WHERE flow_id = @id ORDER BY sort_order ASC",
+      { id: Number(f.id) }
+    );
+    out.push({
+      id: Number(f.id),
+      slug: String(f.slug),
+      name: String(f.name),
+      description: String(f.description ?? ""),
+      active: Boolean(f.active),
+      initial_source: String(f.initial_source) as FlowInitialSource,
+      steps: mapSteps(steps)
+    });
+  }
+  return out;
+}
+
+export async function getLeadGenerationFlow(id: number): Promise<LeadGenerationFlowRow | null> {
+  const f = await get<Record<string, unknown>>("SELECT * FROM lead_generation_flows WHERE id = @id", { id });
+  if (!f) return null;
+  const steps = await all<Record<string, unknown>>(
+    "SELECT * FROM lead_generation_flow_steps WHERE flow_id = @id ORDER BY sort_order ASC",
+    { id }
+  );
+  return {
+    id: Number(f.id),
+    slug: String(f.slug),
+    name: String(f.name),
+    description: String(f.description ?? ""),
+    active: Boolean(f.active),
+    initial_source: String(f.initial_source) as FlowInitialSource,
+    steps: mapSteps(steps)
+  };
+}
+
+export async function getDefaultFlowForSegment(slug: string): Promise<LeadGenerationFlowRow | null> {
+  const row = await get<{ default_flow_id: number | null }>(
+    "SELECT default_flow_id FROM lead_generation_segments WHERE slug = @slug LIMIT 1",
+    { slug }
+  );
+  if (row?.default_flow_id) return getLeadGenerationFlow(Number(row.default_flow_id));
+  const fallback = await get<{ id: number }>(
+    "SELECT id FROM lead_generation_flows WHERE slug = 'fluxo_posto' LIMIT 1"
+  );
+  return fallback ? getLeadGenerationFlow(Number(fallback.id)) : null;
+}
+
+export function buildFlowSnapshot(flow: LeadGenerationFlowRow): FlowSnapshot {
+  return {
+    flow_id: flow.id,
+    slug: flow.slug,
+    name: flow.name,
+    initial_source: flow.initial_source,
+    captured_at: nowIso(),
+    steps: flow.steps.map((s) => ({
+      step_key: s.step_key,
+      sort_order: s.sort_order,
+      enabled: s.enabled,
+      on_fail: s.on_fail,
+      max_api_calls: s.max_api_calls,
+      config_json: s.config_json,
+      label: FLOW_STEP_CATALOG[s.step_key]?.label ?? s.step_key
+    }))
+  };
+}
+
+export async function saveFlowMeta(
+  id: number,
+  patch: { name?: string; description?: string; active?: boolean }
+) {
+  const sets: string[] = ["updated_at = @now"];
+  const params: Record<string, string | number | boolean> = { id, now: nowIso() };
+  if (patch.name != null) {
+    sets.push("name = @name");
+    params.name = patch.name;
+  }
+  if (patch.description != null) {
+    sets.push("description = @description");
+    params.description = patch.description;
+  }
+  if (patch.active != null) {
+    sets.push("active = @active");
+    params.active = patch.active;
+  }
+  await run(`UPDATE lead_generation_flows SET ${sets.join(", ")} WHERE id = @id`, params);
+}
+
+export async function saveFlowSteps(flowId: number, steps: FlowStepRow[]) {
+  for (const s of steps) {
+    if (!isFlowStepKey(s.step_key)) continue;
+    await run(
+      `
+        INSERT INTO lead_generation_flow_steps (flow_id, step_key, sort_order, enabled, on_fail, max_api_calls, config_json)
+        VALUES (@flowId, @stepKey, @sortOrder, @enabled, @onFail, @maxCalls, @config::jsonb)
+        ON CONFLICT (flow_id, step_key) DO UPDATE SET
+          sort_order = EXCLUDED.sort_order,
+          enabled = EXCLUDED.enabled,
+          on_fail = EXCLUDED.on_fail,
+          max_api_calls = EXCLUDED.max_api_calls,
+          config_json = EXCLUDED.config_json
+      `,
+      {
+        flowId,
+        stepKey: s.step_key,
+        sortOrder: s.sort_order,
+        enabled: s.enabled,
+        onFail: s.on_fail,
+        maxCalls: s.max_api_calls,
+        config: JSON.stringify(s.config_json ?? {})
+      }
+    );
+  }
+}
+
+export async function setSegmentDefaultFlow(segmentSlug: string, flowId: number | null) {
+  await run(
+    "UPDATE lead_generation_segments SET default_flow_id = @flowId, updated_at = @now WHERE slug = @slug",
+    { flowId, slug: segmentSlug, now: nowIso() }
+  );
+}
+
+export function parseFlowSnapshot(raw: unknown): FlowSnapshot | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as FlowSnapshot;
+  if (!o.slug || !Array.isArray(o.steps)) return null;
+  return o;
+}

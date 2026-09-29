@@ -47,10 +47,16 @@ type QuotaPanel = {
 };
 
 const PHASE_LABEL: Record<string, string> = {
-  anp_load: "Carregando ANP",
-  processing: "Processando postos",
+  anp_load: "Carregando fonte",
+  processing: "Enriquecimento",
   finalizing: "Finalizando",
   done: "Concluído"
+};
+
+const INITIAL_SOURCE_LABEL: Record<string, string> = {
+  anp_retail: "ANP revendedores",
+  anp_distributor: "ANP distribuidoras",
+  google_places_city: "Google Places (cidade)"
 };
 
 const RUN_STATUS_LABEL: Record<string, string> = {
@@ -142,6 +148,11 @@ export function AdminNovosLeadsWizard() {
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [leadsRequested, setLeadsRequested] = useState(1);
+  const [flowPreview, setFlowPreview] = useState<{
+    name: string;
+    initial_source: string;
+    steps: Array<{ step_key: string; label: string; enabled: boolean; on_fail: string }>;
+  } | null>(null);
 
   const maxLeadsRequested = quota?.per_run_limit ?? 100;
 
@@ -212,6 +223,33 @@ export function AdminNovosLeadsWizard() {
   useEffect(() => {
     void loadMeta();
   }, [loadMeta]);
+
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch(`/api/admin/lead-generation/flows?segment=${encodeURIComponent(segment)}`);
+      if (!res.ok) {
+        setFlowPreview(null);
+        return;
+      }
+      const data = (await res.json()) as {
+        snapshot?: {
+          name: string;
+          initial_source: string;
+          steps: Array<{ step_key: string; label: string; enabled: boolean; on_fail: string; sort_order: number }>;
+        };
+      };
+      const snap = data.snapshot;
+      if (!snap) {
+        setFlowPreview(null);
+        return;
+      }
+      setFlowPreview({
+        name: snap.name,
+        initial_source: snap.initial_source,
+        steps: [...snap.steps].sort((a, b) => a.sort_order - b.sort_order).filter((s) => s.enabled)
+      });
+    })();
+  }, [segment]);
 
   const applyRunRow = useCallback((run: RunDetail) => {
     setActiveRun(run);
@@ -465,6 +503,25 @@ export function AdminNovosLeadsWizard() {
             segment={segment}
           />
         </div>
+
+        {flowPreview ? (
+          <div className="panel lead-gen-flow-preview" style={{ marginBottom: "0.75rem" }}>
+            <p style={{ margin: "0 0 0.35rem", fontSize: "0.92rem" }}>
+              <strong>Fluxo:</strong> {flowPreview.name}
+              <span className="muted" style={{ marginLeft: "0.5rem" }}>
+                Fonte: {INITIAL_SOURCE_LABEL[flowPreview.initial_source] ?? flowPreview.initial_source}
+              </span>
+            </p>
+            <ol className="muted" style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.85rem" }}>
+              {flowPreview.steps.map((s) => (
+                <li key={s.step_key}>
+                  {s.label}
+                  {s.on_fail === "stop" ? " · falha interrompe o item" : ""}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
 
         <div className="lead-gen-form-row lead-gen-form-row--start">
           <div className="field lead-gen-qty-field">

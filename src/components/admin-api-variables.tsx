@@ -81,6 +81,9 @@ export function AdminApiVariables() {
 
       {loading ? <p className="muted">Carregando…</p> : null}
 
+      <p className="muted" style={{ fontSize: "0.88rem" }}>
+        <Link href="/admin/fluxos-geracao">Fluxos de geração →</Link>
+      </p>
       <AdminLeadMotorSegments />
 
       <form onSubmit={save}>

@@ -5,7 +5,16 @@ import { buildGoogleSearchQuery, findPlaceId, getPlaceDetails } from "@/lib/lead
 import { validateGoogleMatch } from "@/lib/lead-motor/google-validate";
 import { enrichFromReceita, mergeEnrichment } from "@/lib/lead-motor/enrichment";
 import { isValidCnpjDigits } from "@/lib/lead-motor/utils";
+import { cityPairsForInitialSource } from "@/lib/lead-generation/discovery-cities";
 import { resolveCityPairs, type CityPair } from "@/lib/lead-generation/city-resolve";
+import type { FlowInitialSource } from "@/lib/lead-generation/flow-modules";
+import { appendStepLog, onFailPolicy, stepEnabled, type StepRunResult } from "@/lib/lead-generation/item-enrichment-runner";
+import { fetchAnpDistributorsForUf, distributorToStation } from "@/lib/lead-motor/anp-distributors";
+import {
+  buildSegmentPlacesQuery,
+  discoverPlacesInCity,
+  placeRowToStation
+} from "@/lib/lead-motor/google-city-discover";
 
 const STALE_RUN_MS = 25 * 60 * 1000;
 
@@ -14,7 +23,7 @@ async function syncRunProgressMetadata(
   runId: number,
   runRow: NonNullable<Awaited<ReturnType<typeof getLeadGenerationRun>>>
 ): Promise<{ paused: boolean }> {
-  const pairs = resolveCityPairs(runRow.uf, runRow.filters_json);
+  const pairs = cityPairsForInitialSource(runInitialSource(runRow), runRow.uf, runRow.filters_json);
   const counts = { ...runRow.counts_json };
   let dirty = false;
   if (pairs.length > 0 && (counts.cities_total ?? 0) !== pairs.length) {
@@ -116,10 +125,181 @@ async function targetCreatedReached(runId: number, maxStations: number) {
   return (await createdCountForRun(runId)) >= maxStations;
 }
 
+function runInitialSource(runRow: NonNullable<Awaited<ReturnType<typeof getLeadGenerationRun>>>): FlowInitialSource {
+  return runRow.flow_snapshot_json?.initial_source ?? "anp_retail";
+}
+
+async function tickAnpDistributorLoad(
+  runId: number,
+  runRow: NonNullable<Awaited<ReturnType<typeof getLeadGenerationRun>>>
+) {
+  const counts = { ...runRow.counts_json };
+  const pairs = cityPairsForInitialSource("anp_distributor", runRow.uf, runRow.filters_json);
+  counts.cities_total = Math.max(1, pairs.length);
+  if (counts.distributor_loaded) {
+    await finishAnpLoadPhase(runId, counts);
+    return;
+  }
+  const citySet = new Set(pairs.map((p) => p.official.toLowerCase()));
+  const { records, warning } = await fetchAnpDistributorsForUf(runRow.uf);
+  const filtered = records.filter((r) => {
+    if (citySet.size === 0) return true;
+    return citySet.has(r.cidade.toLowerCase());
+  });
+  const stations = filtered.map(distributorToStation);
+  await insertRunItemsSafe(
+    runId,
+    stations.map((s) => ({ cnpj: s.cnpj, station_json: s, anp_raw: s }))
+  );
+  counts.distributor_loaded = 1;
+  counts.cities_loaded = counts.cities_total;
+  counts.anp_found = stations.length;
+  const byStatus = await countItemsByStatus(runId);
+  counts.items_total = Object.values(byStatus).reduce((a, b) => a + b, 0);
+  await updateRun(runId, {
+    counts_json: counts,
+    error_message: warning,
+    progress_pct: computeRunProgressPct({
+      phase: runRow.phase,
+      status: runRow.status,
+      max_stations: runRow.max_stations,
+      counts_json: counts
+    })
+  });
+  await finishAnpLoadPhase(runId, counts);
+}
+
+async function tickGooglePlacesCityLoad(
+  runId: number,
+  runRow: NonNullable<Awaited<ReturnType<typeof getLeadGenerationRun>>>
+) {
+  const counts = { ...runRow.counts_json };
+  const pairs = cityPairsForInitialSource("google_places_city", runRow.uf, runRow.filters_json);
+  counts.cities_total = pairs.length;
+  if (pairs.length === 0) {
+    await updateRun(runId, {
+      status: "failed",
+      phase: "done",
+      error_message: "Nenhuma cidade na seleção para busca Google.",
+      completed_at: nowIso(),
+      progress_pct: 100
+    });
+    return;
+  }
+  if (runRow.simulation) {
+    await updateRun(runId, {
+      status: "failed",
+      phase: "done",
+      error_message: "Fluxo Tradicional não roda em simulação (sem chave Google).",
+      completed_at: nowIso(),
+      progress_pct: 100
+    });
+    return;
+  }
+  const apiKey = await getGooglePlacesApiKey();
+  if (!apiKey) {
+    await updateRun(runId, {
+      status: "failed",
+      phase: "done",
+      error_message: "Google Places não configurado.",
+      completed_at: nowIso(),
+      progress_pct: 100
+    });
+    return;
+  }
+
+  const stepCfg = runRow.flow_snapshot_json?.steps.find((s) => s.step_key === "google_places_city_discover");
+  if (stepCfg && !stepCfg.enabled) {
+    await updateRun(runId, {
+      status: "failed",
+      phase: "done",
+      error_message: "Etapa de descoberta Google desativada no fluxo.",
+      completed_at: nowIso(),
+      progress_pct: 100
+    });
+    return;
+  }
+  const maxPerCity = stepCfg?.max_api_calls ?? 8;
+
+  const { listLeadGenSegments } = await import("@/lib/lead-generation/segments-repo");
+  const segments = await listLeadGenSegments();
+  const segLabel = segments.find((s) => s.slug === runRow.filters_json.segment)?.label ?? runRow.filters_json.segment;
+
+  let idx = counts.cities_loaded ?? 0;
+  if (idx >= pairs.length) {
+    await finishAnpLoadPhase(runId, counts);
+    return;
+  }
+
+  const end = Math.min(idx + ANP_CITIES_PER_TICK, pairs.length);
+  for (; idx < end; idx++) {
+    const pair = pairs[idx]!;
+    const ok = await canSpendGoogleCalls(runRow.google_calls_used, runRow.max_google_calls, 1);
+    if (!ok) {
+      await updateRun(runId, {
+        status: "paused",
+        counts_json: counts,
+        error_message: "Limite Google atingido durante descoberta na cidade."
+      });
+      return;
+    }
+    const query = buildSegmentPlacesQuery(segLabel, pair.official, runRow.uf);
+    const places = await discoverPlacesInCity(apiKey, query, maxPerCity);
+    await touchRunGoogleUsage(runId, 1);
+    runRow.google_calls_used += 1;
+
+    await insertRunItemsSafe(
+      runId,
+      places.map((p) => {
+        const station = placeRowToStation({
+          place_id: p.place_id,
+          name: p.name,
+          formatted_address: p.formatted_address,
+          city: pair.official,
+          uf: runRow.uf
+        });
+        return {
+          cnpj: "",
+          station_json: { ...station, discover_source: "google_places_city" },
+          anp_raw: station,
+          google_place_id: p.place_id
+        };
+      })
+    );
+    counts.cities_loaded = idx + 1;
+    counts.anp_found = (counts.anp_found ?? 0) + places.length;
+  }
+
+  counts.cities_loaded = idx;
+  const byStatus = await countItemsByStatus(runId);
+  counts.items_total = Object.values(byStatus).reduce((a, b) => a + b, 0);
+  const progress_pct = computeRunProgressPct({
+    phase: runRow.phase,
+    status: runRow.status,
+    max_stations: runRow.max_stations,
+    counts_json: counts
+  });
+
+  if (idx >= pairs.length) {
+    await finishAnpLoadPhase(runId, counts);
+    return;
+  }
+  await updateRun(runId, { counts_json: counts, progress_pct });
+}
+
 async function tickAnpLoad(runId: number) {
   const runRow = await getLeadGenerationRun(runId);
   if (!runRow) return;
-  const pairs = resolveCityPairs(runRow.uf, runRow.filters_json);
+  const src = runInitialSource(runRow);
+  if (src === "anp_distributor") {
+    await tickAnpDistributorLoad(runId, runRow);
+    return;
+  }
+  if (src === "google_places_city") {
+    await tickGooglePlacesCityLoad(runId, runRow);
+    return;
+  }
+  const pairs = cityPairsForInitialSource("anp_retail", runRow.uf, runRow.filters_json);
   const counts = { ...runRow.counts_json };
   counts.cities_total = pairs.length;
   if ((runRow.counts_json?.cities_total ?? 0) !== pairs.length) {
@@ -268,17 +448,49 @@ async function processOneItem(
 
   await updateItem(itemId, { status: "processing" });
   const station = parseStation(item.station_json);
-  const cnpj = String(item.cnpj ?? "");
+  const snapshot = runRow.flow_snapshot_json;
+  const stepLog: StepRunResult[] = [];
+  const cnpj = String(item.cnpj ?? "").startsWith("gplace:") ? "" : String(item.cnpj ?? "");
+  const hasCnpj = isValidCnpjDigits(cnpj);
+  let presetPlaceId = item.google_place_id != null ? String(item.google_place_id) : null;
 
-  if (!station || !isValidCnpjDigits(cnpj)) {
-    await updateItem(itemId, { status: "skipped_invalid_cnpj", error_message: "CNPJ inválido ou ausente" });
+  if (!station) {
+    await updateItem(itemId, { status: "error", error_message: "Dados da fonte ausentes" });
     return;
   }
 
-  const existingId = await findExistingClientIdByCnpj(cnpj);
-  if (existingId) {
-    await updateItem(itemId, { status: "existing", client_id: existingId });
-    return;
+  if (stepEnabled(snapshot, "validate_cnpj")) {
+    if (hasCnpj) {
+      const existingId = await findExistingClientIdByCnpj(cnpj);
+      if (existingId) {
+        stepLog.push({ step_key: "validate_cnpj", status: "ok", message: "Já no CRM" });
+        await updateItem(itemId, {
+          status: "existing",
+          client_id: existingId,
+          enrichment_json: appendStepLog(null, stepLog)
+        });
+        return;
+      }
+      stepLog.push({ step_key: "validate_cnpj", status: "ok" });
+    } else if (presetPlaceId) {
+      stepLog.push({ step_key: "validate_cnpj", status: "na", message: "Sem CNPJ na fonte (Google)" });
+    } else {
+      stepLog.push({ step_key: "validate_cnpj", status: "error", message: "CNPJ inválido ou ausente" });
+      if (onFailPolicy(snapshot, "validate_cnpj") === "stop") {
+        await updateItem(itemId, {
+          status: "skipped_invalid_cnpj",
+          error_message: "CNPJ inválido ou ausente",
+          enrichment_json: appendStepLog(null, stepLog)
+        });
+        return;
+      }
+    }
+  } else if (hasCnpj) {
+    const existingId = await findExistingClientIdByCnpj(cnpj);
+    if (existingId) {
+      await updateItem(itemId, { status: "existing", client_id: existingId });
+      return;
+    }
   }
 
   const apiKey = runRow.simulation ? null : await getGooglePlacesApiKey();
@@ -291,25 +503,29 @@ async function processOneItem(
     formatted_address: string;
   } | null = null;
 
-  if (!runRow.simulation && !apiKey) {
-    /* ANP + Receita apenas — enriquecimento Google indisponível sem chave. */
-  } else if (!runRow.simulation && apiKey) {
-    const cache = await getGoogleCache(cnpj);
-    if (cache?.payload_json && typeof cache.payload_json === "object") {
-      const p = cache.payload_json as Record<string, unknown>;
-      if (p.phone_digits || p.place_id) {
-        googleSnap = {
-          place_id: String(cache.place_id ?? p.place_id ?? ""),
-          phone_digits: String(p.phone_digits ?? ""),
-          phone_display: String(p.phone_display ?? ""),
-          website: String(p.website ?? ""),
-          name: String(p.name ?? ""),
-          formatted_address: String(p.formatted_address ?? "")
-        };
+  const doGoogleSearch = stepEnabled(snapshot, "google_place_search") && !presetPlaceId;
+  const doGoogleDetails = stepEnabled(snapshot, "google_place_details");
+
+  if (!runRow.simulation && apiKey && (doGoogleSearch || doGoogleDetails)) {
+    if (hasCnpj) {
+      const cache = await getGoogleCache(cnpj);
+      if (cache?.payload_json && typeof cache.payload_json === "object") {
+        const p = cache.payload_json as Record<string, unknown>;
+        if (p.phone_digits || p.place_id) {
+          googleSnap = {
+            place_id: String(cache.place_id ?? p.place_id ?? ""),
+            phone_digits: String(p.phone_digits ?? ""),
+            phone_display: String(p.phone_display ?? ""),
+            website: String(p.website ?? ""),
+            name: String(p.name ?? ""),
+            formatted_address: String(p.formatted_address ?? "")
+          };
+          stepLog.push({ step_key: "google_place_search", status: "skipped", message: "Cache" });
+        }
       }
     }
 
-    if (!googleSnap) {
+    if (!googleSnap && doGoogleSearch) {
       const needCalls = 2;
       const ok = await canSpendGoogleCalls(runRow.google_calls_used, runRow.max_google_calls, needCalls);
       if (!ok) {
@@ -324,35 +540,52 @@ async function processOneItem(
       runRow.google_calls_used += 1;
 
       if (!found) {
-        await updateItem(itemId, { status: "no_google_match" });
-        return;
+        stepLog.push({ step_key: "google_place_search", status: "error", message: "Sem correspondência" });
+        if (onFailPolicy(snapshot, "google_place_search") === "stop") {
+          await updateItem(itemId, { status: "no_google_match", enrichment_json: appendStepLog(null, stepLog) });
+          return;
+        }
+      } else {
+        const match = validateGoogleMatch(station, found.name, found.formatted_address);
+        if (match === "rejected") {
+          stepLog.push({ step_key: "google_place_search", status: "error", message: "Rejeitada" });
+          if (onFailPolicy(snapshot, "google_place_search") === "stop") {
+            await updateItem(itemId, {
+              status: "no_google_match",
+              error_message: "Correspondência Google rejeitada",
+              enrichment_json: appendStepLog(null, stepLog)
+            });
+            return;
+          }
+        } else if (match === "ambiguous") {
+          stepLog.push({ step_key: "google_place_search", status: "error", message: "Incerta" });
+          await updateItem(itemId, {
+            status: "ambiguous",
+            google_place_id: found.place_id,
+            error_message: "Correspondência Google incerta — revisão manual",
+            enrichment_json: appendStepLog(null, stepLog)
+          });
+          return;
+        } else {
+          presetPlaceId = found.place_id;
+          stepLog.push({ step_key: "google_place_search", status: "ok" });
+        }
       }
+    } else if (presetPlaceId && !doGoogleSearch) {
+      stepLog.push({ step_key: "google_place_search", status: "na", message: "Place ID da descoberta" });
+    }
 
-      const match = validateGoogleMatch(station, found.name, found.formatted_address);
-      if (match === "rejected") {
-        await updateItem(itemId, { status: "no_google_match", error_message: "Correspondência Google rejeitada" });
-        return;
-      }
-      if (match === "ambiguous") {
-        await updateItem(itemId, {
-          status: "ambiguous",
-          google_place_id: found.place_id,
-          error_message: "Correspondência Google incerta — revisão manual"
-        });
-        return;
-      }
-
+    const placeForDetails = presetPlaceId ?? googleSnap?.place_id;
+    if (doGoogleDetails && placeForDetails && !googleSnap) {
       const ok2 = await canSpendGoogleCalls(runRow.google_calls_used, runRow.max_google_calls, 1);
       if (!ok2) {
         await updateItem(itemId, { status: "pending" });
-        await updateRun(runId, { status: "paused", error_message: "Limite Google atingido após Find Place." });
+        await updateRun(runId, { status: "paused", error_message: "Limite Google atingido." });
         return;
       }
-
-      const details = await getPlaceDetails(apiKey, found.place_id);
+      const details = await getPlaceDetails(apiKey, placeForDetails);
       await touchRunGoogleUsage(runId, 1);
       runRow.google_calls_used += 1;
-
       if (details) {
         googleSnap = {
           place_id: details.place_id,
@@ -362,24 +595,75 @@ async function processOneItem(
           name: details.name,
           formatted_address: details.formatted_address
         };
-        await upsertGoogleCache(cnpj, details.place_id, {
-          ...details,
-          collected_at: nowIso(),
-          source: "Google Places"
-        });
+        stepLog.push({ step_key: "google_place_details", status: "ok" });
+        if (hasCnpj) {
+          await upsertGoogleCache(cnpj, details.place_id, {
+            ...details,
+            collected_at: nowIso(),
+            source: "Google Places"
+          });
+        }
+      } else {
+        stepLog.push({ step_key: "google_place_details", status: "error", message: "Detalhes indisponíveis" });
       }
+    } else if (doGoogleDetails && !placeForDetails) {
+      stepLog.push({ step_key: "google_place_details", status: "na", message: "Sem Place ID" });
     }
+  } else if (stepEnabled(snapshot, "google_place_search") && !apiKey && !runRow.simulation) {
+    stepLog.push({ step_key: "google_place_search", status: "na", message: "Google não configurado" });
   }
 
   let receita: Awaited<ReturnType<typeof enrichFromReceita>> = {};
-  try {
-    receita = await enrichFromReceita(cnpj, runRow.simulation);
-  } catch {
-    receita = {};
+  if (stepEnabled(snapshot, "receita_cnpj") && hasCnpj) {
+    try {
+      receita = await enrichFromReceita(cnpj, runRow.simulation);
+      stepLog.push({ step_key: "receita_cnpj", status: Object.keys(receita).length ? "ok" : "skipped" });
+    } catch {
+      receita = {};
+      stepLog.push({ step_key: "receita_cnpj", status: "error" });
+    }
+  } else if (stepEnabled(snapshot, "receita_cnpj") && !hasCnpj) {
+    stepLog.push({ step_key: "receita_cnpj", status: "na", message: "Sem CNPJ" });
+  }
+
+  if (stepEnabled(snapshot, "website_enrich")) {
+    const site = googleSnap?.website ?? receita.website ?? "";
+    stepLog.push({
+      step_key: "website_enrich",
+      status: site ? "skipped" : "na",
+      message: site ? "URL via Google/Receita" : "Integração de scraping não configurada"
+    });
+  }
+  if (stepEnabled(snapshot, "instagram_enrich")) {
+    stepLog.push({
+      step_key: "instagram_enrich",
+      status: "na",
+      message: "Integração Instagram não configurada"
+    });
   }
 
   const enrichment = mergeEnrichment(station, receita, googleSnap);
   enrichment.sources.push(`Coletado em ${nowIso()}`);
+
+  if (!stepEnabled(snapshot, "create_crm_client")) {
+    await updateItem(itemId, {
+      status: "ambiguous",
+      google_place_id: googleSnap?.place_id ?? presetPlaceId,
+      enrichment_json: appendStepLog({ ...enrichment, google: googleSnap }, stepLog),
+      error_message: "Etapa de criação desativada no fluxo"
+    });
+    return;
+  }
+
+  if (!hasCnpj) {
+    await updateItem(itemId, {
+      status: "ambiguous",
+      google_place_id: googleSnap?.place_id ?? presetPlaceId,
+      enrichment_json: appendStepLog({ ...enrichment, google: googleSnap }, stepLog),
+      error_message: "CNPJ não identificado com confiança — revisão manual"
+    });
+    return;
+  }
 
   try {
     const clientId = await createClientFromLead({
@@ -388,25 +672,28 @@ async function processOneItem(
       bdr_user_id: runRow.bdr_user_id,
       product_id: runRow.product_id,
       run_id: runId,
-      google_place_id: googleSnap?.place_id ?? null
+      google_place_id: googleSnap?.place_id ?? presetPlaceId
     });
+    stepLog.push({ step_key: "create_crm_client", status: "ok" });
     await updateItem(itemId, {
       status: "created",
       client_id: clientId,
-      google_place_id: googleSnap?.place_id ?? null,
-      enrichment_json: { ...enrichment, google: googleSnap }
+      google_place_id: googleSnap?.place_id ?? presetPlaceId,
+      enrichment_json: appendStepLog({ ...enrichment, google: googleSnap }, stepLog)
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erro ao criar cliente";
+    stepLog.push({ step_key: "create_crm_client", status: "error", message: msg });
     if (/cnpj|duplicate|unique/i.test(msg)) {
       const again = await findExistingClientIdByCnpj(cnpj);
       await updateItem(itemId, {
         status: "existing",
         client_id: again,
-        error_message: "CNPJ já existia ao gravar"
+        error_message: "CNPJ já existia ao gravar",
+        enrichment_json: appendStepLog(null, stepLog)
       });
     } else {
-      await updateItem(itemId, { status: "error", error_message: msg });
+      await updateItem(itemId, { status: "error", error_message: msg, enrichment_json: appendStepLog(null, stepLog) });
     }
   }
 }

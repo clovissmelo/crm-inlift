@@ -8,7 +8,10 @@ type SegmentRow = {
   filter_kind: string;
   sort_order: number;
   active: boolean;
+  default_flow_id: number | null;
 };
+
+type FlowOption = { id: number; name: string };
 
 type FilterKindOption = { value: string; label: string };
 
@@ -19,23 +22,31 @@ export function AdminLeadMotorSegments() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [flowOptions, setFlowOptions] = useState<FlowOption[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const res = await fetch("/api/admin/lead-generation/segments");
-    const data = (await res.json()) as {
+    const [segRes, flowRes] = await Promise.all([
+      fetch("/api/admin/lead-generation/segments"),
+      fetch("/api/admin/lead-generation/flows")
+    ]);
+    const data = (await segRes.json()) as {
       segments?: SegmentRow[];
       filter_kinds?: FilterKindOption[];
       error?: string;
     };
     setLoading(false);
-    if (!res.ok) {
+    if (!segRes.ok) {
       setError(data.error ?? "Erro ao carregar segmentos");
       return;
     }
     setRows(data.segments ?? []);
     setFilterKinds(data.filter_kinds ?? []);
+    if (flowRes.ok) {
+      const f = (await flowRes.json()) as { flows?: Array<{ id: number; name: string }> };
+      setFlowOptions((f.flows ?? []).map((x) => ({ id: x.id, name: x.name })));
+    }
   }, []);
 
   useEffect(() => {
@@ -54,7 +65,8 @@ export function AdminLeadMotorSegments() {
         label: "Novo segmento",
         filter_kind: "all",
         sort_order: (prev.length + 1) * 10,
-        active: true
+        active: true,
+        default_flow_id: null
       }
     ]);
   }
@@ -100,6 +112,7 @@ export function AdminLeadMotorSegments() {
                   <th>Nome na tela</th>
                   <th>Filtro ANP</th>
                   <th>Ordem</th>
+                  <th>Fluxo padrão</th>
                   <th>Ativo</th>
                 </tr>
               </thead>
@@ -142,6 +155,24 @@ export function AdminLeadMotorSegments() {
                         value={row.sort_order}
                         onChange={(e) => updateRow(i, { sort_order: Number(e.target.value) })}
                       />
+                    </td>
+                    <td>
+                      <select
+                        className="input input-sm"
+                        value={row.default_flow_id ?? ""}
+                        onChange={(e) =>
+                          updateRow(i, {
+                            default_flow_id: e.target.value === "" ? null : Number(e.target.value)
+                          })
+                        }
+                      >
+                        <option value="">(padrão do sistema)</option>
+                        {flowOptions.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                     <td>
                       <input

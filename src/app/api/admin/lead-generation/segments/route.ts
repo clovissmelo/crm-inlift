@@ -9,7 +9,8 @@ const itemSchema = z.object({
   label: z.string().min(1).max(200),
   filter_kind: z.enum(["all", "branded", "white_flag", "distributor", "trr"]),
   sort_order: z.number().int().min(0).max(9999),
-  active: z.boolean()
+  active: z.boolean(),
+  default_flow_id: z.number().int().positive().nullable().optional()
 });
 
 const patchSchema = z.object({
@@ -57,6 +58,7 @@ export async function PATCH(request: Request) {
     filter_kind: LeadGenSegmentFilter;
     sort_order: number;
     active: boolean;
+    default_flow_id?: number | null;
   }>);
 
   const segments = await listLeadGenSegments();

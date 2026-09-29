@@ -35,7 +35,10 @@ export async function GET(request: Request) {
     const msg = e instanceof Error ? e.message : "Erro ao carregar municípios";
     if (/lead_generation_ibge_uf_cache|does not exist|relation/i.test(msg)) {
       return Response.json(
-        { error: "Migration 026 pendente (lead_generation_ibge_uf_cache). Rode as migrations no Supabase." },
+        {
+          error:
+            "Tabela lead_generation_ibge_uf_cache ausente neste banco. No Supabase (mesmo projeto do POSTGRES_URL da Vercel), rode migrations/029_lead_generation_ibge_cache_ensure.sql ou faça deploy recente do CRM."
+        },
         { status: 503 }
       );
     }

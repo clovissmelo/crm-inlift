@@ -52,6 +52,14 @@ export const ADMIN_CONFIG_CARDS: AdminConfigCardItem[] = [
     iconClassName: "hub-card-icon--settings"
   },
   {
+    id: "fluxos-geracao",
+    href: "/admin/fluxos-geracao" as Route,
+    title: "Fluxos de geração",
+    description: "Etapas modulares ANP, Google, CNPJ e enriquecimento.",
+    logo: <LogoSettings />,
+    iconClassName: "hub-card-icon--settings"
+  },
+  {
     id: "importacao",
     href: "/admin/importacao",
     title: "Importação",

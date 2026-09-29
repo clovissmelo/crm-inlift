@@ -1,5 +1,6 @@
 import { all, get, run, nowIso } from "@/lib/db";
 import { normalizeSegmentFilter } from "@/lib/lead-motor/lead-gen-segments";
+import { parseFlowSnapshot } from "@/lib/lead-generation/flows-repo";
 import { emptyCounts, type LeadGenCounts, type LeadGenFilters, type LeadGenerationRunRow } from "@/lib/lead-generation/types";
 
 function parseCounts(raw: unknown): LeadGenCounts {
@@ -58,6 +59,8 @@ function mapRun(row: Record<string, unknown>): LeadGenerationRunRow {
     status: String(row.status),
     phase: String(row.phase),
     uf: String(row.uf),
+    flow_id: row.flow_id != null ? Number(row.flow_id) : null,
+    flow_snapshot_json: parseFlowSnapshot(row.flow_snapshot_json),
     filters_json: parseFilters(row.filters_json),
     product_id: row.product_id != null ? Number(row.product_id) : null,
     company_id: row.company_id != null ? Number(row.company_id) : null,
@@ -88,6 +91,8 @@ export async function createLeadGenerationRun(input: {
   max_google_calls: number;
   simulation: boolean;
   cities_total?: number;
+  flow_id?: number | null;
+  flow_snapshot_json?: unknown;
 }) {
   const counts = emptyCounts();
   if (input.cities_total != null && input.cities_total > 0) {
@@ -98,11 +103,11 @@ export async function createLeadGenerationRun(input: {
       INSERT INTO lead_generation_runs (
         requested_by_user_id, status, phase, uf, filters_json,
         product_id, company_id, bdr_user_id, max_stations, max_google_calls,
-        simulation, counts_json, progress_pct, created_at, updated_at
+        simulation, counts_json, progress_pct, flow_id, flow_snapshot_json, created_at, updated_at
       ) VALUES (
         @userId, 'queued', 'anp_load', @uf, @filters::jsonb,
         @productId, @companyId, @bdrUserId, @maxStations, @maxGoogle,
-        @simulation, @counts::jsonb, 0, @now, @now
+        @simulation, @counts::jsonb, 0, @flowId, @flowSnapshot::jsonb, @now, @now
       )
     `,
     {
@@ -116,6 +121,8 @@ export async function createLeadGenerationRun(input: {
       maxGoogle: input.max_google_calls,
       simulation: input.simulation,
       counts: JSON.stringify(counts),
+      flowId: input.flow_id ?? null,
+      flowSnapshot: input.flow_snapshot_json ? JSON.stringify(input.flow_snapshot_json) : null,
       now: nowIso()
     }
   );
@@ -234,24 +241,39 @@ export async function listRunItems(runId: number, status?: string) {
 
 export async function insertRunItemsSafe(
   runId: number,
-  stations: Array<{ cnpj: string; station_json: object; anp_raw?: object }>
+  stations: Array<{
+    cnpj: string;
+    station_json: object;
+    anp_raw?: object;
+    google_place_id?: string | null;
+  }>
 ) {
   for (const s of stations) {
+    const rowKey = s.cnpj?.trim() || (s.google_place_id ? `gplace:${s.google_place_id}` : "");
+    if (!rowKey) continue;
     const exists = await get<{ id: number }>(
       "SELECT id FROM lead_generation_items WHERE run_id = @runId AND cnpj = @cnpj LIMIT 1",
-      { runId, cnpj: s.cnpj }
+      { runId, cnpj: rowKey }
     );
     if (exists) continue;
+    if (s.google_place_id) {
+      const dupPlace = await get<{ id: number }>(
+        "SELECT id FROM lead_generation_items WHERE run_id = @runId AND google_place_id = @placeId LIMIT 1",
+        { runId, placeId: s.google_place_id }
+      );
+      if (dupPlace) continue;
+    }
     await run(
       `
-        INSERT INTO lead_generation_items (run_id, cnpj, station_json, anp_raw, status, created_at, updated_at)
-        VALUES (@runId, @cnpj, @station::jsonb, @anp::jsonb, 'pending', @now, @now)
+        INSERT INTO lead_generation_items (run_id, cnpj, station_json, anp_raw, google_place_id, status, created_at, updated_at)
+        VALUES (@runId, @cnpj, @station::jsonb, @anp::jsonb, @placeId, 'pending', @now, @now)
       `,
       {
         runId,
-        cnpj: s.cnpj,
+        cnpj: rowKey,
         station: JSON.stringify(s.station_json),
         anp: JSON.stringify(s.anp_raw ?? s.station_json),
+        placeId: s.google_place_id ?? null,
         now: nowIso()
       }
     );

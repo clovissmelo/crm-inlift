@@ -16,11 +16,22 @@ function normalizeName(s: string): string {
     .trim();
 }
 
+function isMissingIbgeCacheTableError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /lead_generation_ibge_uf_cache|does not exist|relation/i.test(msg);
+}
+
 async function readCache(uf: string): Promise<{ municipalities: IbgeMunicipality[]; source: "cache" | "fallback"; fetched_at: string } | null> {
-  const row = await get<{ municipalities_json: unknown; source: string; fetched_at: string }>(
-    "SELECT municipalities_json, source, fetched_at FROM lead_generation_ibge_uf_cache WHERE uf = @uf",
-    { uf: uf.toUpperCase() }
-  );
+  let row: { municipalities_json: unknown; source: string; fetched_at: string } | undefined;
+  try {
+    row = await get<{ municipalities_json: unknown; source: string; fetched_at: string }>(
+      "SELECT municipalities_json, source, fetched_at FROM lead_generation_ibge_uf_cache WHERE uf = @uf",
+      { uf: uf.toUpperCase() }
+    );
+  } catch (e) {
+    if (isMissingIbgeCacheTableError(e)) return null;
+    throw e;
+  }
   if (!row) return null;
   const raw = row.municipalities_json;
   if (!Array.isArray(raw)) return null;
@@ -43,22 +54,27 @@ async function readCache(uf: string): Promise<{ municipalities: IbgeMunicipality
 }
 
 async function writeCache(uf: string, municipalities: IbgeMunicipality[], source: "ibge" | "cache" | "fallback") {
-  await run(
-    `
-      INSERT INTO lead_generation_ibge_uf_cache (uf, municipalities_json, fetched_at, source)
-      VALUES (@uf, @json::jsonb, @now, @source)
-      ON CONFLICT (uf) DO UPDATE SET
-        municipalities_json = EXCLUDED.municipalities_json,
-        fetched_at = EXCLUDED.fetched_at,
-        source = EXCLUDED.source
-    `,
-    {
-      uf: uf.toUpperCase(),
-      json: JSON.stringify(municipalities),
-      now: nowIso(),
-      source
-    }
-  );
+  try {
+    await run(
+      `
+        INSERT INTO lead_generation_ibge_uf_cache (uf, municipalities_json, fetched_at, source)
+        VALUES (@uf, @json::jsonb, @now, @source)
+        ON CONFLICT (uf) DO UPDATE SET
+          municipalities_json = EXCLUDED.municipalities_json,
+          fetched_at = EXCLUDED.fetched_at,
+          source = EXCLUDED.source
+      `,
+      {
+        uf: uf.toUpperCase(),
+        json: JSON.stringify(municipalities),
+        now: nowIso(),
+        source
+      }
+    );
+  } catch (e) {
+    if (isMissingIbgeCacheTableError(e)) return;
+    throw e;
+  }
 }
 
 function fallbackFromAnpNames(uf: string): IbgeMunicipality[] | null {

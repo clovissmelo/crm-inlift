@@ -8,6 +8,7 @@ export type LeadGenSegmentRow = {
   filter_kind: LeadGenSegmentFilter;
   sort_order: number;
   active: boolean;
+  default_flow_id: number | null;
 };
 
 const FILTER_KINDS: LeadGenSegmentFilter[] = ["all", "branded", "white_flag", "distributor", "trr"];
@@ -18,7 +19,8 @@ function fallbackSegments(): LeadGenSegmentRow[] {
     label: o.label,
     filter_kind: o.value,
     sort_order: (i + 1) * 10,
-    active: true
+    active: true,
+    default_flow_id: null
   }));
 }
 
@@ -30,9 +32,10 @@ export async function listLeadGenSegments(opts?: { activeOnly?: boolean }): Prom
       filter_kind: string;
       sort_order: number;
       active: boolean;
+      default_flow_id: number | null;
     }>(
       `
-        SELECT slug, label, filter_kind, sort_order, active
+        SELECT slug, label, filter_kind, sort_order, active, default_flow_id
         FROM lead_generation_segments
         ${opts?.activeOnly ? "WHERE active = true" : ""}
         ORDER BY sort_order ASC, label ASC
@@ -46,7 +49,8 @@ export async function listLeadGenSegments(opts?: { activeOnly?: boolean }): Prom
         ? (r.filter_kind as LeadGenSegmentFilter)
         : "all",
       sort_order: Number(r.sort_order),
-      active: Boolean(r.active)
+      active: Boolean(r.active),
+      default_flow_id: r.default_flow_id != null ? Number(r.default_flow_id) : null
     }));
   } catch {
     return fallbackSegments();
@@ -66,6 +70,7 @@ export async function saveLeadGenSegments(
     filter_kind: LeadGenSegmentFilter;
     sort_order: number;
     active: boolean;
+    default_flow_id?: number | null;
   }>
 ) {
   for (const item of items) {
@@ -73,13 +78,14 @@ export async function saveLeadGenSegments(
     if (!slug) continue;
     await run(
       `
-        INSERT INTO lead_generation_segments (slug, label, filter_kind, sort_order, active, updated_at)
-        VALUES (@slug, @label, @filterKind, @sortOrder, @active, @now)
+        INSERT INTO lead_generation_segments (slug, label, filter_kind, sort_order, active, default_flow_id, updated_at)
+        VALUES (@slug, @label, @filterKind, @sortOrder, @active, @flowId, @now)
         ON CONFLICT (slug) DO UPDATE SET
           label = EXCLUDED.label,
           filter_kind = EXCLUDED.filter_kind,
           sort_order = EXCLUDED.sort_order,
           active = EXCLUDED.active,
+          default_flow_id = EXCLUDED.default_flow_id,
           updated_at = EXCLUDED.updated_at
       `,
       {
@@ -88,6 +94,7 @@ export async function saveLeadGenSegments(
         filterKind: item.filter_kind,
         sortOrder: item.sort_order,
         active: item.active,
+        flowId: item.default_flow_id ?? null,
         now: nowIso()
       }
     );

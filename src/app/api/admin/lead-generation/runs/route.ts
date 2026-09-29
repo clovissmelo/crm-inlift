@@ -2,6 +2,7 @@ import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { resolveCityPairsFromMunicipalities } from "@/lib/lead-generation/city-resolve-ibge";
 import { drainLeadGenerationTicks } from "@/lib/lead-generation/drain-ticks";
+import { buildFlowSnapshot, getDefaultFlowForSegment, getLeadGenerationFlow } from "@/lib/lead-generation/flows-repo";
 import { getMunicipalitiesForUf } from "@/lib/lead-generation/ibge-localidades";
 import { persistRunMunicipalities } from "@/lib/lead-generation/municipality-runs";
 import { createLeadGenerationRun, listLeadGenerationRuns } from "@/lib/lead-generation/runs-repo";
@@ -29,7 +30,8 @@ const createSchema = z.object({
   product_id: z.number().int().positive().nullable().optional(),
   company_id: z.number().int().positive().nullable().optional(),
   bdr_user_id: z.number().int().positive().nullable().optional(),
-  max_stations: z.number().int().min(1).max(500).optional()
+  max_stations: z.number().int().min(1).max(500).optional(),
+  flow_id: z.number().int().positive().optional()
 });
 
 export const maxDuration = 60;
@@ -59,6 +61,16 @@ export async function POST(request: Request) {
     return Response.json({ error: "Segmento inválido ou inativo." }, { status: 400 });
   }
   const segment_filter_kind = await resolveSegmentFilterKind(segmentSlug);
+  const segmentRow = activeSegments.find((s) => s.slug === segmentSlug);
+  const flow =
+    (parsed.data.flow_id ? await getLeadGenerationFlow(parsed.data.flow_id) : null) ??
+    (segmentRow?.default_flow_id ? await getLeadGenerationFlow(segmentRow.default_flow_id) : null) ??
+    (await getDefaultFlowForSegment(segmentSlug));
+  if (!flow || !flow.active) {
+    return Response.json({ error: "Fluxo de geração inválido ou inativo." }, { status: 400 });
+  }
+  const flowSnapshot = buildFlowSnapshot(flow);
+  const initialSource = flowSnapshot.initial_source;
   const ibge = await getMunicipalitiesForUf(uf);
 
   const selected: LeadGenMunicipalityRef[] = parsed.data.municipalities.map((m) => ({
@@ -77,13 +89,38 @@ export async function POST(request: Request) {
     ibge.municipalities,
     parsed.data.all_cities_in_uf
   );
+  const hasKey = Boolean(await getGooglePlacesApiKey());
 
-  if (pairs.length === 0) {
+  if (pairs.length === 0 && initialSource === "anp_retail") {
     const hint =
       skipped.length > 0
         ? "Nenhuma cidade selecionada tem consulta ANP disponível. Ajuste a seleção (RS/PR têm mapa completo)."
         : "Nenhuma cidade válida na seleção.";
     return Response.json({ error: hint }, { status: 400 });
+  }
+
+  if (pairs.length === 0 && (initialSource === "google_places_city" || initialSource === "anp_distributor")) {
+    if (parsed.data.all_cities_in_uf) {
+      for (const m of ibge.municipalities) {
+        pairs.push({ official: m.name, api: m.name });
+        municipalities.push({ ibge_code: m.ibge_code, name: m.name, commercial_zone_id: null });
+      }
+    } else if (selected.length > 0) {
+      for (const m of selected) {
+        pairs.push({ official: m.name, api: m.name });
+        if (!municipalities.some((x) => x.ibge_code === m.ibge_code)) {
+          municipalities.push({ ibge_code: m.ibge_code, name: m.name, commercial_zone_id: m.commercial_zone_id ?? null });
+        }
+      }
+    }
+  }
+
+  if (pairs.length === 0) {
+    return Response.json({ error: "Nenhuma cidade válida na seleção." }, { status: 400 });
+  }
+
+  if (initialSource === "google_places_city" && !hasKey) {
+    return Response.json({ error: "Fluxo Tradicional exige Google Places configurado." }, { status: 400 });
   }
 
   const filtersForRun: LeadGenFilters = {
@@ -96,7 +133,6 @@ export async function POST(request: Request) {
     segment_filter_kind
   };
 
-  const hasKey = Boolean(await getGooglePlacesApiKey());
   const [perRunLimit, dailyLimit, usedToday] = await Promise.all([
     getGooglePlacesLimit("google_places_per_run_limit"),
     getGooglePlacesLimit("google_places_daily_limit"),
@@ -120,7 +156,9 @@ export async function POST(request: Request) {
     max_stations: maxStations,
     max_google_calls: maxGoogle,
     simulation,
-    cities_total: pairs.length
+    cities_total: pairs.length,
+    flow_id: flow.id,
+    flow_snapshot_json: flowSnapshot
   });
 
   await persistRunMunicipalities(
@@ -135,5 +173,10 @@ export async function POST(request: Request) {
 
   await drainLeadGenerationTicks({ runId: id, maxTicks: 18, maxMs: 55_000 });
 
-  return Response.json({ id, status: "queued", skipped_municipalities: skipped.length });
+  return Response.json({
+    id,
+    status: "queued",
+    skipped_municipalities: skipped.length,
+    flow: { id: flow.id, name: flow.name, snapshot: flowSnapshot }
+  });
 }

@@ -104,6 +104,21 @@ async function runMigrations(sql: Sql) {
       throw new Error(`Migração ${id} falhou: ${detail}`);
     }
   }
+
+  await ensureLeadGenerationIbgeCacheTable(sql);
+}
+
+/** Repara produção onde 026 consta aplicada mas a tabela de cache IBGE não existe. */
+async function ensureLeadGenerationIbgeCacheTable(sql: Sql) {
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS lead_generation_ibge_uf_cache (
+      uf CHAR(2) PRIMARY KEY,
+      municipalities_json JSONB NOT NULL,
+      fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      source TEXT NOT NULL DEFAULT 'ibge'
+        CHECK (source IN ('ibge', 'cache', 'fallback'))
+    )
+  `);
 }
 
 async function initDb() {

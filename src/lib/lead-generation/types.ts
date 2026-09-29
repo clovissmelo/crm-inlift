@@ -1,3 +1,4 @@
+import type { FlowSnapshot } from "@/lib/lead-generation/flows-repo";
 import type { LeadGenSegmentFilter } from "@/lib/lead-motor/motor-config";
 
 export type LeadGenMunicipalityRef = {
@@ -35,6 +36,7 @@ export type LeadGenCounts = {
   skipped_invalid_cnpj: number;
   cities_loaded: number;
   cities_total: number;
+  distributor_loaded?: number;
 };
 
 export function emptyCounts(): LeadGenCounts {
@@ -61,6 +63,8 @@ export type LeadGenerationRunRow = {
   status: string;
   phase: string;
   uf: string;
+  flow_id: number | null;
+  flow_snapshot_json: FlowSnapshot | null;
   filters_json: LeadGenFilters;
   product_id: number | null;
   company_id: number | null;
