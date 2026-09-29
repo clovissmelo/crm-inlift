@@ -1,5 +1,6 @@
 "use client";
 
+import { userMessageForOAuthError } from "@/lib/google-oauth-connect-error";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -16,6 +17,7 @@ export function GoogleIntegrationPanel() {
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -31,12 +33,15 @@ export function GoogleIntegrationPanel() {
   useEffect(() => {
     const err = searchParams.get("error");
     const ok = searchParams.get("connected");
-    if (err === "not_configured") setError("Credenciais OAuth não configuradas. Salve Client ID e Secret acima.");
-    else if (err === "oauth_denied") setError("Autorização cancelada no Google.");
-    else if (err === "invalid_state") setError("Sessão OAuth expirada. Tente conectar novamente.");
-    else if (err === "token_failed") setError("Não foi possível salvar os tokens. Tente novamente.");
-    else if (ok) setError(null);
-  }, [searchParams]);
+    if (ok) {
+      setError(null);
+      setSuccess("Google Agenda conectado com sucesso.");
+      void load();
+      return;
+    }
+    setSuccess(null);
+    setError(userMessageForOAuthError(err));
+  }, [searchParams, load]);
 
   async function disconnect() {
     setError(null);
@@ -52,6 +57,7 @@ export function GoogleIntegrationPanel() {
     <div className="panel">
       <h2 style={{ marginTop: 0 }}>Google Agenda e Meet</h2>
       {loading ? <p className="muted">Carregando…</p> : null}
+      {success ? <div className="alert">{success}</div> : null}
       {error ? <div className="alert alert-error">{error}</div> : null}
       {status && !loading ? (
         <>

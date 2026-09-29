@@ -13,12 +13,7 @@ type Setting = {
   has_value: boolean;
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  lead_discovery: "Motor de leads",
-  api4com: "API4COM (telefonia)"
-};
-
-const HIDDEN_CATEGORIES = new Set(["google_calendar", "google_places"]);
+const VISIBLE_LEAD_KEYS = new Set(["lead_generation_simulation_default"]);
 
 export function AdminApiVariables() {
   const [settings, setSettings] = useState<Setting[]>([]);
@@ -37,9 +32,10 @@ export function AdminApiVariables() {
       setLoading(false);
       return;
     }
-    setSettings(data.settings.filter((s) => !HIDDEN_CATEGORIES.has(s.category)));
+    const visible = data.settings.filter((s) => VISIBLE_LEAD_KEYS.has(s.key));
+    setSettings(visible);
     const initial: Record<string, string> = {};
-    for (const s of data.settings) initial[s.key] = s.value ?? "";
+    for (const s of visible) initial[s.key] = s.value ?? "";
     setDraft(initial);
     setLoading(false);
   }, []);
@@ -66,14 +62,9 @@ export function AdminApiVariables() {
       setError(data.error ?? "Erro ao salvar");
       return;
     }
-    setMessage("Variáveis salvas.");
+    setMessage("Salvo.");
     void load();
   }
-
-  const byCategory = settings.reduce<Record<string, Setting[]>>((acc, s) => {
-    (acc[s.category] ??= []).push(s);
-    return acc;
-  }, {});
 
   return (
     <div>
@@ -81,8 +72,7 @@ export function AdminApiVariables() {
         <Link href="/admin">← Admin</Link>
       </p>
       <PageIntro>
-        Parâmetros gerais do CRM. Chaves Google (Agenda e Places) ficam em{" "}
-        <Link href="/admin/integracoes">Admin → Integrações</Link>.
+        Opções do motor de novos leads. API4COM e Google ficam nos cards correspondentes na página Admin.
       </PageIntro>
 
       {message ? <div className="alert alert-info">{message}</div> : null}
@@ -91,30 +81,27 @@ export function AdminApiVariables() {
       {loading ? <p className="muted">Carregando…</p> : null}
 
       <form onSubmit={save}>
-        {Object.entries(byCategory).map(([category, rows]) => (
-          <div key={category} className="panel" style={{ marginBottom: "1rem" }}>
-            <h2 style={{ marginTop: 0, fontSize: "1rem" }}>{CATEGORY_LABELS[category] ?? category}</h2>
-            {rows.map((s) => (
-              <div key={s.key} className="field">
-                <label className="label" htmlFor={s.key}>
-                  {s.label}
-                </label>
-                <input
-                  id={s.key}
-                  className="input"
-                  type={s.is_secret ? "password" : "text"}
-                  autoComplete="off"
-                  placeholder={s.is_secret && s.has_value ? "•••••••• (preencha para trocar)" : ""}
-                  value={draft[s.key] ?? ""}
-                  onChange={(e) => setDraft((d) => ({ ...d, [s.key]: e.target.value }))}
-                />
-              </div>
-            ))}
-          </div>
-        ))}
+        <div className="panel" style={{ marginBottom: "1rem" }}>
+          <h2 style={{ marginTop: 0, fontSize: "1rem" }}>Motor de leads</h2>
+          {settings.map((s) => (
+            <div key={s.key} className="field">
+              <label className="label" htmlFor={s.key}>
+                {s.key === "lead_generation_simulation_default"
+                  ? "Modo simulação padrão (1 = sim, sem Google pago)"
+                  : s.label}
+              </label>
+              <input
+                id={s.key}
+                className="input"
+                value={draft[s.key] ?? ""}
+                onChange={(e) => setDraft((d) => ({ ...d, [s.key]: e.target.value }))}
+              />
+            </div>
+          ))}
+        </div>
 
         <button className="btn btn-primary" type="submit" disabled={saving || loading}>
-          {saving ? "Salvando…" : "Salvar variáveis"}
+          {saving ? "Salvando…" : "Salvar"}
         </button>
       </form>
     </div>

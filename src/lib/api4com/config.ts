@@ -1,4 +1,15 @@
 import { getSystemSetting } from "@/lib/system-settings";
+import { decryptSecret } from "@/lib/token-crypto";
+
+function readSecret(raw: string | null | undefined): string | null {
+  const t = raw?.trim();
+  if (!t) return null;
+  try {
+    return decryptSecret(t);
+  } catch {
+    return t;
+  }
+}
 
 export type Api4comConfig = {
   apiToken: string | null;
@@ -36,9 +47,9 @@ export async function getApi4comConfig(): Promise<Api4comConfig> {
   const envBase = process.env.API4COM_BASE_URL?.trim();
 
   return {
-    apiToken: envToken || tokenRow?.value?.trim() || null,
+    apiToken: envToken || readSecret(tokenRow?.value) || null,
     gateway: envGateway || gatewayRow?.value?.trim() || "inlift-crm",
-    webhookSecret: envSecret || secretRow?.value?.trim() || null,
+    webhookSecret: envSecret || readSecret(secretRow?.value) || null,
     baseUrl: (envBase || baseRow?.value?.trim() || "https://api.api4com.com").replace(/\/$/, "")
   };
 }

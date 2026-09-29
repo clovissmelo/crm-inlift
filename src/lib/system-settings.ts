@@ -1,6 +1,7 @@
 import { all, get, nowIso, run } from "@/lib/db";
 import { encryptGoogleOAuthSecretForStorage } from "@/lib/google-oauth-settings";
 import { encryptGooglePlacesApiKeyForStorage } from "@/lib/google-places-settings";
+import { encryptSecret } from "@/lib/token-crypto";
 
 export type SystemSettingRow = {
   key: string;
@@ -40,6 +41,9 @@ export async function updateSystemSettings(
     }
     if (row.key === "google_oauth_client_secret" && value && value.trim()) {
       value = encryptGoogleOAuthSecretForStorage(value);
+    }
+    if ((row.key === "api4com_api_token" || row.key === "api4com_webhook_secret") && value && value.trim()) {
+      value = encryptSecret(value.trim());
     }
     await run(
       `

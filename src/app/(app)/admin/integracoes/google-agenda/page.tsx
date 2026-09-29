@@ -12,7 +12,7 @@ export default async function AdminIntegracoesGoogleAgendaPage() {
   return (
     <div>
       <p className="muted" style={{ marginTop: 0 }}>
-        <Link href="/admin/integracoes">← Integrações</Link>
+        <Link href="/admin">← Admin</Link>
       </p>
       <PageIntro>Google Agenda e Meet — credenciais OAuth no banco; conexão da conta abaixo.</PageIntro>
       <AdminGoogleCalendarPanel />

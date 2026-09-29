@@ -208,7 +208,7 @@ export function AdminNovosLeadsWizard() {
     <div>
       <PageIntro>
         Geração de postos via ANP (motor PostoCred). O processamento roda em segundo plano no servidor — você pode sair e voltar depois.{" "}
-        <Link href="/admin/integracoes/google-places">Google Places</Link> e limites em Integrações.
+        <Link href="/admin/integracoes/google-places">Google Places</Link> (Admin → card Google Places).
       </PageIntro>
 
       {error ? <div className="alert alert-error">{error}</div> : null}

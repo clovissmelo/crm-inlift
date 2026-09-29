@@ -11,7 +11,7 @@ export function AdminIntegracoesHub() {
     <div>
       <PageIntro>
         Telefonia e Google. Credenciais no servidor; após salvar, segredos não voltam ao navegador.{" "}
-        <Link href="/admin">Ver todas as configurações</Link>
+        <Link href="/admin">← Admin (todas as configurações)</Link>
       </PageIntro>
       <AdminConfigCardGrid items={items} />
     </div>

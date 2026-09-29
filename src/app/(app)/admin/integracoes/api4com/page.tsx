@@ -12,9 +12,9 @@ export default async function AdminIntegracoesApi4comPage() {
   return (
     <div>
       <p className="muted" style={{ marginTop: 0 }}>
-        <Link href="/admin/integracoes">← Integrações</Link>
+        <Link href="/admin">← Admin</Link>
       </p>
-      <PageIntro>Telefonia API4COM — mesma configuração de antes, agora em página dedicada.</PageIntro>
+      <PageIntro>Token, gateway, webhook e registro na API4COM — tudo nesta página.</PageIntro>
       <AdminApi4comPanel />
     </div>
   );

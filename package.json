@@ -10,7 +10,8 @@
     "migrate": "tsx src/scripts/migrate.ts",
     "create-admin": "tsx src/scripts/create-admin.ts",
     "test:lead-generation": "tsx scripts/lead-generation-tests.ts",
-    "test:places-api": "tsx scripts/places-api-new-errors.test.ts"
+    "test:places-api": "tsx scripts/places-api-new-errors.test.ts",
+    "test:google-oauth": "tsx scripts/google-oauth-errors.test.ts"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.2",

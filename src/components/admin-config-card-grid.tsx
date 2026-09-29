@@ -46,8 +46,8 @@ export const ADMIN_CONFIG_CARDS: AdminConfigCardItem[] = [
   {
     id: "variaveis",
     href: "/admin/variaveis",
-    title: "Variáveis do CRM",
-    description: "Motor de leads, API4COM e parâmetros gerais.",
+    title: "Motor de leads",
+    description: "Simulação padrão e parâmetros do gerador ANP.",
     logo: <LogoSettings />,
     iconClassName: "hub-card-icon--settings"
   },

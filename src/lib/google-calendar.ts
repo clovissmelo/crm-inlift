@@ -8,6 +8,13 @@ import {
   isGoogleOAuthConfiguredInApp,
   resolveGoogleOAuthRedirectUri
 } from "@/lib/google-oauth-settings";
+import { GoogleOAuthConnectError, logGoogleOAuthFailure } from "@/lib/google-oauth-connect-error";
+
+const GOOGLE_OAUTH_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/userinfo.email",
+  "openid"
+];
 
 export type GooglePublicStatus = {
   configured: boolean;
@@ -69,48 +76,89 @@ export async function buildGoogleAuthUrl(state: string, requestOrigin?: string) 
   return oauth2.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    scope: ["https://www.googleapis.com/auth/calendar.events"],
+    scope: GOOGLE_OAUTH_SCOPES,
     state
   });
 }
 
 export async function saveTokensFromCode(code: string, userId: number, requestOrigin?: string) {
   const cfg = await getOAuthConfig(requestOrigin);
-  if (!cfg) throw new Error("Google OAuth não configurado");
-  const oauth2 = new google.auth.OAuth2(cfg.clientId, cfg.clientSecret, cfg.redirectUri);
-  const { tokens } = await oauth2.getToken(code);
-  if (!tokens.refresh_token) {
-    throw new Error("Não foi recebido refresh_token. Desconecte a conta no Google e tente novamente com consent.");
+  if (!cfg) {
+    throw new GoogleOAuthConnectError(
+      "config",
+      "OAuth config missing (client or redirect URI)",
+      "OAuth não configurado no servidor."
+    );
   }
+  const oauth2 = new google.auth.OAuth2(cfg.clientId, cfg.clientSecret, cfg.redirectUri);
+
+  let tokens;
+  try {
+    const res = await oauth2.getToken(code);
+    tokens = res.tokens;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logGoogleOAuthFailure("token_exchange", msg);
+    throw new GoogleOAuthConnectError(
+      "token_exchange",
+      msg,
+      "Não foi possível trocar o código de autorização por tokens."
+    );
+  }
+
+  if (!tokens.refresh_token) {
+    logGoogleOAuthFailure("missing_refresh_token", "getToken succeeded without refresh_token");
+    throw new GoogleOAuthConnectError(
+      "missing_refresh_token",
+      "missing refresh_token in token response",
+      "Google não enviou refresh token."
+    );
+  }
+
   oauth2.setCredentials(tokens);
-  const oauth2api = google.oauth2({ version: "v2", auth: oauth2 });
-  const me = await oauth2api.userinfo.get();
-  const email = me.data.email ?? null;
+
+  let email: string | null = null;
+  try {
+    const oauth2api = google.oauth2({ version: "v2", auth: oauth2 });
+    const me = await oauth2api.userinfo.get();
+    email = me.data.email ?? null;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logGoogleOAuthFailure("userinfo", msg);
+    throw new GoogleOAuthConnectError("userinfo", msg, "Não foi possível obter e-mail da conta Google.");
+  }
+
   const encrypted = encryptSecret(tokens.refresh_token);
-  await run(
-    `
-      INSERT INTO google_calendar_connection (
-        id, account_email, calendar_id, refresh_token_encrypted, access_token,
-        access_token_expires_at, connected_by_user_id, connected_at, updated_at
-      ) VALUES (1, @email, 'primary', @refresh, @access, @expires, @userId, @now, @now)
-      ON CONFLICT (id) DO UPDATE SET
-        account_email = EXCLUDED.account_email,
-        refresh_token_encrypted = EXCLUDED.refresh_token_encrypted,
-        access_token = EXCLUDED.access_token,
-        access_token_expires_at = EXCLUDED.access_token_expires_at,
-        connected_by_user_id = EXCLUDED.connected_by_user_id,
-        connected_at = EXCLUDED.connected_at,
-        updated_at = EXCLUDED.updated_at
-    `,
-    {
-      email,
-      refresh: encrypted,
-      access: tokens.access_token ?? null,
-      expires: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
-      userId,
-      now: nowIso()
-    }
-  );
+  try {
+    await run(
+      `
+        INSERT INTO google_calendar_connection (
+          id, account_email, calendar_id, refresh_token_encrypted, access_token,
+          access_token_expires_at, connected_by_user_id, connected_at, updated_at
+        ) VALUES (1, @email, 'primary', @refresh, @access, @expires, @userId, @now, @now)
+        ON CONFLICT (id) DO UPDATE SET
+          account_email = EXCLUDED.account_email,
+          refresh_token_encrypted = EXCLUDED.refresh_token_encrypted,
+          access_token = EXCLUDED.access_token,
+          access_token_expires_at = EXCLUDED.access_token_expires_at,
+          connected_by_user_id = EXCLUDED.connected_by_user_id,
+          connected_at = EXCLUDED.connected_at,
+          updated_at = EXCLUDED.updated_at
+      `,
+      {
+        email,
+        refresh: encrypted,
+        access: tokens.access_token ?? null,
+        expires: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
+        userId,
+        now: nowIso()
+      }
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logGoogleOAuthFailure("database", msg);
+    throw new GoogleOAuthConnectError("database", msg, "Falha ao gravar conexão no banco.");
+  }
 }
 
 export async function disconnectGoogle() {

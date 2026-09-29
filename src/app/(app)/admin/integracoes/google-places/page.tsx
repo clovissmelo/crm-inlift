@@ -12,7 +12,7 @@ export default async function AdminIntegracoesGooglePlacesPage() {
   return (
     <div>
       <p className="muted" style={{ marginTop: 0 }}>
-        <Link href="/admin/integracoes">← Integrações</Link>
+        <Link href="/admin">← Admin</Link>
       </p>
       <PageIntro>Google Places para enriquecimento na geração de leads de postos (Admin → Novos leads).</PageIntro>
       <AdminGooglePlacesPanel />
