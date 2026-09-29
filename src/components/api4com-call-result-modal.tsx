@@ -13,6 +13,7 @@ import {
   type ApproachNextActionKey,
   validateNextActionChoice
 } from "@/lib/approach-next-actions";
+import { ApproachDecisionMakerField } from "@/components/approach-decision-maker-field";
 import { confirmProceedIfClientHasAgenda } from "@/lib/client-agenda-warning";
 
 type CallDetail = {
@@ -43,6 +44,7 @@ type ResultType = {
   collect_notes: boolean;
   require_schedule_return: boolean;
   require_final_registration: boolean;
+  ask_decision_maker?: boolean;
   allowed_next_actions?: unknown;
 };
 
@@ -110,6 +112,7 @@ export function Api4comCallResultForm({
   const [dialLoading, setDialLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultLockedByIntegration, setResultLockedByIntegration] = useState(false);
+  const [spokeWithDecisionMaker, setSpokeWithDecisionMaker] = useState<boolean | null>(null);
 
   const call = ctx?.call ?? null;
 
@@ -271,6 +274,11 @@ export function Api4comCallResultForm({
 
   const showNotesField = selectedResult?.collect_notes === true;
   const showRegistrationSteps = selectedResult?.require_final_registration !== false;
+  const showDecisionMakerField = selectedResult?.ask_decision_maker === true;
+
+  useEffect(() => {
+    setSpokeWithDecisionMaker(null);
+  }, [resultTypeId]);
   const nextDial = ctx?.remaining[0] ?? null;
 
   async function dismissPending() {
@@ -376,6 +384,10 @@ export function Api4comCallResultForm({
       setError("Informe as observações exigidas para este resultado.");
       return;
     }
+    if (selectedResult?.ask_decision_maker && spokeWithDecisionMaker === null) {
+      setError("Informe se houve contato com o decisor.");
+      return;
+    }
     if (selectedResult && showRegistrationSteps) {
       const nextErr = validateNextActionChoice(selectedResult, nextType);
       if (nextErr) {
@@ -434,6 +446,7 @@ export function Api4comCallResultForm({
         result_type_id: Number(resultTypeId),
         notes: finalNotes || null,
         external_call_id: call.api4com_call_id,
+        spoke_with_decision_maker: showDecisionMakerField ? spokeWithDecisionMaker : null,
         next_action
       })
     });
@@ -584,6 +597,13 @@ export function Api4comCallResultForm({
               <label className="label">Observações</label>
               <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} required />
             </div>
+          ) : null}
+          {showDecisionMakerField ? (
+            <ApproachDecisionMakerField
+              value={spokeWithDecisionMaker}
+              onChange={setSpokeWithDecisionMaker}
+              disabled={loading}
+            />
           ) : null}
           {showRegistrationSteps ? (
             <ApproachNextStepField

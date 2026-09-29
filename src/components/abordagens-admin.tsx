@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
 import { FilterBar, FilterSelect } from "@/components/filter-bar";
-import { PageIntro } from "@/components/page-intro";
 import { ScriptFlowEditor } from "@/components/script-flow-editor";
 import { PLACEHOLDER_HELP } from "@/lib/message-templates";
 import {
@@ -144,7 +143,6 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
 
   return (
     <div>
-      <PageIntro>Scripts de ligação, modelos de WhatsApp e e-mail para apoio na prospecção.</PageIntro>
       {error && !scriptModal ? <div className="alert alert-error">{error}</div> : null}
 
       <CadastroPageHeader title="Scripts e modelos" onNew={openScriptCreate} newLabel="Novo script" />

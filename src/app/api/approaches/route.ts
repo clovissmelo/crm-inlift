@@ -21,11 +21,16 @@ export async function POST(request: Request) {
     lead_qualification: string | null;
     require_schedule_return: boolean;
     allowed_next_actions: unknown;
+    ask_decision_maker: boolean;
   }>(
-    "SELECT suggest_follow_up, lead_qualification, require_schedule_return, allowed_next_actions FROM approach_result_types WHERE id = @id AND status = 'active'",
+    "SELECT suggest_follow_up, lead_qualification, require_schedule_return, allowed_next_actions, ask_decision_maker FROM approach_result_types WHERE id = @id AND status = 'active'",
     { id: data.result_type_id }
   );
   if (!resultType) return Response.json({ error: "Resultado inválido" }, { status: 400 });
+
+  if (resultType.ask_decision_maker && typeof data.spoke_with_decision_maker !== "boolean") {
+    return Response.json({ error: "Informe se houve contato com o decisor." }, { status: 400 });
+  }
 
   const nextValidation = validateNextActionChoice(resultType, data.next_action.type as ApproachNextActionKey);
   if (nextValidation) return Response.json({ error: nextValidation }, { status: 400 });
@@ -48,6 +53,7 @@ export async function POST(request: Request) {
       result_type_id: data.result_type_id,
       notes: data.notes,
       external_call_id: data.external_call_id,
+      spoke_with_decision_maker: resultType.ask_decision_maker ? data.spoke_with_decision_maker : null,
       next_action: data.next_action
     });
 

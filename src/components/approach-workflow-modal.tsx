@@ -9,6 +9,7 @@ import {
   type ApproachNextActionKey,
   validateNextActionChoice
 } from "@/lib/approach-next-actions";
+import { ApproachDecisionMakerField } from "@/components/approach-decision-maker-field";
 import { confirmProceedIfClientHasAgenda } from "@/lib/client-agenda-warning";
 
 type ResultType = {
@@ -18,6 +19,7 @@ type ResultType = {
   collect_notes?: boolean;
   require_schedule_return?: boolean;
   require_final_registration?: boolean;
+  ask_decision_maker?: boolean;
   allowed_next_actions?: unknown;
 };
 type ClosureReason = { id: number; name: string; kind: "pause" | "close" };
@@ -67,6 +69,7 @@ export function ApproachWorkflowModal({
   const [reasonId, setReasonId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [spokeWithDecisionMaker, setSpokeWithDecisionMaker] = useState<boolean | null>(null);
 
   const resolvedProductId =
     defaultProductId ?? (products.length === 1 ? products[0].id : products.length > 0 ? products[0].id : null);
@@ -95,6 +98,11 @@ export function ApproachWorkflowModal({
   const selectedResult = resultTypes.find((r) => String(r.id) === resultTypeId);
   const showNotesField = selectedResult?.collect_notes === true;
   const showRegistrationSteps = selectedResult?.require_final_registration !== false;
+  const showDecisionMakerField = selectedResult?.ask_decision_maker === true;
+
+  useEffect(() => {
+    setSpokeWithDecisionMaker(null);
+  }, [resultTypeId]);
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -104,6 +112,11 @@ export function ApproachWorkflowModal({
       const nextErr = validateNextActionChoice(selectedResult, nextType);
       if (nextErr) {
         setError(nextErr);
+        setLoading(false);
+        return;
+      }
+      if (selectedResult.ask_decision_maker && spokeWithDecisionMaker === null) {
+        setError("Informe se houve contato com o decisor.");
         setLoading(false);
         return;
       }
@@ -144,6 +157,7 @@ export function ApproachWorkflowModal({
         result_type_id: Number(resultTypeId),
         notes: notes || null,
         follow_up_id: followUpId,
+        spoke_with_decision_maker: showDecisionMakerField ? spokeWithDecisionMaker : null,
         next_action
       })
     });
@@ -215,6 +229,9 @@ export function ApproachWorkflowModal({
             <label className="label">Observações</label>
             <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
+        ) : null}
+        {showDecisionMakerField ? (
+          <ApproachDecisionMakerField value={spokeWithDecisionMaker} onChange={setSpokeWithDecisionMaker} disabled={loading} />
         ) : null}
         <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <input type="checkbox" checked={usePast} onChange={(e) => setUsePast(e.target.checked)} />

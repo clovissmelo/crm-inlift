@@ -27,6 +27,7 @@ export async function createApproach(input: {
   result_type_id: number;
   notes?: string | null;
   external_call_id?: string | null;
+  spoke_with_decision_maker?: boolean | null;
   next_action: NextActionInput;
 }) {
   const occurredAt = input.occurred_at ?? nowIso();
@@ -36,10 +37,10 @@ export async function createApproach(input: {
     `
       INSERT INTO approaches (
         client_id, contact_id, product_id, user_id, channel, notes,
-        occurred_at, recorded_at, result_type_id, external_call_id, created_at
+        occurred_at, recorded_at, result_type_id, external_call_id, spoke_with_decision_maker, created_at
       ) VALUES (
         @clientId, @contactId, @productId, @userId, @channel, @notes,
-        @occurredAt, @recordedAt, @resultTypeId, @externalCallId, @createdAt
+        @occurredAt, @recordedAt, @resultTypeId, @externalCallId, @spokeWithDecisionMaker, @createdAt
       )
     `,
     {
@@ -53,6 +54,7 @@ export async function createApproach(input: {
       recordedAt,
       resultTypeId: input.result_type_id,
       externalCallId: input.external_call_id ?? null,
+      spokeWithDecisionMaker: input.spoke_with_decision_maker ?? null,
       createdAt: recordedAt
     }
   );

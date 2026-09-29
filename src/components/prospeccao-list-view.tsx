@@ -79,7 +79,7 @@ export function ProspeccaoListView({
 
   return (
     <div>
-      <PageIntro>Prioridade: reagendar, retorno, acompanhamento, primeiro contato.</PageIntro>
+      <PageIntro>Lista para entrar em contato</PageIntro>
       <FilterBar>
         <FilterInput
           label="Busca"

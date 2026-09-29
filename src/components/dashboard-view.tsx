@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import type { Route } from "next";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DashboardStatsPayload } from "@/lib/dashboard-stats";
-import { ArrowUpRight, Calendar, Gem, Target } from "lucide-react";
+import { ArrowUpRight, Calendar, Gem, Target, UserCheck } from "lucide-react";
 import { FilterBar, FilterSelect } from "@/components/filter-bar";
 import { LEAD_QUALIFICATION_LABELS, LEAD_QUALIFICATION_ORDER } from "@/lib/lead-qualification";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
@@ -17,14 +16,6 @@ function periodFootnote(period: string) {
   if (period === "today") return "Hoje";
   if (period === "yesterday") return "Ontem";
   return "Todo o período";
-}
-
-function formatFocusTime(iso: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(new Date(iso));
 }
 
 function QualDonut({ cold, warm, hot }: { cold: number; warm: number; hot: number }) {
@@ -105,11 +96,6 @@ export function DashboardView({
     void load();
   }, [load]);
 
-  const qualTotal = useMemo(() => {
-    if (!stats) return 0;
-    return stats.qualification.cold + stats.qualification.warm + stats.qualification.hot;
-  }, [stats]);
-
   const periodNote = periodFootnote(period);
 
   return (
@@ -176,6 +162,16 @@ export function DashboardView({
             </div>
             <div className="dash-kpi-card">
               <div className="dash-kpi-card-head">
+                <p className="dash-kpi-title">Contato com decisores</p>
+                <span className="dash-kpi-icon" style={{ color: "#2dd4bf" }}>
+                  <UserCheck size={16} aria-hidden />
+                </span>
+              </div>
+              <p className="dash-kpi-value dash-kpi-value-tone-teal">{stats.decision_maker_contacts}</p>
+              <p className="dash-kpi-foot">Com decisor confirmado · {periodNote}</p>
+            </div>
+            <div className="dash-kpi-card">
+              <div className="dash-kpi-card-head">
                 <p className="dash-kpi-title">Reuniões marcadas</p>
                 <span className="dash-kpi-icon" style={{ color: "#f39c12" }}>
                   <Calendar size={16} aria-hidden />
@@ -199,54 +195,24 @@ export function DashboardView({
           <div className="dash-mid-row">
             <section className="dash-panel">
               <div className="dash-panel-head">
-                <h2>Seu foco hoje</h2>
+                <h2>Base para trabalhar</h2>
                 <Link className="dash-panel-link" href="/prospeccao">
-                  Ver prospecção →
+                  Ir para prospecção →
                 </Link>
               </div>
-              <div className="dash-focus-stats">
-                <div className="dash-focus-stat dash-focus-stat-tone-red">
-                  <strong>{stats.returns_overdue}</strong>
-                  Retornos atrasados
+              <p className="dash-panel-sub" style={{ marginTop: 0 }}>
+                Estoque atual · não muda com o período
+              </p>
+              <div className="dash-base-row dash-base-row-compact">
+                <div className="dash-base-stat">
+                  <strong>{stats.clients_available_for_contact}</strong>
+                  <span>Clientes disponíveis para contato</span>
                 </div>
-                <div className="dash-focus-stat dash-focus-stat-tone-orange">
-                  <strong>{stats.returns_today}</strong>
-                  Retornos para hoje
-                </div>
-                <div className="dash-focus-stat dash-focus-stat-tone-blue">
-                  <strong>{stats.meetings_upcoming}</strong>
-                  Próximas reuniões
+                <div className="dash-base-stat">
+                  <strong>{stats.pending_returns}</strong>
+                  <span>Clientes para retorno</span>
                 </div>
               </div>
-              <ul className="dash-focus-list">
-                {stats.focus_items.length === 0 ? (
-                  <li className="muted" style={{ fontSize: "0.8125rem" }}>
-                    Nada urgente para hoje com os filtros atuais.
-                  </li>
-                ) : (
-                  stats.focus_items.map((item) => {
-                    const href = (
-                      item.type === "return"
-                        ? `/clientes/${item.client_id}?follow_up=${item.id}`
-                        : `/clientes/${item.client_id}?agendar=1`
-                    ) as Route;
-                    const dotColor = item.overdue ? "#f87171" : item.type === "meeting" ? "#2dd4bf" : "#f39c12";
-                    return (
-                      <li key={`${item.type}-${item.id}`}>
-                        <Link href={href}>
-                          <span className="dash-focus-list-label">
-                            <span className="dash-focus-list-dot" style={{ background: dotColor }} aria-hidden />
-                            <span className="dash-focus-list-text">
-                              {item.label} · {item.client_name}
-                            </span>
-                          </span>
-                          <span className="dash-focus-list-time">{formatFocusTime(item.at)}</span>
-                        </Link>
-                      </li>
-                    );
-                  })
-                )}
-              </ul>
             </section>
 
             <section className="dash-panel">
@@ -285,34 +251,6 @@ export function DashboardView({
               <p className="dash-temp-foot">Clientes quentes podem ser priorizados na lista de prospecção.</p>
             </section>
           </div>
-
-          <section className="dash-panel">
-            <div className="dash-panel-head">
-              <h2>Base para trabalhar</h2>
-              <Link className="dash-panel-link" href="/prospeccao">
-                Ir para prospecção →
-              </Link>
-            </div>
-            <div className="dash-base-row">
-              <div className="dash-base-stat">
-                <strong>{stats.clients_without_approach}</strong>
-                <span>Clientes sem abordagem · estoque atual</span>
-              </div>
-              <div className="dash-base-stat">
-                <strong>{stats.clients_with_verified_phone}</strong>
-                <span>Clientes com telefone verificado · estoque atual</span>
-              </div>
-              <div className="dash-base-stat">
-                <strong>{stats.qualification.hot}</strong>
-                <span>Leads quentes para priorizar · estoque atual</span>
-              </div>
-            </div>
-            {qualTotal === 0 ? (
-              <p className="dash-temp-foot" style={{ marginTop: "0.75rem" }}>
-                Cadastre clientes e use a qualificação frio/morno/quente para enriquecer esta visão.
-              </p>
-            ) : null}
-          </section>
 
           <DashboardAnalytics
             data={{

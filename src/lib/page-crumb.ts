@@ -30,7 +30,7 @@ export function pageCrumbSegments(pathname: string): string[] {
   }
 
   if (pathname.startsWith("/prospeccao")) {
-    segments.push("leads para prospecção");
+    segments.push("lista para entrar em contato");
     return segments;
   }
   if (pathname.startsWith("/retornos")) {

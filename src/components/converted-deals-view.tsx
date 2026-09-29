@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download } from "lucide-react";
 import { FilterBar, FilterBarButton, FilterInput, FilterSelect } from "@/components/filter-bar";
-import { PageIntro } from "@/components/page-intro";
 import type { Company, Product, User } from "@/lib/types";
 import { formatSpDateTime, monthBoundsYmd } from "@/lib/datetime";
 
@@ -53,7 +52,6 @@ export function ConvertedDealsView({
 
   return (
     <div>
-      <PageIntro>Base para comissões futuras — sem cálculo de valores a pagar nesta etapa.</PageIntro>
       <FilterBar>
         <FilterInput
           label="De"

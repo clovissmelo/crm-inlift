@@ -1,4 +1,4 @@
-import { ITEMS_PER_CRON_TICK } from "@/lib/lead-motor/motor-config";
+import { ANP_CITIES_PER_TICK, ITEMS_PER_CRON_TICK } from "@/lib/lead-motor/motor-config";
 import type { AnpStation } from "@/lib/lead-motor/anp";
 import { fetchAnpMunicipality, filterStations, mapAnpRecord } from "@/lib/lead-motor/anp";
 import { buildGoogleSearchQuery, findPlaceId, getPlaceDetails } from "@/lib/lead-motor/google-places";
@@ -92,39 +92,78 @@ async function tickAnpLoad(runId: number) {
     return;
   }
 
-  const idx = counts.cities_loaded ?? 0;
+  let idx = counts.cities_loaded ?? 0;
   if (idx >= pairs.length) {
-    const items = await listRunItems(runId);
-    counts.anp_found = items.length;
-    counts.items_total = items.length;
-    await updateRun(runId, {
-      phase: "processing",
-      counts_json: counts,
-      progress_pct: items.length ? 1 : 99
-    });
+    await finishAnpLoadPhase(runId, counts);
     return;
   }
 
-  const pair = pairs[idx]!;
-  const rawRows = await fetchAnpMunicipality(pair.api, runRow.uf);
-  const mapped: AnpStation[] = [];
-  for (const row of rawRows) {
-    const m = mapAnpRecord(row, pair.official, runRow.uf);
-    if (m) mapped.push(m);
+  const end = Math.min(idx + ANP_CITIES_PER_TICK, pairs.length);
+  let addedStations = 0;
+  for (; idx < end; idx++) {
+    const pair = pairs[idx]!;
+    let rawRows: Record<string, unknown>[];
+    try {
+      rawRows = await fetchAnpMunicipality(pair.api, runRow.uf);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Falha ao consultar ANP";
+      await updateRun(runId, {
+        status: "failed",
+        phase: "done",
+        error_message: `ANP (${pair.official}): ${msg}`,
+        counts_json: { ...counts, cities_loaded: idx },
+        progress_pct: 100,
+        completed_at: nowIso()
+      });
+      return;
+    }
+    const mapped: AnpStation[] = [];
+    for (const row of rawRows) {
+      const m = mapAnpRecord(row, pair.official, runRow.uf);
+      if (m) mapped.push(m);
+    }
+    const filtered = filterStations(mapped, {
+      city: runRow.filters_json.all_cities_in_uf ? null : pair.official,
+      segment: runRow.filters_json.segment,
+      limit: 0
+    });
+    await insertRunItemsSafe(
+      runId,
+      filtered.map((s) => ({ cnpj: s.cnpj, station_json: s, anp_raw: s }))
+    );
+    addedStations += filtered.length;
   }
-  const filtered = filterStations(mapped, {
-    city: runRow.filters_json.all_cities_in_uf ? null : pair.official,
-    segment: runRow.filters_json.segment,
-    limit: 0
-  });
-  await insertRunItemsSafe(
-    runId,
-    filtered.map((s) => ({ cnpj: s.cnpj, station_json: s, anp_raw: s }))
-  );
-  counts.cities_loaded = idx + 1;
-  counts.anp_found = (counts.anp_found ?? 0) + filtered.length;
+
+  counts.cities_loaded = idx;
+  counts.anp_found = (counts.anp_found ?? 0) + addedStations;
+  const byStatus = await countItemsByStatus(runId);
+  counts.items_total = Object.values(byStatus).reduce((a, b) => a + b, 0);
+  const pending = byStatus.pending ?? 0;
   const pct = Math.min(15, Math.round((counts.cities_loaded / pairs.length) * 15));
+
+  if (idx >= pairs.length) {
+    await finishAnpLoadPhase(runId, counts);
+    return;
+  }
+
+  const buffer = Math.max(15, runRow.max_stations * 8);
+  if (pending >= buffer) {
+    await updateRun(runId, { phase: "processing", counts_json: counts, progress_pct: Math.max(pct, 1) });
+    return;
+  }
+
   await updateRun(runId, { counts_json: counts, progress_pct: pct });
+}
+
+async function finishAnpLoadPhase(runId: number, counts: LeadGenCounts) {
+  const items = await listRunItems(runId);
+  counts.anp_found = items.length;
+  counts.items_total = items.length;
+  await updateRun(runId, {
+    phase: "processing",
+    counts_json: counts,
+    progress_pct: items.length ? 1 : 99
+  });
 }
 
 async function processOneItem(
@@ -292,7 +331,15 @@ async function tickProcessing(runId: number) {
 
   const ids = await fetchPendingItemIds(runId, ITEMS_PER_CRON_TICK);
   if (ids.length === 0) {
-    await updateRun(runId, { phase: "finalizing" });
+    const { counts } = await recomputeCounts(runId, runRow);
+    const citiesDone = (counts.cities_loaded ?? 0) >= (counts.cities_total ?? 0);
+    const targetPending =
+      runRow.max_stations > 0 && (counts.created ?? 0) < runRow.max_stations && !citiesDone;
+    if (targetPending) {
+      await updateRun(runId, { phase: "anp_load", counts_json: counts });
+      return;
+    }
+    await updateRun(runId, { phase: "finalizing", counts_json: counts });
     return;
   }
 
@@ -345,9 +392,18 @@ async function tickFinalizing(runId: number) {
   });
 }
 
-export async function processLeadGenerationTick(): Promise<{ processedRunId: number | null; action: string }> {
-  const { pickRunnableRunId } = await import("@/lib/lead-generation/runs-repo");
-  const runId = await pickRunnableRunId();
+export async function processLeadGenerationTick(
+  preferredRunId?: number
+): Promise<{ processedRunId: number | null; action: string }> {
+  const { pickRunnableRunId, getLeadGenerationRun: getRun } = await import("@/lib/lead-generation/runs-repo");
+  let runId = preferredRunId ?? null;
+  if (runId != null) {
+    const row = await getRun(runId);
+    if (!row || !["queued", "running", "paused"].includes(row.status) || row.status === "paused") {
+      runId = null;
+    }
+  }
+  if (runId == null) runId = await pickRunnableRunId();
   if (!runId) return { processedRunId: null, action: "idle" };
 
   let runRow = await getLeadGenerationRun(runId);

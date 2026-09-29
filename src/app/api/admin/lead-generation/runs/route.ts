@@ -1,5 +1,6 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
+import { drainLeadGenerationTicks } from "@/lib/lead-generation/drain-ticks";
 import { createLeadGenerationRun, listLeadGenerationRuns } from "@/lib/lead-generation/runs-repo";
 import { normalizeLeadGenFilters, resolveCityPairs, ufHasMotorMapping } from "@/lib/lead-generation/city-resolve";
 import { getGooglePlacesApiKey, getGooglePlacesLimit } from "@/lib/google-places-settings";
@@ -19,6 +20,8 @@ const createSchema = z.object({
   bdr_user_id: z.number().int().positive().nullable().optional(),
   max_stations: z.number().int().min(1).max(500).optional()
 });
+
+export const maxDuration = 60;
 
 export async function GET() {
   const user = await requireApiUser();
@@ -96,6 +99,8 @@ export async function POST(request: Request) {
     max_google_calls: maxGoogle,
     simulation
   });
+
+  await drainLeadGenerationTicks({ runId: id, maxTicks: 18, maxMs: 55_000 });
 
   return Response.json({ id, status: "queued" });
 }

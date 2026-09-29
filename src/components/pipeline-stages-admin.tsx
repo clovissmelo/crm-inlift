@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions } from "@/components/cadastro-ui";
-import { PageIntro } from "@/components/page-intro";
 import type { PipelineStageKind } from "@/lib/pipeline-stages";
 
 type Stage = {
@@ -174,11 +173,6 @@ export function PipelineStagesAdmin() {
 
   return (
     <div>
-      <PageIntro>
-        Colunas do funil comercial e zonas Convertido / Perdido. A ordem segue o campo Ordem. Negócios abertos na etapa
-        excluída devem ser movidos para outra coluna em andamento.
-      </PageIntro>
-
       <CadastroPageHeader title="Etapas do funil comercial" onNew={openCreate} newLabel="Nova etapa" />
 
       {error && !modalOpen && !deleteTarget ? <div className="alert alert-error">{error}</div> : null}

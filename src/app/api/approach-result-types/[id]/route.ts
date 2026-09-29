@@ -30,6 +30,7 @@ export async function PATCH(request: Request, { params }: Params) {
         collect_notes = COALESCE(@collectNotes, collect_notes),
         require_schedule_return = COALESCE(@requireScheduleReturn, require_schedule_return),
         require_final_registration = COALESCE(@requireFinalRegistration, require_final_registration),
+        ask_decision_maker = COALESCE(@askDecisionMaker, ask_decision_maker),
         allowed_next_actions = CASE WHEN @allowedSet THEN @allowedNextActions::jsonb ELSE allowed_next_actions END,
         updated_at = @now
       WHERE id = @id
@@ -44,6 +45,7 @@ export async function PATCH(request: Request, { params }: Params) {
       collectNotes: parsed.data.collect_notes ?? null,
       requireScheduleReturn: parsed.data.require_schedule_return ?? null,
       requireFinalRegistration: parsed.data.require_final_registration ?? null,
+      askDecisionMaker: parsed.data.ask_decision_maker ?? null,
       allowedSet,
       allowedNextActions: allowedJson,
       now: nowIso()

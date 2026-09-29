@@ -165,7 +165,7 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
 
   return (
     <div>
-      <PageIntro>Arraste os cartões entre etapas ou use a seleção de etapa em cada cartão. Abordagens não alteram a etapa automaticamente.</PageIntro>
+      <PageIntro>Arraste os cartões entre etapas ou para fechamento relacionado.</PageIntro>
       <FilterBar>
         <FilterSelect label="Produto" value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}>
           <option value="">Todos</option>

@@ -4,7 +4,6 @@ import clsx from "clsx";
 import { useCallback, useEffect, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
 import { LeadQualificationBadge } from "@/components/lead-qualification-picker";
-import { PageIntro } from "@/components/page-intro";
 import {
   deriveSuggestFollowUpFromRules,
   formatAllowedNextActionsSummary,
@@ -31,6 +30,7 @@ type ResultRow = {
   collect_notes: boolean;
   require_schedule_return: boolean;
   require_final_registration: boolean;
+  ask_decision_maker?: boolean;
   allowed_next_actions?: unknown;
 };
 
@@ -43,6 +43,7 @@ type ResultForm = {
   collect_notes: boolean;
   require_schedule_return: boolean;
   require_final_registration: boolean;
+  ask_decision_maker: boolean;
   allowed_next_actions: ApproachNextActionKey[];
 };
 
@@ -67,6 +68,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
     collect_notes: false,
     require_schedule_return: false,
     require_final_registration: true,
+    ask_decision_maker: false,
     allowed_next_actions: ["none"]
   });
   const [resultSaving, setResultSaving] = useState(false);
@@ -91,6 +93,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
       collect_notes: false,
       require_schedule_return: false,
       require_final_registration: true,
+      ask_decision_maker: false,
       allowed_next_actions: ["none"]
     });
     setError(null);
@@ -108,6 +111,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
       collect_notes: row.collect_notes === true,
       require_schedule_return: row.require_schedule_return === true,
       require_final_registration: row.require_final_registration !== false,
+      ask_decision_maker: row.ask_decision_maker === true,
       allowed_next_actions: normalizeAllowedForForm(row)
     });
     setError(null);
@@ -157,11 +161,13 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
           collect_notes: resultForm.collect_notes,
           require_schedule_return: resultForm.require_schedule_return,
           require_final_registration: resultForm.require_final_registration,
+          ask_decision_maker: resultForm.ask_decision_maker,
           allowed_next_actions: allowed
         }
       : {
           ...resultForm,
           lead_qualification: qualPayload,
+          ask_decision_maker: resultForm.ask_decision_maker,
           allowed_next_actions: allowed,
           suggest_follow_up: suggestFollowUp
         };
@@ -194,15 +200,9 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
 
   return (
     <div>
-      <PageIntro>Tipos de resultado comercial ao registrar ligações, WhatsApp e e-mail.</PageIntro>
       {error && !resultModal ? <div className="alert alert-error">{error}</div> : null}
 
-      <CadastroPageHeader
-        title="Resultados de abordagem"
-        description="Configure qualificação, registro pós-ligação e próximos passos por resultado."
-        onNew={openResultCreate}
-        newLabel="Novo resultado"
-      />
+      <CadastroPageHeader title="Resultado comercial" onNew={openResultCreate} newLabel="Novo resultado" />
       <div className="panel table-wrap">
         <table className="data-table">
           <thead>
@@ -213,6 +213,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
               <th>Registro final</th>
               <th>Exigir obs.</th>
               <th>Retorno obrig.</th>
+              <th>Perg. decisor</th>
               <th>Próximos passos</th>
               <th style={{ width: canDelete ? 180 : 100 }} />
             </tr>
@@ -226,6 +227,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
                 <td>{r.require_final_registration !== false ? "Sim" : "Automático"}</td>
                 <td>{r.collect_notes === true ? "Sim" : "—"}</td>
                 <td>{r.require_schedule_return ? "Sim" : "—"}</td>
+                <td>{r.ask_decision_maker ? "Sim" : "—"}</td>
                 <td style={{ fontSize: "0.8125rem", maxWidth: 280 }}>{formatAllowedNextActionsSummary(r)}</td>
                 <td>
                   <CadastroRowActions
@@ -354,6 +356,14 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
                   onChange={(e) => setResultForm((f) => ({ ...f, collect_notes: e.target.checked }))}
                 />
                 <span>Exigir observações</span>
+              </label>
+              <label className="resultado-check-row">
+                <input
+                  type="checkbox"
+                  checked={resultForm.ask_decision_maker}
+                  onChange={(e) => setResultForm((f) => ({ ...f, ask_decision_maker: e.target.checked }))}
+                />
+                <span>Pergunta sobre decisor</span>
               </label>
             </div>
           </div>

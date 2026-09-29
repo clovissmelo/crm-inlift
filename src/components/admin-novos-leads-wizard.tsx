@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Trash2 } from "lucide-react";
-import { PageIntro } from "@/components/page-intro";
 import {
   AdminNovosLeadsCityPicker,
   type CitySelectionPayload,
@@ -79,6 +78,18 @@ function formatRunGeo(filters: RunFilters, uf: string): { line: string; title?: 
     return { line: `${regions.length} zona${regions.length === 1 ? "" : "s"}`, title: regions.join(", ") };
   }
   return { line: "—" };
+}
+
+function formatActiveRunProgress(r: { phase: string; progress_pct: number; max_stations: number; counts_json: Record<string, number> }): string {
+  if (r.phase === "anp_load") {
+    const loaded = r.counts_json?.cities_loaded ?? 0;
+    const total = r.counts_json?.cities_total ?? 0;
+    if (total > 0) return `ANP: ${loaded}/${total} cidades`;
+    return "Carregando ANP…";
+  }
+  const created = r.counts_json?.created ?? 0;
+  if (created > 0) return `${created}/${r.max_stations} novos`;
+  return `${Math.round(r.progress_pct)}%`;
 }
 
 function formatRunResults(counts: Record<string, number>): string {
@@ -190,10 +201,11 @@ export function AdminNovosLeadsWizard() {
   useEffect(() => {
     if (!activeRunId) return;
     void fetchRunDetail(activeRunId);
+    const pollMs = ["queued", "running"].includes(activeRun?.status ?? "") ? 2500 : 4000;
     const t = setInterval(() => {
       void fetchRunDetail(activeRunId);
       if (["completed", "failed", "cancelled"].includes(activeRun?.status ?? "")) return;
-    }, 4000);
+    }, pollMs);
     return () => clearInterval(t);
   }, [activeRunId, fetchRunDetail, activeRun?.status]);
 
@@ -279,11 +291,6 @@ export function AdminNovosLeadsWizard() {
 
   return (
     <div>
-      <PageIntro>
-        Geração de postos via ANP (motor PostoCred). O processamento roda em segundo plano no servidor — você pode sair e voltar depois.{" "}
-        <Link href="/admin/integracoes/google-places">Google Places</Link> (Admin → card Google Places).
-      </PageIntro>
-
       {error ? <div className="alert alert-error">{error}</div> : null}
 
       <div className="panel">
@@ -426,7 +433,7 @@ export function AdminNovosLeadsWizard() {
             {["queued", "running", "paused"].includes(activeRun.status)
               ? ` · ${PHASE_LABEL[activeRun.phase] ?? activeRun.phase}`
               : null}{" "}
-            · Progresso: {activeRun.progress_pct}%
+            · Progresso: {formatActiveRunProgress(activeRun)}
             {activeRun.simulation ? " · Sem Google (sem chave ou quota)" : ""}
           </p>
           {activeRun.error_message ? <p className="alert alert-error">{activeRun.error_message}</p> : null}
@@ -555,7 +562,7 @@ export function AdminNovosLeadsWizard() {
                         {(r.counts_json?.processed ?? 0) > 0 || r.status === "completed" ? (
                           formatRunResults(r.counts_json ?? {})
                         ) : active ? (
-                          <span className="muted">{Math.round(r.progress_pct)}% processado</span>
+                          <span className="muted">{formatActiveRunProgress(r)}</span>
                         ) : (
                           <span className="muted">—</span>
                         )}
@@ -571,7 +578,7 @@ export function AdminNovosLeadsWizard() {
                           {RUN_STATUS_LABEL[r.status] ?? r.status}
                         </span>
                         {active ? (
-                          <span className="lead-gen-history-sub muted">{Math.round(r.progress_pct)}%</span>
+                          <span className="lead-gen-history-sub muted">{formatActiveRunProgress(r)}</span>
                         ) : null}
                         {r.error_message ? (
                           <span className="lead-gen-history-sub lead-gen-history-error" title={r.error_message}>

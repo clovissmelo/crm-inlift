@@ -21,6 +21,8 @@ export type DashboardStatsPayload = {
   clients_without_approach: number;
   clients_by_bdr: Array<{ bdr_user_id: number | null; bdr_name: string; count: number }>;
   unique_clients_attempted: number;
+  decision_maker_contacts: number;
+  clients_available_for_contact: number;
   approaches_by_channel: Array<{ channel: string; count: number }>;
   call_results: Array<{ result: string; count: number }>;
   pending_returns: number;
@@ -193,7 +195,9 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
     meetingsTodayRow,
     meetingsUpcomingRow,
     focusReturns,
-    focusMeetings
+    focusMeetings,
+    prospeccaoAvailableRow,
+    decisionMakerRow
   ] = (await runQueriesLimited([
     () => get<{ count: string }>(`SELECT COUNT(*)::text AS count FROM clients c WHERE ${clientFilter}`, params),
     () =>
@@ -444,6 +448,24 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
         LIMIT 4
       `,
         focusParams
+      ),
+    () =>
+      get<{ count: string }>(
+        `
+        SELECT COUNT(*)::text AS count FROM clients c
+        WHERE c.in_prospeccao_queue = true AND ${clientFilter}
+      `,
+        params
+      ),
+    () =>
+      get<{ count: string }>(
+        `
+        SELECT COUNT(*)::text AS count
+        FROM approaches a
+        JOIN clients c ON c.id = a.client_id
+        WHERE ${approachFilter} AND a.spoke_with_decision_maker = true
+      `,
+        params
       )
   ])) as [
     { count: string } | undefined,
@@ -468,7 +490,9 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
     { count: string } | undefined,
     { count: string } | undefined,
     Array<{ id: number; client_id: number; client_name: string; scheduled_at: string; kind: string }>,
-    Array<{ id: number; client_id: number; title: string; client_name: string; starts_at: string }>
+    Array<{ id: number; client_id: number; title: string; client_name: string; starts_at: string }>,
+    { count: string } | undefined,
+    { count: string } | undefined
   ];
 
   const seriesMap = new Map<string, number>();
@@ -549,6 +573,8 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
       count: Number(row.count)
     })),
     unique_clients_attempted: Number(uniqueClientsTried?.count ?? 0),
+    decision_maker_contacts: Number(decisionMakerRow?.count ?? 0),
+    clients_available_for_contact: Number(prospeccaoAvailableRow?.count ?? 0),
     approaches_by_channel: byChannel.map((r) => ({ channel: r.channel, count: Number(r.count) })),
     call_results: byResult.map((r) => ({ result: r.result_name, count: Number(r.count) })),
     pending_returns: Number(pendingReturns?.count ?? 0),

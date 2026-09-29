@@ -114,6 +114,7 @@ export const approachCreateSchema = z.object({
   notes: z.string().trim().optional().nullable(),
   external_call_id: z.string().trim().optional().nullable(),
   follow_up_id: z.number().int().positive().optional().nullable(),
+  spoke_with_decision_maker: z.boolean().optional().nullable(),
   next_action: z.discriminatedUnion("type", [
     z.object({ type: z.literal("none") }),
     z.object({
@@ -204,6 +205,7 @@ export const catalogItemSchema = z.object({
   collect_notes: z.boolean().optional(),
   require_schedule_return: z.boolean().optional(),
   require_final_registration: z.boolean().optional(),
+  ask_decision_maker: z.boolean().optional(),
   allowed_next_actions: z.array(approachNextActionKeySchema).optional().nullable()
 });
 

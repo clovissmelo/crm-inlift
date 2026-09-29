@@ -147,10 +147,7 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
 
   return (
     <div>
-      <PageIntro>
-        Filtre, selecione clientes, transfira BDR ou vincule um novo produto (cria oportunidade sem remover os já
-        cadastrados).
-      </PageIntro>
+      <PageIntro>Vincule ou transfira BDR e/ou produto aos leads.</PageIntro>
 
       <FilterBar>
         <FilterInput label="Cidade" value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} placeholder="—" />

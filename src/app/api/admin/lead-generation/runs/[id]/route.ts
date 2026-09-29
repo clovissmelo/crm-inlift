@@ -19,7 +19,7 @@ export async function GET(_request: Request, { params }: Params) {
   if (!run) return Response.json({ error: "Execução não encontrada" }, { status: 404 });
 
   if (["queued", "running"].includes(run.status)) {
-    await drainLeadGenerationTicks({ runId: id, maxTicks: 10, maxMs: 52_000 });
+    await drainLeadGenerationTicks({ runId: id, maxTicks: 18, maxMs: 55_000 });
     run = (await getLeadGenerationRun(id))!;
   }
 

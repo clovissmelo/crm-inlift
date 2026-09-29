@@ -36,7 +36,7 @@ type NavItem = { href: Route; label: string; icon: typeof LayoutDashboard };
 const navMain: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/funil", label: "Funil", icon: Funnel },
-  { href: "/prospeccao", label: "Leads para prospecção", icon: PhoneCall },
+  { href: "/prospeccao", label: "Lista para entrar em contato", icon: PhoneCall },
   { href: "/agendamentos", label: "Agendamentos", icon: Calendar },
   { href: "/negocios-convertidos", label: "Negócios convertidos", icon: Trophy },
   { href: "/clientes", label: "Clientes", icon: List },

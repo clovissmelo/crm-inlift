@@ -18,6 +18,6 @@ export async function drainLeadGenerationTicks(opts: {
       if (!run || !ACTIVE.has(run.status)) break;
       if (run.status === "paused") break;
     }
-    await processLeadGenerationTick();
+    await processLeadGenerationTick(opts.runId);
   }
 }
