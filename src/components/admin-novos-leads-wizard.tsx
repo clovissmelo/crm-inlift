@@ -419,10 +419,14 @@ export function AdminNovosLeadsWizard() {
 
       {activeRun ? (
         <div className="panel" style={{ marginTop: "1rem" }}>
-          <h3 className="panel-title">Execução #{activeRun.id}</h3>
+          <h3 className="panel-title">Execução em andamento</h3>
           <p>
-            Meta: {activeRun.max_stations} novo{activeRun.max_stations === 1 ? "" : "s"} · {PHASE_LABEL[activeRun.phase] ?? activeRun.phase} ·
-            Status: {activeRun.status} · Progresso: {activeRun.progress_pct}%
+            Meta: {activeRun.max_stations} novo{activeRun.max_stations === 1 ? "" : "s"} ·{" "}
+            {RUN_STATUS_LABEL[activeRun.status] ?? activeRun.status}
+            {["queued", "running", "paused"].includes(activeRun.status)
+              ? ` · ${PHASE_LABEL[activeRun.phase] ?? activeRun.phase}`
+              : null}{" "}
+            · Progresso: {activeRun.progress_pct}%
             {activeRun.simulation ? " · Sem Google (sem chave ou quota)" : ""}
           </p>
           {activeRun.error_message ? <p className="alert alert-error">{activeRun.error_message}</p> : null}

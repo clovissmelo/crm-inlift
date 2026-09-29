@@ -1,7 +1,7 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { createLeadGenerationRun, listLeadGenerationRuns } from "@/lib/lead-generation/runs-repo";
-import { normalizeLeadGenFilters, ufHasMotorMapping } from "@/lib/lead-generation/city-resolve";
+import { normalizeLeadGenFilters, resolveCityPairs, ufHasMotorMapping } from "@/lib/lead-generation/city-resolve";
 import { getGooglePlacesApiKey, getGooglePlacesLimit } from "@/lib/google-places-settings";
 import { getDailyGoogleUsage } from "@/lib/lead-generation/quota";
 import type { LeadGenFilters } from "@/lib/lead-generation/types";
@@ -50,7 +50,25 @@ export async function POST(request: Request) {
     segment: parsed.data.segment
   });
   if (!filtersNormalized.all_cities_in_uf && filtersNormalized.cities.length === 0) {
-    return Response.json({ error: "Selecione cidades, regiões ou todas da UF." }, { status: 400 });
+    return Response.json({ error: "Selecione cidades, regiões ou marque “Todas mapeadas” na UF." }, { status: 400 });
+  }
+
+  const filtersForRun: LeadGenFilters = {
+    cities: filtersNormalized.cities,
+    regions: parsed.data.regions,
+    all_cities_in_uf: parsed.data.all_cities_in_uf,
+    segment: parsed.data.segment
+  };
+  const cityPairs = resolveCityPairs(uf, filtersForRun);
+  if (cityPairs.length === 0) {
+    return Response.json(
+      {
+        error: parsed.data.all_cities_in_uf
+          ? `UF ${uf} sem cidades no mapa ANP.`
+          : "Nenhuma cidade válida na seleção. Marque “Todas mapeadas”, zonas ou cidades."
+      },
+      { status: 400 }
+    );
   }
 
   const hasKey = Boolean(await getGooglePlacesApiKey());
@@ -67,17 +85,10 @@ export async function POST(request: Request) {
     ? 0
     : Math.min(perRunLimit, availableToday, Math.max(1, maxStations * 2));
 
-  const filters: LeadGenFilters = {
-    cities: filtersNormalized.cities,
-    regions: parsed.data.regions,
-    all_cities_in_uf: parsed.data.all_cities_in_uf,
-    segment: parsed.data.segment
-  };
-
   const id = await createLeadGenerationRun({
     requested_by_user_id: user!.id,
     uf,
-    filters,
+    filters: filtersForRun,
     product_id: parsed.data.product_id ?? null,
     company_id: parsed.data.company_id ?? null,
     bdr_user_id: parsed.data.bdr_user_id ?? null,

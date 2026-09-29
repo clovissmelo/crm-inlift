@@ -78,10 +78,13 @@ async function tickAnpLoad(runId: number) {
   const counts = { ...runRow.counts_json };
   counts.cities_total = pairs.length;
   if (pairs.length === 0) {
+    const hint = runRow.filters_json.all_cities_in_uf
+      ? `UF ${runRow.uf} sem cidades no mapa ANP.`
+      : "Nenhuma cidade válida na seleção salva. Marque “Todas mapeadas”, zonas ou cidades e inicie de novo.";
     await updateRun(runId, {
       status: "failed",
       phase: "done",
-      error_message: `UF ${runRow.uf} sem mapa de cidades ou nenhuma cidade selecionada.`,
+      error_message: hint,
       counts_json: counts,
       progress_pct: 100,
       completed_at: nowIso()

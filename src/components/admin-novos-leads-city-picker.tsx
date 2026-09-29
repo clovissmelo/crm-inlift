@@ -44,11 +44,13 @@ export function AdminNovosLeadsCityPicker({
   const [cityFilter, setCityFilter] = useState("");
   const [checkedRegions, setCheckedRegions] = useState<Set<string>>(new Set());
   const [checkedCities, setCheckedCities] = useState<Set<string>>(new Set());
+  const [geoAppliedForUf, setGeoAppliedForUf] = useState<string | null>(null);
 
   useEffect(() => {
     setCheckedRegions(new Set());
     setCheckedCities(new Set());
     setCityFilter("");
+    setGeoAppliedForUf(null);
     onAllCitiesChange(false);
     onSelectionChange({ regions: [], cities: [] });
   }, [uf, onAllCitiesChange, onSelectionChange]);
@@ -68,6 +70,15 @@ export function AdminNovosLeadsCityPicker({
       cancelled = true;
     };
   }, [uf]);
+
+  useEffect(() => {
+    if (!geo || geo.uf !== uf || geoAppliedForUf === uf) return;
+    setGeoAppliedForUf(uf);
+    if (geo.has_motor_mapping) {
+      onAllCitiesChange(true);
+      onSelectionChange({ regions: [], cities: [] });
+    }
+  }, [geo, uf, geoAppliedForUf, onAllCitiesChange, onSelectionChange]);
 
   const regionCityMap = useMemo(() => {
     const m = new Map<string, string[]>();

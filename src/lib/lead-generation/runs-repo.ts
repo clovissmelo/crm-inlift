@@ -10,11 +10,21 @@ function parseCounts(raw: unknown): LeadGenCounts {
 
 function parseFilters(raw: unknown): LeadGenFilters {
   const d: LeadGenFilters = { cities: [], regions: [], all_cities_in_uf: false, segment: "all" };
-  if (!raw || typeof raw !== "object") return d;
-  const o = raw as Record<string, unknown>;
+  let value: unknown = raw;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value) as unknown;
+    } catch {
+      return d;
+    }
+  }
+  if (!value || typeof value !== "object") return d;
+  const o = value as Record<string, unknown>;
   if (Array.isArray(o.cities)) d.cities = o.cities.map(String);
   if (Array.isArray(o.regions)) d.regions = o.regions.map(String);
-  if (typeof o.all_cities_in_uf === "boolean") d.all_cities_in_uf = o.all_cities_in_uf;
+  if (o.all_cities_in_uf === true || o.all_cities_in_uf === "true" || o.all_cities_in_uf === 1) {
+    d.all_cities_in_uf = true;
+  }
   if (typeof o.segment === "string") d.segment = normalizeSegmentFilter(o.segment);
   return d;
 }

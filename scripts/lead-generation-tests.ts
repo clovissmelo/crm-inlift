@@ -3,6 +3,7 @@
  * Executar: npx tsx scripts/lead-generation-tests.ts
  */
 import assert from "node:assert/strict";
+import { resolveCityPairs } from "../src/lib/lead-generation/city-resolve";
 import { filterStations, mapAnpRecord, type AnpStation } from "../src/lib/lead-motor/anp";
 import { validateGoogleMatch } from "../src/lib/lead-motor/google-validate";
 import { isValidCnpjDigits } from "../src/lib/lead-motor/utils";
@@ -92,6 +93,16 @@ function testGoogleAmbiguous() {
 }
 
 /** Cliente existente: motor deve classificar como existing sem chamar create — coberto em run-processor via findExistingClientIdByCnpj. */
+function testRsAllCitiesResolvesPairs() {
+  const pairs = resolveCityPairs("RS", {
+    cities: [],
+    regions: [],
+    all_cities_in_uf: true,
+    segment: "all"
+  });
+  assert.ok(pairs.length > 50, "RS deve ter dezenas de cidades mapeadas");
+}
+
 function testDuplicateCnpjInRunDedup() {
   const seen = new Set<string>();
   const cnpjs = ["00000000000191", "00000000000191", "00000000000272"];
@@ -105,5 +116,6 @@ function testDuplicateCnpjInRunDedup() {
 testWhiteFlagFilter();
 testInvalidCnpjSkipped();
 testGoogleAmbiguous();
+testRsAllCitiesResolvesPairs();
 testDuplicateCnpjInRunDedup();
 console.log("lead-generation-tests: OK");
