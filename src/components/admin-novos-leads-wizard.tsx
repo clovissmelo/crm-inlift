@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Trash2 } from "lucide-react";
 import { PageIntro } from "@/components/page-intro";
 import {
   AdminNovosLeadsCityPicker,
@@ -111,6 +112,15 @@ export function AdminNovosLeadsWizard() {
   const [products, setProducts] = useState<Array<{ id: number; name: string }>>([]);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [leadsRequested, setLeadsRequested] = useState(1);
+
+  const maxLeadsRequested = quota?.per_run_limit ?? 100;
+
+  function clampLeadsRequested(value: number) {
+    const max = maxLeadsRequested;
+    if (!Number.isFinite(value)) return 1;
+    return Math.min(max, Math.max(1, Math.floor(value)));
+  }
 
   const resolvedGeo = useMemo(
     () =>
@@ -155,7 +165,9 @@ export function AdminNovosLeadsWizard() {
       setUfOptions(g.ufs ?? []);
     }
     if (quotaRes.ok) {
-      setQuota((await quotaRes.json()) as QuotaPanel);
+      const q = (await quotaRes.json()) as QuotaPanel;
+      setQuota(q);
+      setLeadsRequested((prev) => Math.min(Math.max(1, prev), q.per_run_limit));
     }
   }, []);
 
@@ -208,7 +220,8 @@ export function AdminNovosLeadsWizard() {
         all_cities_in_uf: allCities,
         segment,
         bdr_user_id: bdrUserId === "" ? null : bdrUserId,
-        product_id: productId === "" ? null : productId
+        product_id: productId === "" ? null : productId,
+        max_stations: clampLeadsRequested(leadsRequested)
       })
     });
     const data = (await res.json()) as { id?: number; error?: string };
@@ -234,6 +247,32 @@ export function AdminNovosLeadsWizard() {
     if (!activeRunId) return;
     await fetch(`/api/admin/lead-generation/runs/${activeRunId}/resume`, { method: "POST" });
     void fetchRunDetail(activeRunId);
+  }
+
+  async function deleteHistoryRun(r: RunRow) {
+    const when = new Date(r.created_at).toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+    const ok = window.confirm(
+      `Excluir do histórico a execução de ${r.uf} em ${when}?\n\nSerão removidos os dados desta execução na fila ANP. Clientes já cadastrados no CRM não são apagados.`
+    );
+    if (!ok) return;
+    setError(null);
+    const res = await fetch(`/api/admin/lead-generation/runs/${r.id}`, { method: "DELETE" });
+    const data = (await res.json()) as { error?: string };
+    if (!res.ok) {
+      setError(data.error ?? "Não foi possível excluir");
+      return;
+    }
+    if (activeRunId === r.id) {
+      setActiveRunId(null);
+      setActiveRun(null);
+    }
+    void loadMeta();
   }
 
   const counts = activeRun?.counts_json ?? {};
@@ -332,16 +371,58 @@ export function AdminNovosLeadsWizard() {
           </div>
         </div>
 
-        <button className="btn btn-primary" type="button" disabled={starting} onClick={() => void startRun()}>
-          {starting ? "Iniciando…" : "Iniciar geração"}
-        </button>
+        <div className="lead-gen-start-row">
+          <div className="field lead-gen-qty-field">
+            <span className="label" id="lead-gen-qty-label">
+              Novos leads a solicitar
+            </span>
+            <div className="qty-stepper" role="group" aria-labelledby="lead-gen-qty-label">
+              <button
+                type="button"
+                className="qty-stepper-btn"
+                aria-label="Diminuir quantidade"
+                disabled={starting || leadsRequested <= 1}
+                onClick={() => setLeadsRequested((n) => clampLeadsRequested(n - 1))}
+              >
+                −
+              </button>
+              <input
+                className="input qty-stepper-input"
+                type="number"
+                min={1}
+                max={maxLeadsRequested}
+                value={leadsRequested}
+                disabled={starting}
+                onChange={(e) => setLeadsRequested(clampLeadsRequested(Number(e.target.value)))}
+              />
+              <button
+                type="button"
+                className="qty-stepper-btn"
+                aria-label="Aumentar quantidade"
+                disabled={starting || leadsRequested >= maxLeadsRequested}
+                onClick={() => setLeadsRequested((n) => clampLeadsRequested(n + 1))}
+              >
+                +
+              </button>
+            </div>
+            <span className="muted lead-gen-qty-hint">Máx. {maxLeadsRequested} por execução</span>
+          </div>
+          <button className="btn btn-primary" type="button" disabled={starting} onClick={() => void startRun()}>
+            {starting ? "Iniciando…" : "Iniciar geração"}
+          </button>
+        </div>
+        <p className="muted lead-gen-qty-note">
+          A execução percorre postos da ANP até cadastrar a quantidade solicitada; já existentes ou inválidos são ignorados e o
+          próximo da fila é processado (sem repetir CNPJ já tratado nesta execução).
+        </p>
       </div>
 
       {activeRun ? (
         <div className="panel" style={{ marginTop: "1rem" }}>
           <h3 className="panel-title">Execução #{activeRun.id}</h3>
           <p>
-            {PHASE_LABEL[activeRun.phase] ?? activeRun.phase} · Status: {activeRun.status} · Progresso: {activeRun.progress_pct}%
+            Meta: {activeRun.max_stations} novo{activeRun.max_stations === 1 ? "" : "s"} · {PHASE_LABEL[activeRun.phase] ?? activeRun.phase} ·
+            Status: {activeRun.status} · Progresso: {activeRun.progress_pct}%
             {activeRun.simulation ? " · Sem Google (sem chave ou quota)" : ""}
           </p>
           {activeRun.error_message ? <p className="alert alert-error">{activeRun.error_message}</p> : null}
@@ -414,12 +495,12 @@ export function AdminNovosLeadsWizard() {
             <table className="data-table lead-gen-history-table">
               <thead>
                 <tr>
-                  <th>Execução</th>
                   <th>Quando</th>
                   <th>Parâmetros</th>
                   <th>Resultado</th>
                   <th>Status</th>
                   <th>Solicitante</th>
+                  <th className="lead-gen-history-actions-head" aria-label="Ações" />
                 </tr>
               </thead>
               <tbody>
@@ -436,19 +517,16 @@ export function AdminNovosLeadsWizard() {
                   const isSelected = activeRunId === r.id;
                   return (
                     <tr key={r.id} className={isSelected ? "is-selected" : undefined}>
-                      <td>
-                        <button type="button" className="link-btn" onClick={() => setActiveRunId(r.id)}>
-                          #{r.id}
-                        </button>
-                      </td>
                       <td className="lead-gen-history-when">
-                        {new Date(r.created_at).toLocaleString("pt-BR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit"
-                        })}
+                        <button type="button" className="link-btn" onClick={() => setActiveRunId(r.id)}>
+                          {new Date(r.created_at).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })}
+                        </button>
                       </td>
                       <td className="lead-gen-history-params">
                         <span className="lead-gen-history-line">
@@ -458,7 +536,7 @@ export function AdminNovosLeadsWizard() {
                           {segmentLabel(filters.segment)}
                         </span>
                         <span className="lead-gen-history-sub muted">
-                          Até {r.max_stations} posto{r.max_stations === 1 ? "" : "s"}
+                          Solicitados: {r.max_stations} novo{r.max_stations === 1 ? "" : "s"}
                           {r.simulation ? " · sem Google" : ` · Google ${r.google_calls_used}/${r.max_google_calls}`}
                         </span>
                         {bdrName || productName ? (
@@ -498,6 +576,19 @@ export function AdminNovosLeadsWizard() {
                         ) : null}
                       </td>
                       <td className="muted">{r.requested_by_name ?? "—"}</td>
+                      <td className="lead-gen-history-actions">
+                        {!active ? (
+                          <button
+                            type="button"
+                            className="btn btn-icon-sm lead-gen-history-delete"
+                            title="Excluir do histórico"
+                            aria-label="Excluir do histórico"
+                            onClick={() => void deleteHistoryRun(r)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        ) : null}
+                      </td>
                     </tr>
                   );
                 })}

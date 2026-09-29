@@ -22,7 +22,7 @@ import {
 import type { LeadGenCounts } from "@/lib/lead-generation/types";
 import { createClientFromLead, findExistingClientIdByCnpj } from "@/lib/lead-motor/persist-client";
 import { getGooglePlacesApiKey } from "@/lib/google-places-settings";
-import { all, run, nowIso } from "@/lib/db";
+import { run, nowIso } from "@/lib/db";
 
 function parseStation(raw: unknown): AnpStation | null {
   if (!raw || typeof raw !== "object") return null;
@@ -56,20 +56,19 @@ async function recomputeCounts(runId: number, runRow: { counts_json: LeadGenCoun
   return { counts, pct, pending, processing };
 }
 
-async function trimExcessPending(runId: number, maxStations: number) {
-  const pending = await all<{ id: number }>(
-    `
-      SELECT id FROM lead_generation_items
-      WHERE run_id = @runId AND status = 'pending'
-      ORDER BY id
-    `,
-    { runId }
-  );
-  if (pending.length <= maxStations) return;
-  const drop = pending.slice(maxStations);
-  for (const row of drop) {
-    await run("DELETE FROM lead_generation_items WHERE id = @id", { id: row.id });
-  }
+/** Meta atingida: descarta fila pendente (itens já processados não são reconsultados). */
+async function dropRemainingPending(runId: number) {
+  await run("DELETE FROM lead_generation_items WHERE run_id = @runId AND status = 'pending'", { runId });
+}
+
+async function createdCountForRun(runId: number) {
+  const byStatus = await countItemsByStatus(runId);
+  return byStatus.created ?? 0;
+}
+
+async function targetCreatedReached(runId: number, maxStations: number) {
+  if (maxStations <= 0) return false;
+  return (await createdCountForRun(runId)) >= maxStations;
 }
 
 async function tickAnpLoad(runId: number) {
@@ -92,7 +91,6 @@ async function tickAnpLoad(runId: number) {
 
   const idx = counts.cities_loaded ?? 0;
   if (idx >= pairs.length) {
-    await trimExcessPending(runId, runRow.max_stations);
     const items = await listRunItems(runId);
     counts.anp_found = items.length;
     counts.items_total = items.length;
@@ -283,6 +281,12 @@ async function tickProcessing(runId: number) {
   const runRow = await getLeadGenerationRun(runId);
   if (!runRow) return;
 
+  if (await targetCreatedReached(runId, runRow.max_stations)) {
+    await dropRemainingPending(runId);
+    await updateRun(runId, { phase: "finalizing" });
+    return;
+  }
+
   const ids = await fetchPendingItemIds(runId, ITEMS_PER_CRON_TICK);
   if (ids.length === 0) {
     await updateRun(runId, { phase: "finalizing" });
@@ -292,14 +296,31 @@ async function tickProcessing(runId: number) {
   for (const { id } of ids) {
     const fresh = await getLeadGenerationRun(runId);
     if (!fresh || fresh.cancel_requested) break;
+    if (await targetCreatedReached(runId, fresh.max_stations)) break;
     await processOneItem(runId, id, fresh);
+    if (await targetCreatedReached(runId, fresh.max_stations)) break;
   }
 
   const freshRun = await getLeadGenerationRun(runId);
   if (!freshRun) return;
-  const { counts, pct } = await recomputeCounts(runId, freshRun);
+
+  if (await targetCreatedReached(runId, freshRun.max_stations)) {
+    await dropRemainingPending(runId);
+    const { counts } = await recomputeCounts(runId, freshRun);
+    counts.google_matched = counts.created + counts.ambiguous;
+    counts.enriched = counts.created;
+    const pct = Math.min(99, Math.round((counts.created / freshRun.max_stations) * 100));
+    await updateRun(runId, { counts_json: counts, progress_pct: pct, phase: "finalizing" });
+    return;
+  }
+
+  const { counts, pct: itemPct } = await recomputeCounts(runId, freshRun);
   counts.google_matched = counts.created + counts.ambiguous;
   counts.enriched = counts.created;
+  let pct = itemPct;
+  if (freshRun.max_stations > 0) {
+    pct = Math.min(99, Math.round((counts.created / freshRun.max_stations) * 100));
+  }
   await updateRun(runId, { counts_json: counts, progress_pct: Math.max(pct, freshRun.progress_pct) });
 }
 

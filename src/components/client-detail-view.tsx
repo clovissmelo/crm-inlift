@@ -186,6 +186,7 @@ export function ClientDetailView({
     parseLeadQualification(initialClient.lead_qualification)
   );
   const [savingQualification, setSavingQualification] = useState(false);
+  const [deletingClient, setDeletingClient] = useState(false);
 
   const [clientDraft, setClientDraft] = useState({
     cnpj: initialClient.cnpj ?? "",
@@ -562,6 +563,25 @@ export function ClientDetailView({
     router.refresh();
   }
 
+  async function removeClient() {
+    const label = clientDisplayName;
+    const ok = window.confirm(
+      `Excluir o cliente “${label}”?\n\nSerão removidos contatos, abordagens, oportunidades, agendamentos e demais registros vinculados a este lead. Esta ação não pode ser desfeita.`
+    );
+    if (!ok) return;
+    setDeletingClient(true);
+    setError(null);
+    const res = await fetch(`/api/clients/${initialClient.id}`, { method: "DELETE" });
+    const data = (await res.json()) as { error?: string };
+    setDeletingClient(false);
+    if (!res.ok) {
+      setError(data.error ?? "Não foi possível excluir o cliente");
+      return;
+    }
+    router.push("/clientes");
+    router.refresh();
+  }
+
   async function updateVerification(contactId: number, status: ContactVerification) {
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact) return;
@@ -637,15 +657,27 @@ export function ClientDetailView({
             </button>
           </div>
           {canReconsult ? (
-            <button
-              type="button"
-              className="btn btn-icon-sm client-detail-reconsult"
-              title="Reconsultar dados"
-              aria-label="Reconsultar dados"
-              onClick={() => setReconsultOpen(true)}
-            >
-              <RefreshCw size={18} />
-            </button>
+            <div className="client-detail-admin-tools">
+              <button
+                type="button"
+                className="btn btn-icon-sm"
+                title="Reconsultar dados"
+                aria-label="Reconsultar dados"
+                onClick={() => setReconsultOpen(true)}
+              >
+                <RefreshCw size={18} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-icon-sm client-detail-delete"
+                title="Excluir cliente"
+                aria-label="Excluir cliente"
+                disabled={deletingClient}
+                onClick={() => void removeClient()}
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
           ) : null}
         </div>
         <div className="client-detail-actions-row client-detail-contact-row">

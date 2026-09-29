@@ -1,5 +1,6 @@
+import { deleteBlockedMessage, requireAdminApi } from "@/lib/admin";
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
-import { getClientDetail, updateClient } from "@/lib/clients";
+import { deleteClient, getClientDetail, updateClient } from "@/lib/clients";
 import { clientSchema } from "@/lib/validators";
 
 type Params = { params: Promise<{ id: string }> };
@@ -30,4 +31,24 @@ export async function PATCH(request: Request, { params }: Params) {
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Erro ao salvar" }, { status: 400 });
   }
+}
+
+export async function DELETE(_request: Request, { params }: Params) {
+  const user = await requireApiUser();
+  if (!user) return jsonUnauthorized();
+  const denied = requireAdminApi(user);
+  if (denied) return denied;
+  const { id } = await params;
+  const clientId = Number(id);
+  const detail = await getClientDetail(clientId);
+  if (!detail) return Response.json({ error: "Não encontrado" }, { status: 404 });
+  try {
+    await deleteClient(clientId);
+  } catch (err) {
+    if (err instanceof Error && err.message === "Cliente não encontrado") {
+      return Response.json({ error: err.message }, { status: 404 });
+    }
+    return Response.json({ error: deleteBlockedMessage(err) }, { status: 409 });
+  }
+  return Response.json({ ok: true });
 }

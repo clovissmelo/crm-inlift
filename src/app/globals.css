@@ -1653,8 +1653,16 @@ table.data-table th {
   flex: 1;
 }
 
-.client-detail-reconsult {
+.client-detail-admin-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   margin-left: auto;
+}
+
+.client-detail-delete:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
 }
 
 .client-detail-contact-row {
@@ -2335,6 +2343,82 @@ table.data-table tbody tr.is-selected {
   margin-bottom: 0.5rem;
 }
 
+.lead-gen-start-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.lead-gen-qty-field {
+  margin: 0;
+  min-width: 12rem;
+}
+
+.lead-gen-qty-hint {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.lead-gen-qty-note {
+  font-size: 0.78rem;
+  margin: 0.65rem 0 0;
+  max-width: 42rem;
+  line-height: 1.45;
+}
+
+.qty-stepper {
+  display: flex;
+  align-items: stretch;
+  max-width: 9rem;
+}
+
+.qty-stepper-btn {
+  flex: 0 0 2.25rem;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.qty-stepper-btn:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.qty-stepper-btn:last-child {
+  border-radius: 0 8px 8px 0;
+}
+
+.qty-stepper-btn:hover:not(:disabled) {
+  background: var(--nav-hover-bg);
+}
+
+.qty-stepper-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.qty-stepper-input {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  -moz-appearance: textfield;
+}
+
+.qty-stepper-input::-webkit-outer-spin-button,
+.qty-stepper-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .lead-gen-history-table td {
   vertical-align: top;
   font-size: 0.88rem;
@@ -2393,6 +2477,23 @@ table.data-table tbody tr.is-selected {
 
 .lead-gen-status--paused {
   color: var(--warning, #e6a700);
+}
+
+.lead-gen-history-actions-head {
+  width: 2.5rem;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+.lead-gen-history-actions {
+  width: 2.5rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.lead-gen-history-delete:hover {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
 }
 
 @media (max-width: 768px) {

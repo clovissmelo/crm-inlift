@@ -178,3 +178,10 @@ export async function addClientProductLink(clientId: number, productId: number) 
   );
   await run("UPDATE clients SET updated_at = @now WHERE id = @id", { id: clientId, now: nowIso() });
 }
+
+/** Remove o cliente; contatos, oportunidades, agendamentos e demais vínculos em CASCADE no banco. */
+export async function deleteClient(id: number) {
+  const client = await get<{ id: number }>("SELECT id FROM clients WHERE id = @id", { id });
+  if (!client) throw new Error("Cliente não encontrado");
+  await run("DELETE FROM clients WHERE id = @id", { id });
+}

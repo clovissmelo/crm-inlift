@@ -53,13 +53,14 @@ export async function POST(request: Request) {
     return Response.json({ error: "Selecione cidades, regiões ou todas da UF." }, { status: 400 });
   }
 
-  const maxStations = parsed.data.max_stations ?? 500;
   const hasKey = Boolean(await getGooglePlacesApiKey());
   const [perRunLimit, dailyLimit, usedToday] = await Promise.all([
     getGooglePlacesLimit("google_places_per_run_limit"),
     getGooglePlacesLimit("google_places_daily_limit"),
     getDailyGoogleUsage()
   ]);
+  const requested = parsed.data.max_stations ?? perRunLimit;
+  const maxStations = Math.min(Math.max(1, requested), perRunLimit, 500);
   const availableToday = Math.max(0, dailyLimit - usedToday);
   const simulation = !hasKey;
   const maxGoogle = simulation

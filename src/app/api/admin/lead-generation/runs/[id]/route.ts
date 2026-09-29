@@ -1,7 +1,7 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { drainLeadGenerationTicks } from "@/lib/lead-generation/drain-ticks";
-import { getLeadGenerationRun, listRunItems } from "@/lib/lead-generation/runs-repo";
+import { deleteLeadGenerationRun, getLeadGenerationRun, listRunItems } from "@/lib/lead-generation/runs-repo";
 
 export const maxDuration = 60;
 
@@ -35,4 +35,23 @@ export async function GET(_request: Request, { params }: Params) {
   }
 
   return Response.json({ run, items });
+}
+
+export async function DELETE(_request: Request, { params }: Params) {
+  const user = await requireApiUser();
+  const denied = requireAdminApi(user);
+  if (denied) return denied;
+
+  const id = Number((await params).id);
+  if (!Number.isFinite(id)) return Response.json({ error: "ID inválido" }, { status: 400 });
+
+  try {
+    await deleteLeadGenerationRun(id);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Não foi possível excluir.";
+    const status = msg.includes("não encontrada") ? 404 : msg.includes("andamento") ? 409 : 400;
+    return Response.json({ error: msg }, { status });
+  }
+
+  return Response.json({ ok: true });
 }

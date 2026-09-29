@@ -91,6 +91,15 @@ export async function getLeadGenerationRun(id: number) {
   return row ? mapRun(row) : null;
 }
 
+export async function deleteLeadGenerationRun(id: number) {
+  const row = await getLeadGenerationRun(id);
+  if (!row) throw new Error("Execução não encontrada");
+  if (["queued", "running", "paused"].includes(row.status)) {
+    throw new Error("Cancele a execução em andamento antes de excluir do histórico.");
+  }
+  await run("DELETE FROM lead_generation_runs WHERE id = @id", { id });
+}
+
 export async function listLeadGenerationRuns(limit = 30) {
   const rows = await all<Record<string, unknown>>(
     `
