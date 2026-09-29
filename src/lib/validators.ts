@@ -81,7 +81,9 @@ export const productSchema = z.object({
   status: z.enum(["active", "inactive"]),
   uses_proposal: z.boolean(),
   company_id: z.number().int().positive("Selecione a empresa"),
-  responsible_user_ids: z.array(z.number().int().positive())
+  responsible_user_ids: z.array(z.number().int().positive()),
+  lead_gen_segment_slug: z.string().trim().min(1).max(64).optional().nullable(),
+  lead_gen_flow_id: z.number().int().positive().optional().nullable()
 });
 
 export const clientSchema = z.object({

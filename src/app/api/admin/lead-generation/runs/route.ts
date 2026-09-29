@@ -6,6 +6,7 @@ import { buildFlowSnapshot, getDefaultFlowForSegment, getLeadGenerationFlow } fr
 import { getMunicipalitiesForUf } from "@/lib/lead-generation/ibge-localidades";
 import { persistRunMunicipalities } from "@/lib/lead-generation/municipality-runs";
 import { createLeadGenerationRun, listLeadGenerationRuns } from "@/lib/lead-generation/runs-repo";
+import { getProduct } from "@/lib/products";
 import { getGooglePlacesApiKey, getGooglePlacesLimit } from "@/lib/google-places-settings";
 import { getDailyGoogleUsage } from "@/lib/lead-generation/quota";
 import type { LeadGenFilters, LeadGenMunicipalityRef } from "@/lib/lead-generation/types";
@@ -55,7 +56,13 @@ export async function POST(request: Request) {
   }
 
   const uf = parsed.data.uf.toUpperCase();
-  const segmentSlug = parsed.data.segment;
+  let segmentSlug = parsed.data.segment;
+  let productFlowId: number | null = null;
+  if (parsed.data.product_id) {
+    const product = await getProduct(parsed.data.product_id);
+    if (product?.lead_gen_segment_slug) segmentSlug = product.lead_gen_segment_slug;
+    if (product?.lead_gen_flow_id) productFlowId = product.lead_gen_flow_id;
+  }
   const activeSegments = await listLeadGenSegments({ activeOnly: true });
   if (!activeSegments.some((s) => s.slug === segmentSlug)) {
     return Response.json({ error: "Segmento inválido ou inativo." }, { status: 400 });
@@ -63,6 +70,7 @@ export async function POST(request: Request) {
   const segment_filter_kind = await resolveSegmentFilterKind(segmentSlug);
   const segmentRow = activeSegments.find((s) => s.slug === segmentSlug);
   const flow =
+    (productFlowId ? await getLeadGenerationFlow(productFlowId) : null) ??
     (parsed.data.flow_id ? await getLeadGenerationFlow(parsed.data.flow_id) : null) ??
     (segmentRow?.default_flow_id ? await getLeadGenerationFlow(segmentRow.default_flow_id) : null) ??
     (await getDefaultFlowForSegment(segmentSlug));

@@ -12,7 +12,12 @@ type ProductForm = {
   uses_proposal: boolean;
   company_id: string;
   responsible_user_ids: number[];
+  lead_gen_segment_slug: string;
+  lead_gen_flow_id: string;
 };
+
+type SegmentOpt = { slug: string; label: string };
+type FlowOpt = { id: number; name: string };
 
 const emptyForm = (defaultCompanyId = ""): ProductForm => ({
   name: "",
@@ -20,17 +25,23 @@ const emptyForm = (defaultCompanyId = ""): ProductForm => ({
   status: "active",
   uses_proposal: false,
   company_id: defaultCompanyId,
-  responsible_user_ids: []
+  responsible_user_ids: [],
+  lead_gen_segment_slug: "",
+  lead_gen_flow_id: ""
 });
 
 export function ProductsAdmin({
   users,
   companies,
-  canDelete = false
+  canDelete = false,
+  leadGenSegments = [],
+  leadGenFlows = []
 }: {
   users: User[];
   companies: Company[];
   canDelete?: boolean;
+  leadGenSegments?: SegmentOpt[];
+  leadGenFlows?: FlowOpt[];
 }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +51,6 @@ export function ProductsAdmin({
   const defaultCompanyId = companies.find((c) => c.status === "active")?.id ?? companies[0]?.id;
   const [form, setForm] = useState<ProductForm>(() => emptyForm(defaultCompanyId ? String(defaultCompanyId) : ""));
   const [saving, setSaving] = useState(false);
-
   const ownerUsers = useMemo(
     () => users.filter((u) => u.status === "active" && u.roles.includes("product_owner")),
     [users]
@@ -74,7 +84,9 @@ export function ProductsAdmin({
       status: product.status,
       uses_proposal: product.uses_proposal,
       company_id: String(product.company_id),
-      responsible_user_ids: product.responsible_user_ids.filter((id) => allowedOwnerIds.has(id))
+      responsible_user_ids: product.responsible_user_ids.filter((id) => allowedOwnerIds.has(id)),
+      lead_gen_segment_slug: product.lead_gen_segment_slug ?? "",
+      lead_gen_flow_id: product.lead_gen_flow_id != null ? String(product.lead_gen_flow_id) : ""
     });
     setError(null);
     setModalOpen(true);
@@ -97,7 +109,9 @@ export function ProductsAdmin({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...form,
-        company_id: Number(form.company_id)
+        company_id: Number(form.company_id),
+        lead_gen_segment_slug: form.lead_gen_segment_slug.trim() || null,
+        lead_gen_flow_id: form.lead_gen_flow_id ? Number(form.lead_gen_flow_id) : null
       })
     });
     const data = (await res.json()) as { error?: string };
@@ -140,6 +154,7 @@ export function ProductsAdmin({
                 <th>Empresa</th>
                 <th>Situação</th>
                 <th>Proposta</th>
+                <th>Motor de leads</th>
                 <th style={{ width: canDelete ? 180 : 100 }} />
               </tr>
             </thead>
@@ -150,6 +165,11 @@ export function ProductsAdmin({
                   <td>{p.company_name ?? "—"}</td>
                   <td>{p.status === "active" ? "Ativo" : "Inativo"}</td>
                   <td>{p.uses_proposal ? "Sim" : "Não"}</td>
+                  <td className="muted" style={{ fontSize: "0.85rem" }}>
+                    {p.lead_gen_segment_label || p.lead_gen_flow_name
+                      ? [p.lead_gen_segment_label, p.lead_gen_flow_name].filter(Boolean).join(" · ")
+                      : "—"}
+                  </td>
                   <td>
                     <CadastroRowActions
                       canDelete={canDelete}
@@ -215,6 +235,48 @@ export function ProductsAdmin({
               placeholder="Opcional"
             />
           </div>
+
+          <div className="product-form-grid product-form-grid--lead-gen">
+            <div className="field">
+              <label className="label" htmlFor="product-lead-segment">
+                Segmento ANP (Novos leads)
+              </label>
+              <select
+                id="product-lead-segment"
+                className="select"
+                value={form.lead_gen_segment_slug}
+                onChange={(e) => setForm((f) => ({ ...f, lead_gen_segment_slug: e.target.value }))}
+              >
+                <option value="">— Não definido —</option>
+                {leadGenSegments.map((s) => (
+                  <option key={s.slug} value={s.slug}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="product-lead-flow">
+                Fluxo de geração
+              </label>
+              <select
+                id="product-lead-flow"
+                className="select"
+                value={form.lead_gen_flow_id}
+                onChange={(e) => setForm((f) => ({ ...f, lead_gen_flow_id: e.target.value }))}
+              >
+                <option value="">— Padrão do segmento —</option>
+                {leadGenFlows.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <p className="muted" style={{ fontSize: "0.82rem", margin: "-0.35rem 0 0.75rem" }}>
+            Usado em Novos leads ao selecionar este produto (segmento ANP e pipeline de enriquecimento).
+          </p>
 
           <div className="product-form-grid">
             <div className="field">

@@ -46,8 +46,16 @@ export const ADMIN_CONFIG_CARDS: AdminConfigCardItem[] = [
   {
     id: "variaveis",
     href: "/admin/variaveis",
-    title: "Motor de leads",
-    description: "Segmentos, simulação e parâmetros do gerador ANP.",
+    title: "Segmentos ANP",
+    description: "Tipos de posto e filtro na base revendedores (Novos leads e Produtos).",
+    logo: <LogoSettings />,
+    iconClassName: "hub-card-icon--settings"
+  },
+  {
+    id: "anp-variaveis",
+    href: "/admin/anp-variaveis" as Route,
+    title: "Variáveis ANP",
+    description: "Simulação, provedor e notas das fontes públicas ANP.",
     logo: <LogoSettings />,
     iconClassName: "hub-card-icon--settings"
   },
@@ -55,7 +63,7 @@ export const ADMIN_CONFIG_CARDS: AdminConfigCardItem[] = [
     id: "fluxos-geracao",
     href: "/admin/fluxos-geracao" as Route,
     title: "Fluxos de geração",
-    description: "Etapas modulares ANP, Google, CNPJ e enriquecimento.",
+    description: "Pipeline de enriquecimento (Google, CNPJ, CRM).",
     logo: <LogoSettings />,
     iconClassName: "hub-card-icon--settings"
   },

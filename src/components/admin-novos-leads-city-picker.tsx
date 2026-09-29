@@ -342,7 +342,11 @@ export function AdminNovosLeadsCityPicker({
         <div className="lead-geo-col">
           {geo && !allCities ? (
             geo.zones.length === 0 ? (
-              <p className="muted">Nenhuma zona comercial cadastrada nesta UF.</p>
+              <p className="muted">
+                {geo.has_motor_mapping
+                  ? "Zonas comerciais indisponíveis (tabelas do CRM ou migration 029). Use cidades IBGE."
+                  : "Nesta UF não há zonas pré-definidas no CRM (só RS/PR). Use cidades IBGE — o IBGE não publica “zona comercial” de postos."}
+              </p>
             ) : (
               <ul className="lead-geo-list">
                 {geo.zones.map((z) => (

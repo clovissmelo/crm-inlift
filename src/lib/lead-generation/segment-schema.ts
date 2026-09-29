@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Slug do segmento (cadastro em Admin → Motor de leads). */
+/** Slug do segmento (cadastro em Admin → Segmentos ANP). */
 export const leadGenSegmentZod = z
   .string()
   .min(1)

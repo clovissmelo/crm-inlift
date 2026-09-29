@@ -10,11 +10,19 @@ export async function listProducts() {
     uses_proposal: boolean;
     company_id: number;
     company_name: string | null;
+    lead_gen_segment_slug: string | null;
+    lead_gen_flow_id: number | null;
+    lead_gen_segment_label: string | null;
+    lead_gen_flow_name: string | null;
   }>(
     `
-      SELECT p.*, co.name AS company_name
+      SELECT p.*, co.name AS company_name,
+        s.label AS lead_gen_segment_label,
+        f.name AS lead_gen_flow_name
       FROM products p
       LEFT JOIN companies co ON co.id = p.company_id
+      LEFT JOIN lead_generation_segments s ON s.slug = p.lead_gen_segment_slug
+      LEFT JOIN lead_generation_flows f ON f.id = p.lead_gen_flow_id
       ORDER BY p.name
     `
   );
@@ -49,13 +57,18 @@ export async function saveProduct(input: {
   uses_proposal: boolean;
   company_id: number;
   responsible_user_ids: number[];
+  lead_gen_segment_slug?: string | null;
+  lead_gen_flow_id?: number | null;
 }) {
+  const segmentSlug = input.lead_gen_segment_slug?.trim() || null;
+  const flowId = input.lead_gen_flow_id ?? null;
   let productId = input.id;
   if (productId) {
     await run(
       `
         UPDATE products SET name = @name, description = @description, status = @status,
-          uses_proposal = @usesProposal, company_id = @companyId, updated_at = @updatedAt
+          uses_proposal = @usesProposal, company_id = @companyId,
+          lead_gen_segment_slug = @segmentSlug, lead_gen_flow_id = @flowId, updated_at = @updatedAt
         WHERE id = @id
       `,
       {
@@ -65,14 +78,19 @@ export async function saveProduct(input: {
         status: input.status,
         usesProposal: input.uses_proposal,
         companyId: input.company_id,
+        segmentSlug,
+        flowId,
         updatedAt: nowIso()
       }
     );
   } else {
     const result = await run(
       `
-        INSERT INTO products (name, description, status, uses_proposal, company_id, created_at, updated_at)
-        VALUES (@name, @description, @status, @usesProposal, @companyId, @createdAt, @updatedAt)
+        INSERT INTO products (
+          name, description, status, uses_proposal, company_id,
+          lead_gen_segment_slug, lead_gen_flow_id, created_at, updated_at
+        )
+        VALUES (@name, @description, @status, @usesProposal, @companyId, @segmentSlug, @flowId, @createdAt, @updatedAt)
       `,
       {
         name: input.name,
@@ -80,6 +98,8 @@ export async function saveProduct(input: {
         status: input.status,
         usesProposal: input.uses_proposal,
         companyId: input.company_id,
+        segmentSlug,
+        flowId,
         createdAt: nowIso(),
         updatedAt: nowIso()
       }

@@ -68,6 +68,8 @@ function isAdminHubPath(pathname: string) {
   return (
     pathname.startsWith("/admin/integracoes") ||
     pathname.startsWith("/admin/variaveis") ||
+    pathname.startsWith("/admin/anp-variaveis") ||
+    pathname.startsWith("/admin/fluxos-geracao") ||
     pathname.startsWith("/admin/importacao")
   );
 }

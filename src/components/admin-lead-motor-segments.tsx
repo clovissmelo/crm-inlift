@@ -11,8 +11,6 @@ type SegmentRow = {
   default_flow_id: number | null;
 };
 
-type FlowOption = { id: number; name: string };
-
 type FilterKindOption = { value: string; label: string };
 
 export function AdminLeadMotorSegments() {
@@ -22,15 +20,10 @@ export function AdminLeadMotorSegments() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [flowOptions, setFlowOptions] = useState<FlowOption[]>([]);
-
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [segRes, flowRes] = await Promise.all([
-      fetch("/api/admin/lead-generation/segments"),
-      fetch("/api/admin/lead-generation/flows")
-    ]);
+    const segRes = await fetch("/api/admin/lead-generation/segments");
     const data = (await segRes.json()) as {
       segments?: SegmentRow[];
       filter_kinds?: FilterKindOption[];
@@ -43,10 +36,6 @@ export function AdminLeadMotorSegments() {
     }
     setRows(data.segments ?? []);
     setFilterKinds(data.filter_kinds ?? []);
-    if (flowRes.ok) {
-      const f = (await flowRes.json()) as { flows?: Array<{ id: number; name: string }> };
-      setFlowOptions((f.flows ?? []).map((x) => ({ id: x.id, name: x.name })));
-    }
   }, []);
 
   useEffect(() => {
@@ -93,9 +82,10 @@ export function AdminLeadMotorSegments() {
 
   return (
     <div className="panel" style={{ marginBottom: "1rem" }}>
-      <h2 style={{ marginTop: 0, fontSize: "1rem" }}>Segmentos (Novos leads)</h2>
+      <h2 style={{ marginTop: 0, fontSize: "1rem" }}>Segmentos ANP (postos)</h2>
       <p className="muted" style={{ fontSize: "0.88rem" }}>
-        Rótulos exibidos em Novos leads. O <strong>filtro ANP</strong> define quais postos entram em cada segmento.
+        Mesma lista em <strong>Novos leads</strong> e em <strong>Produtos → Segmento</strong>. O filtro ANP aplica-se à base de{" "}
+        <strong>revendedores</strong>; distribuidoras e fluxo tradicional usam outras fontes conforme o fluxo do produto.
       </p>
 
       {loading ? <p className="muted">Carregando segmentos…</p> : null}
@@ -112,7 +102,6 @@ export function AdminLeadMotorSegments() {
                   <th>Nome na tela</th>
                   <th>Filtro ANP</th>
                   <th>Ordem</th>
-                  <th>Fluxo padrão</th>
                   <th>Ativo</th>
                 </tr>
               </thead>
@@ -155,24 +144,6 @@ export function AdminLeadMotorSegments() {
                         value={row.sort_order}
                         onChange={(e) => updateRow(i, { sort_order: Number(e.target.value) })}
                       />
-                    </td>
-                    <td>
-                      <select
-                        className="input input-sm"
-                        value={row.default_flow_id ?? ""}
-                        onChange={(e) =>
-                          updateRow(i, {
-                            default_flow_id: e.target.value === "" ? null : Number(e.target.value)
-                          })
-                        }
-                      >
-                        <option value="">(padrão do sistema)</option>
-                        {flowOptions.map((f) => (
-                          <option key={f.id} value={f.id}>
-                            {f.name}
-                          </option>
-                        ))}
-                      </select>
                     </td>
                     <td>
                       <input

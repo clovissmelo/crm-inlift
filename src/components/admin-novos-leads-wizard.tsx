@@ -7,6 +7,7 @@ import {
   type CitySelectionPayload,
   type UfOption
 } from "@/components/admin-novos-leads-city-picker";
+import { LeadGenFlowField } from "@/components/lead-gen-flow-field";
 import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -51,12 +52,6 @@ const PHASE_LABEL: Record<string, string> = {
   processing: "Enriquecimento",
   finalizing: "Finalizando",
   done: "Concluído"
-};
-
-const INITIAL_SOURCE_LABEL: Record<string, string> = {
-  anp_retail: "ANP revendedores",
-  anp_distributor: "ANP distribuidoras",
-  google_places_city: "Google Places (cidade)"
 };
 
 const RUN_STATUS_LABEL: Record<string, string> = {
@@ -143,7 +138,9 @@ export function AdminNovosLeadsWizard() {
   const [resultItems, setResultItems] = useState<Array<{ id: number; cnpj: string; client_id: number | null; status: string; error_message: string | null }>>([]);
 
   const [bdrs, setBdrs] = useState<Array<{ id: number; name: string }>>([]);
-  const [products, setProducts] = useState<Array<{ id: number; name: string }>>([]);
+  const [products, setProducts] = useState<
+    Array<{ id: number; name: string; lead_gen_segment_slug: string | null; lead_gen_flow_id: number | null }>
+  >([]);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -151,7 +148,7 @@ export function AdminNovosLeadsWizard() {
   const [flowPreview, setFlowPreview] = useState<{
     name: string;
     initial_source: string;
-    steps: Array<{ step_key: string; label: string; enabled: boolean; on_fail: string }>;
+    steps: Array<{ step_key: string; label: string; enabled: boolean; on_fail: string; sort_order: number }>;
   } | null>(null);
 
   const maxLeadsRequested = quota?.per_run_limit ?? 100;
@@ -179,6 +176,11 @@ export function AdminNovosLeadsWizard() {
 
   const productNameById = useMemo(() => new Map(products.map((p) => [p.id, p.name])), [products]);
   const bdrNameById = useMemo(() => new Map(bdrs.map((b) => [b.id, b.name])), [bdrs]);
+  const selectedProduct = useMemo(
+    () => (productId !== "" ? products.find((p) => p.id === productId) : undefined),
+    [productId, products]
+  );
+  const segmentLockedByProduct = Boolean(selectedProduct?.lead_gen_segment_slug);
 
   const loadMeta = useCallback(async () => {
     const [uRes, pRes, rRes, geoRes, quotaRes, segRes] = await Promise.all([
@@ -194,8 +196,17 @@ export function AdminNovosLeadsWizard() {
       setBdrs(u.users.filter((x) => x.roles.includes("bdr")).map((x) => ({ id: x.id, name: x.name })));
     }
     if (pRes.ok) {
-      const p = (await pRes.json()) as { products: Array<{ id: number; name: string }> };
-      setProducts(p.products ?? []);
+      const p = (await pRes.json()) as {
+        products: Array<{ id: number; name: string; lead_gen_segment_slug?: string | null; lead_gen_flow_id?: number | null }>;
+      };
+      setProducts(
+        (p.products ?? []).map((row) => ({
+          id: row.id,
+          name: row.name,
+          lead_gen_segment_slug: row.lead_gen_segment_slug ?? null,
+          lead_gen_flow_id: row.lead_gen_flow_id ?? null
+        }))
+      );
     }
     if (rRes.ok) {
       const r = (await rRes.json()) as { runs: RunRow[] };
@@ -225,8 +236,18 @@ export function AdminNovosLeadsWizard() {
   }, [loadMeta]);
 
   useEffect(() => {
+    if (selectedProduct?.lead_gen_segment_slug) {
+      setSegment(selectedProduct.lead_gen_segment_slug);
+    }
+  }, [productId, selectedProduct?.lead_gen_segment_slug]);
+
+  useEffect(() => {
     void (async () => {
-      const res = await fetch(`/api/admin/lead-generation/flows?segment=${encodeURIComponent(segment)}`);
+      const flowQuery =
+        selectedProduct?.lead_gen_flow_id != null
+          ? `flow_id=${selectedProduct.lead_gen_flow_id}`
+          : `segment=${encodeURIComponent(segment)}`;
+      const res = await fetch(`/api/admin/lead-generation/flows?${flowQuery}`);
       if (!res.ok) {
         setFlowPreview(null);
         return;
@@ -249,7 +270,7 @@ export function AdminNovosLeadsWizard() {
         steps: [...snap.steps].sort((a, b) => a.sort_order - b.sort_order).filter((s) => s.enabled)
       });
     })();
-  }, [segment]);
+  }, [segment, selectedProduct?.lead_gen_flow_id]);
 
   const applyRunRow = useCallback((run: RunDetail) => {
     setActiveRun(run);
@@ -458,13 +479,25 @@ export function AdminNovosLeadsWizard() {
             <label className="label" htmlFor="lead-segment">
               Segmento
             </label>
-            <select id="lead-segment" className="input" value={segment} onChange={(e) => setSegment(e.target.value)}>
+            <select
+              id="lead-segment"
+              className="input"
+              value={segment}
+              disabled={segmentLockedByProduct}
+              title={segmentLockedByProduct ? "Definido no cadastro do produto" : undefined}
+              onChange={(e) => setSegment(e.target.value)}
+            >
               {segmentOptions.map((o) => (
                 <option key={o.slug} value={o.slug}>
                   {o.label}
                 </option>
               ))}
             </select>
+            {segmentLockedByProduct ? (
+              <span className="muted" style={{ fontSize: "0.78rem" }}>
+                Definido pelo produto
+              </span>
+            ) : null}
           </div>
           <div className="field">
             <label className="label">Produto (opcional)</label>
@@ -490,6 +523,12 @@ export function AdminNovosLeadsWizard() {
           </div>
         </div>
 
+        {productId !== "" && flowPreview ? (
+          <div className="lead-gen-form-row lead-gen-form-row--flow">
+            <LeadGenFlowField preview={flowPreview} />
+          </div>
+        ) : null}
+
         <div className="lead-gen-form-section">
           <span className="label">Região</span>
           <AdminNovosLeadsCityPicker
@@ -503,25 +542,6 @@ export function AdminNovosLeadsWizard() {
             segment={segment}
           />
         </div>
-
-        {flowPreview ? (
-          <div className="panel lead-gen-flow-preview" style={{ marginBottom: "0.75rem" }}>
-            <p style={{ margin: "0 0 0.35rem", fontSize: "0.92rem" }}>
-              <strong>Fluxo:</strong> {flowPreview.name}
-              <span className="muted" style={{ marginLeft: "0.5rem" }}>
-                Fonte: {INITIAL_SOURCE_LABEL[flowPreview.initial_source] ?? flowPreview.initial_source}
-              </span>
-            </p>
-            <ol className="muted" style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.85rem" }}>
-              {flowPreview.steps.map((s) => (
-                <li key={s.step_key}>
-                  {s.label}
-                  {s.on_fail === "stop" ? " · falha interrompe o item" : ""}
-                </li>
-              ))}
-            </ol>
-          </div>
-        ) : null}
 
         <div className="lead-gen-form-row lead-gen-form-row--start">
           <div className="field lead-gen-qty-field">

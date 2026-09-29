@@ -8,11 +8,11 @@ export default function AdminFluxosGeracaoPage() {
       <p className="muted" style={{ marginTop: 0 }}>
         <Link href="/admin">← Admin</Link>
         {" · "}
-        <Link href="/admin/variaveis">Motor de leads</Link>
+        <Link href="/admin/variaveis">Segmentos ANP</Link>
       </p>
       <PageIntro>
-        Configure fluxos de geração: etapas ordenadas, política de falha e limites de consulta. Associe um fluxo padrão
-        em Segmentos (Motor de leads).
+        Configure fluxos de enriquecimento: etapas ordenadas, política de falha e limites de consulta. Associe fluxo e
+        segmento em cada <Link href="/produtos">Produto</Link>; o segmento ANP vem de Segmentos ANP.
       </PageIntro>
       <AdminLeadGenerationFlows />
     </div>

@@ -39,6 +39,10 @@ export type Product = {
   company_id: number;
   company_name: string | null;
   responsible_user_ids: number[];
+  lead_gen_segment_slug: string | null;
+  lead_gen_flow_id: number | null;
+  lead_gen_segment_label?: string | null;
+  lead_gen_flow_name?: string | null;
 };
 
 export type ClientListItem = {

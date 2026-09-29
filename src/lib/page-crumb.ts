@@ -2,7 +2,9 @@ const ADMIN_SEGMENTS: Record<string, string> = {
   usuarios: "usuários",
   importacao: "importação de planilhas",
   "novos-leads": "novos leads",
-  variaveis: "variáveis para as APIs",
+  variaveis: "segmentos ANP",
+  "anp-variaveis": "variáveis ANP",
+  "fluxos-geracao": "fluxos de geração",
   integracoes: "integrações",
   "etapas-funil": "etapas do funil comercial"
 };
