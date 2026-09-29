@@ -1,4 +1,5 @@
 import { all, get, run, nowIso } from "@/lib/db";
+import { normalizeSegmentFilter } from "@/lib/lead-motor/lead-gen-segments";
 import { emptyCounts, type LeadGenCounts, type LeadGenFilters, type LeadGenerationRunRow } from "@/lib/lead-generation/types";
 
 function parseCounts(raw: unknown): LeadGenCounts {
@@ -8,12 +9,13 @@ function parseCounts(raw: unknown): LeadGenCounts {
 }
 
 function parseFilters(raw: unknown): LeadGenFilters {
-  const d: LeadGenFilters = { cities: [], all_cities_in_uf: false, segment: "all" };
+  const d: LeadGenFilters = { cities: [], regions: [], all_cities_in_uf: false, segment: "all" };
   if (!raw || typeof raw !== "object") return d;
   const o = raw as Record<string, unknown>;
   if (Array.isArray(o.cities)) d.cities = o.cities.map(String);
+  if (Array.isArray(o.regions)) d.regions = o.regions.map(String);
   if (typeof o.all_cities_in_uf === "boolean") d.all_cities_in_uf = o.all_cities_in_uf;
-  if (o.segment === "white_flag_only" || o.segment === "all") d.segment = o.segment;
+  if (typeof o.segment === "string") d.segment = normalizeSegmentFilter(o.segment);
   return d;
 }
 

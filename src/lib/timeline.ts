@@ -9,6 +9,7 @@ export type TimelineItem = {
   detail: string | null;
   occurred_at: string;
   user_name: string | null;
+  meet_link?: string | null;
 };
 
 export async function getClientTimeline(clientId: number): Promise<TimelineItem[]> {
@@ -273,10 +274,11 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     title: string;
     starts_at: string;
     status: string;
+    meet_link: string | null;
     user_name: string | null;
   }>(
     `
-      SELECT m.id, m.title, m.starts_at, m.status, u.name AS user_name
+      SELECT m.id, m.title, m.starts_at, m.status, m.meet_link, u.name AS user_name
       FROM meetings m
       LEFT JOIN users u ON u.id = m.created_by_user_id
       WHERE m.client_id = @clientId
@@ -292,7 +294,8 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       title: `Reunião: ${m.title} (${MEETING_STATUS_LABELS[m.status as MeetingStatus] ?? m.status})`,
       detail: null,
       occurred_at: m.starts_at,
-      user_name: m.user_name
+      user_name: m.user_name,
+      meet_link: m.meet_link
     });
   }
 
@@ -303,9 +306,10 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     created_at: string;
     user_name: string | null;
     title: string;
+    meet_link: string | null;
   }>(
     `
-      SELECT l.id, l.to_status, l.reason, l.created_at, u.name AS user_name, m.title
+      SELECT l.id, l.to_status, l.reason, l.created_at, u.name AS user_name, m.title, m.meet_link
       FROM meeting_status_logs l
       JOIN meetings m ON m.id = l.meeting_id
       LEFT JOIN users u ON u.id = l.user_id
@@ -322,7 +326,8 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       title: `Reunião "${l.title}": ${l.to_status}`,
       detail: l.reason,
       occurred_at: l.created_at,
-      user_name: l.user_name
+      user_name: l.user_name,
+      meet_link: l.meet_link
     });
   }
 

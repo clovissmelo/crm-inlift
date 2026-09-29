@@ -2,6 +2,8 @@ import type { LeadGenSegmentFilter } from "@/lib/lead-motor/motor-config";
 
 export type LeadGenFilters = {
   cities: string[];
+  /** IDs de região (anp-regions) selecionados na UI */
+  regions?: string[];
   all_cities_in_uf: boolean;
   segment: LeadGenSegmentFilter;
 };

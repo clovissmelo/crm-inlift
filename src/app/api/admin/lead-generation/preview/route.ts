@@ -2,15 +2,17 @@ import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { previewLeadSelection } from "@/lib/lead-generation/run-processor";
 import type { LeadGenFilters } from "@/lib/lead-generation/types";
-import { supportedUfs } from "@/lib/lead-generation/city-resolve";
+import { normalizeLeadGenFilters, ufHasMotorMapping } from "@/lib/lead-generation/city-resolve";
 import { getGooglePlacesApiKey } from "@/lib/google-places-settings";
+import { leadGenSegmentZod } from "@/lib/lead-generation/segment-schema";
 import { z } from "zod";
 
 const bodySchema = z.object({
   uf: z.string().length(2),
   cities: z.array(z.string()).default([]),
+  regions: z.array(z.string()).default([]),
   all_cities_in_uf: z.boolean().default(false),
-  segment: z.enum(["all", "white_flag_only"]).default("all"),
+  segment: leadGenSegmentZod.default("all"),
   max_stations: z.number().int().min(1).max(500).default(50),
   preview_max_cities: z.number().int().min(1).max(60).optional()
 });
@@ -26,22 +28,23 @@ export async function POST(request: Request) {
   }
 
   const uf = parsed.data.uf.toUpperCase();
-  if (!supportedUfs().includes(uf)) {
+  if (!ufHasMotorMapping(uf)) {
     return Response.json(
-      { error: `UF ${uf} ainda não mapeada. Disponíveis: ${supportedUfs().join(", ")}` },
+      { error: `UF ${uf} ainda não tem cidades mapeadas no motor ANP. Disponíveis: RS e PR.` },
       { status: 400 }
     );
   }
 
-  if (!parsed.data.all_cities_in_uf && parsed.data.cities.length === 0) {
-    return Response.json({ error: "Informe ao menos uma cidade ou marque todas da UF." }, { status: 400 });
-  }
-
-  const filters: LeadGenFilters = {
+  const filters: LeadGenFilters = normalizeLeadGenFilters(uf, {
     cities: parsed.data.cities,
+    regions: parsed.data.regions,
     all_cities_in_uf: parsed.data.all_cities_in_uf,
     segment: parsed.data.segment
-  };
+  });
+
+  if (!filters.all_cities_in_uf && filters.cities.length === 0) {
+    return Response.json({ error: "Selecione ao menos uma cidade ou região, ou marque todas da UF." }, { status: 400 });
+  }
 
   const preview = await previewLeadSelection({
     uf,

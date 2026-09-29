@@ -16,4 +16,4 @@ export const REQUEST_TIMEOUT_MS = 25000;
 
 export const ITEMS_PER_CRON_TICK = 3;
 
-export type LeadGenSegmentFilter = "all" | "white_flag_only";
+export type { LeadGenSegmentFilter } from "@/lib/lead-motor/lead-gen-segments";

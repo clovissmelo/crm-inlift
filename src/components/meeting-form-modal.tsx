@@ -213,6 +213,17 @@ export function MeetingFormModal({
     [externals]
   );
 
+  const internalIds = useMemo(() => new Set(internal.map((p) => p.id)), [internal]);
+
+  const usersAvailableToAdd = useMemo(
+    () => allUsers.filter((u) => !internalIds.has(u.id)),
+    [allUsers, internalIds]
+  );
+
+  useEffect(() => {
+    if (extraUserId && internalIds.has(Number(extraUserId))) setExtraUserId("");
+  }, [extraUserId, internalIds]);
+
   function removeInternal(id: number) {
     setInternal((list) => list.filter((p) => p.id !== id));
   }
@@ -463,15 +474,22 @@ export function MeetingFormModal({
             ))}
           </ul>
           <div className="filters-row">
-            <select className="select" value={extraUserId} onChange={(e) => setExtraUserId(e.target.value)}>
-              <option value="">Adicionar usuário…</option>
-              {allUsers.map((u) => (
+            <select
+              className="select"
+              value={extraUserId}
+              disabled={usersAvailableToAdd.length === 0}
+              onChange={(e) => setExtraUserId(e.target.value)}
+            >
+              <option value="">
+                {usersAvailableToAdd.length === 0 ? "Todos já incluídos" : "Adicionar usuário…"}
+              </option>
+              {usersAvailableToAdd.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name} ({u.email})
                 </option>
               ))}
             </select>
-            <button type="button" className="btn" onClick={addInternal}>
+            <button type="button" className="btn" onClick={addInternal} disabled={!extraUserId}>
               Incluir
             </button>
           </div>

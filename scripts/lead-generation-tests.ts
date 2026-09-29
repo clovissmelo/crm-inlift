@@ -27,7 +27,8 @@ function testWhiteFlagFilter() {
       distribuidora: "IPIRANGA",
       produtos_anp: "",
       latitude: "",
-      longitude: ""
+      longitude: "",
+      anp_segment: "retail"
     },
     {
       cnpj: "00000000000272",
@@ -47,10 +48,11 @@ function testWhiteFlagFilter() {
       distribuidora: "BANDEIRA BRANCA",
       produtos_anp: "",
       latitude: "",
-      longitude: ""
+      longitude: "",
+      anp_segment: "retail"
     }
   ];
-  const out = filterStations(stations, { segment: "white_flag_only", limit: 10 });
+  const out = filterStations(stations, { segment: "white_flag", limit: 10 });
   assert.equal(out.length, 1);
   assert.equal(out[0]!.bandeira_branca, true);
 }
@@ -80,7 +82,8 @@ function testGoogleAmbiguous() {
     distribuidora: "",
     produtos_anp: "",
     latitude: "",
-    longitude: ""
+    longitude: "",
+    anp_segment: "retail"
   };
   const r = validateGoogleMatch(station, "Restaurante unrelated", "São Paulo, SP, Brasil");
   assert.ok(r === "rejected" || r === "ambiguous");

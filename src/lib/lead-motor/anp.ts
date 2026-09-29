@@ -4,8 +4,11 @@ import {
   ANP_CITY_SLEEP_MS,
   REQUEST_TIMEOUT_MS,
   WHITE_FLAG_DISTRIBUTORS,
-  type LeadGenSegmentFilter
 } from "@/lib/lead-motor/motor-config";
+import {
+  type LeadGenSegmentFilter,
+  stationMatchesSegment
+} from "@/lib/lead-motor/lead-gen-segments";
 import { isValidCnpjDigits, parseAddressNumber, safeStr } from "@/lib/lead-motor/utils";
 import { normalizeCnpj } from "@/lib/format";
 
@@ -28,6 +31,8 @@ export type AnpStation = {
   produtos_anp: string;
   latitude: string;
   longitude: string;
+  /** Classificação heurística a partir dos dados ANP (revendedores combustível). */
+  anp_segment: "retail" | "distributor" | "trr";
 };
 
 export async function fetchAnpMunicipalityPage(
@@ -94,9 +99,18 @@ export function mapAnpRecord(raw: Record<string, unknown>, officialCity: string,
       .map((p) => `${safeStr(p.produto)} (${safeStr(p.qtdeBicos)} bicos)`)
       .join("; ");
   }
+  const razao = safeStr(raw.razaoSocial);
+  const razaoUp = razao.toUpperCase();
+  let anp_segment: AnpStation["anp_segment"] = "retail";
+  if (/\bTRR\b/.test(razaoUp) || /TRANSPORTADOR\s+REVENDEDOR\s+RETALHISTA/i.test(razao)) {
+    anp_segment = "trr";
+  } else if (/\bDISTRIBUIDOR(A)?\b/.test(razaoUp)) {
+    anp_segment = "distributor";
+  }
+
   return {
     cnpj,
-    razao_social: safeStr(raw.razaoSocial),
+    razao_social: razao,
     nome_fantasia: "",
     bandeira: distribuidora || "SEM BANDEIRA",
     bandeira_branca: WHITE_FLAG_DISTRIBUTORS.has(distribuidora),
@@ -112,7 +126,8 @@ export function mapAnpRecord(raw: Record<string, unknown>, officialCity: string,
     distribuidora,
     produtos_anp: produtosTxt,
     latitude: safeStr(raw.latitude),
-    longitude: safeStr(raw.longitude)
+    longitude: safeStr(raw.longitude),
+    anp_segment
   };
 }
 
@@ -126,7 +141,7 @@ export function filterStations(
 ): AnpStation[] {
   let list = [...stations];
   if (opts.city) list = list.filter((s) => s.cidade === opts.city);
-  if (opts.segment === "white_flag_only") list = list.filter((s) => s.bandeira_branca);
+  list = list.filter((s) => stationMatchesSegment(s, opts.segment));
   list.sort((a, b) => a.cidade.localeCompare(b.cidade, "pt-BR") || a.razao_social.localeCompare(b.razao_social, "pt-BR"));
   if (opts.limit > 0) list = list.slice(0, opts.limit);
   return list;

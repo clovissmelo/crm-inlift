@@ -1,23 +1,23 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { createLeadGenerationRun, listLeadGenerationRuns } from "@/lib/lead-generation/runs-repo";
-import { supportedUfs } from "@/lib/lead-generation/city-resolve";
-import { isLeadGenSimulationDefault, getGooglePlacesLimit } from "@/lib/google-places-settings";
+import { normalizeLeadGenFilters, ufHasMotorMapping } from "@/lib/lead-generation/city-resolve";
+import { getGooglePlacesApiKey, getGooglePlacesLimit } from "@/lib/google-places-settings";
+import { getDailyGoogleUsage } from "@/lib/lead-generation/quota";
 import type { LeadGenFilters } from "@/lib/lead-generation/types";
+import { leadGenSegmentZod } from "@/lib/lead-generation/segment-schema";
 import { z } from "zod";
 
 const createSchema = z.object({
   uf: z.string().length(2),
   cities: z.array(z.string()).default([]),
+  regions: z.array(z.string()).default([]),
   all_cities_in_uf: z.boolean().default(false),
-  segment: z.enum(["all", "white_flag_only"]).default("all"),
+  segment: leadGenSegmentZod.default("all"),
   product_id: z.number().int().positive().nullable().optional(),
   company_id: z.number().int().positive().nullable().optional(),
   bdr_user_id: z.number().int().positive().nullable().optional(),
-  max_stations: z.number().int().min(1).max(500).default(50),
-  max_google_calls: z.number().int().min(0).max(500).optional(),
-  simulation: z.boolean().optional(),
-  acknowledge_charges: z.boolean().optional()
+  max_stations: z.number().int().min(1).max(500).optional()
 });
 
 export async function GET() {
@@ -38,30 +38,37 @@ export async function POST(request: Request) {
     return Response.json({ error: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   }
 
-  const simulationDefault = await isLeadGenSimulationDefault();
-  const simulation = parsed.data.simulation ?? simulationDefault;
-  if (!simulation && !parsed.data.acknowledge_charges) {
-    return Response.json(
-      { error: "Confirme que entende possíveis cobranças de API (Google Places) ou use modo simulação." },
-      { status: 400 }
-    );
-  }
-
   const uf = parsed.data.uf.toUpperCase();
-  if (!supportedUfs().includes(uf)) {
-    return Response.json({ error: `UF ${uf} não disponível no motor.` }, { status: 400 });
-  }
-  if (!parsed.data.all_cities_in_uf && parsed.data.cities.length === 0) {
-    return Response.json({ error: "Selecione cidades ou todas da UF." }, { status: 400 });
+  if (!ufHasMotorMapping(uf)) {
+    return Response.json({ error: `UF ${uf} ainda não tem cidades mapeadas no motor ANP.` }, { status: 400 });
   }
 
-  const perRunDefault = await getGooglePlacesLimit("google_places_per_run_limit");
-  const maxGoogle =
-    parsed.data.max_google_calls ??
-    (simulation ? 0 : Math.min(perRunDefault, parsed.data.max_stations * 2));
+  const filtersNormalized = normalizeLeadGenFilters(uf, {
+    cities: parsed.data.cities,
+    regions: parsed.data.regions,
+    all_cities_in_uf: parsed.data.all_cities_in_uf,
+    segment: parsed.data.segment
+  });
+  if (!filtersNormalized.all_cities_in_uf && filtersNormalized.cities.length === 0) {
+    return Response.json({ error: "Selecione cidades, regiões ou todas da UF." }, { status: 400 });
+  }
+
+  const maxStations = parsed.data.max_stations ?? 500;
+  const hasKey = Boolean(await getGooglePlacesApiKey());
+  const [perRunLimit, dailyLimit, usedToday] = await Promise.all([
+    getGooglePlacesLimit("google_places_per_run_limit"),
+    getGooglePlacesLimit("google_places_daily_limit"),
+    getDailyGoogleUsage()
+  ]);
+  const availableToday = Math.max(0, dailyLimit - usedToday);
+  const simulation = !hasKey;
+  const maxGoogle = simulation
+    ? 0
+    : Math.min(perRunLimit, availableToday, Math.max(1, maxStations * 2));
 
   const filters: LeadGenFilters = {
     cities: parsed.data.cities,
+    regions: parsed.data.regions,
     all_cities_in_uf: parsed.data.all_cities_in_uf,
     segment: parsed.data.segment
   };
@@ -73,7 +80,7 @@ export async function POST(request: Request) {
     product_id: parsed.data.product_id ?? null,
     company_id: parsed.data.company_id ?? null,
     bdr_user_id: parsed.data.bdr_user_id ?? null,
-    max_stations: parsed.data.max_stations,
+    max_stations: maxStations,
     max_google_calls: maxGoogle,
     simulation
   });

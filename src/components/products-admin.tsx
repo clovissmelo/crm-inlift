@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
+import { ProductOwnerPicker } from "@/components/product-owner-picker";
 import type { Company, Product, User } from "@/lib/types";
 
 type ProductForm = {
@@ -40,6 +41,11 @@ export function ProductsAdmin({
   const [form, setForm] = useState<ProductForm>(() => emptyForm(defaultCompanyId ? String(defaultCompanyId) : ""));
   const [saving, setSaving] = useState(false);
 
+  const ownerUsers = useMemo(
+    () => users.filter((u) => u.status === "active" && u.roles.includes("product_owner")),
+    [users]
+  );
+
   async function load() {
     setLoading(true);
     const res = await fetch("/api/products");
@@ -61,13 +67,14 @@ export function ProductsAdmin({
 
   function openEdit(product: Product) {
     setEditingId(product.id);
+    const allowedOwnerIds = new Set(ownerUsers.map((u) => u.id));
     setForm({
       name: product.name,
       description: product.description ?? "",
       status: product.status,
       uses_proposal: product.uses_proposal,
       company_id: String(product.company_id),
-      responsible_user_ids: [...product.responsible_user_ids]
+      responsible_user_ids: product.responsible_user_ids.filter((id) => allowedOwnerIds.has(id))
     });
     setError(null);
     setModalOpen(true);
@@ -77,15 +84,6 @@ export function ProductsAdmin({
     setModalOpen(false);
     setEditingId(null);
     setForm(emptyForm(defaultCompanyId ? String(defaultCompanyId) : ""));
-  }
-
-  function toggleResponsible(userId: number) {
-    setForm((f) => ({
-      ...f,
-      responsible_user_ids: f.responsible_user_ids.includes(userId)
-        ? f.responsible_user_ids.filter((id) => id !== userId)
-        : [...f.responsible_user_ids, userId]
-    }));
   }
 
   async function saveProduct(e: React.FormEvent) {
@@ -166,53 +164,91 @@ export function ProductsAdmin({
         ) : null}
       </div>
 
-      <CadastroModal open={modalOpen} title={editingId ? "Editar produto" : "Novo produto"} onClose={closeModal}>
-        <form onSubmit={saveProduct}>
+      <CadastroModal open={modalOpen} title={editingId ? "Editar produto" : "Novo produto"} onClose={closeModal} wide>
+        <form className="product-form" onSubmit={saveProduct}>
           {error ? <div className="alert alert-error">{error}</div> : null}
-          <div className="field">
-            <label className="label">Nome</label>
-            <input className="input" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
-          </div>
-          <div className="field">
-            <label className="label">Empresa *</label>
-            <select
-              className="select"
-              value={form.company_id}
-              onChange={(e) => setForm((f) => ({ ...f, company_id: e.target.value }))}
-              required
-            >
-              <option value="">Selecione…</option>
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label className="label">Descrição</label>
-            <textarea className="textarea" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
-          </div>
-          <div className="field">
-            <label className="label">Situação</label>
-            <select className="select" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as "active" | "inactive" }))}>
-              <option value="active">Ativo</option>
-              <option value="inactive">Inativo</option>
-            </select>
-          </div>
-          <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            <input type="checkbox" checked={form.uses_proposal} onChange={(e) => setForm((f) => ({ ...f, uses_proposal: e.target.checked }))} />
-            Utiliza proposta?
-          </label>
-          <div className="field">
-            <span className="label">Responsáveis</span>
-            {users.map((u) => (
-              <label key={u.id} style={{ display: "block" }}>
-                <input type="checkbox" checked={form.responsible_user_ids.includes(u.id)} onChange={() => toggleResponsible(u.id)} /> {u.name} — {u.email}
+
+          <div className="product-form-grid">
+            <div className="field">
+              <label className="label" htmlFor="product-name">
+                Nome
               </label>
-            ))}
+              <input
+                id="product-name"
+                className="input"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="product-company">
+                Empresa
+              </label>
+              <select
+                id="product-company"
+                className="select"
+                value={form.company_id}
+                onChange={(e) => setForm((f) => ({ ...f, company_id: e.target.value }))}
+                required
+              >
+                <option value="">Selecione…</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+
+          <div className="field">
+            <label className="label" htmlFor="product-desc">
+              Descrição
+            </label>
+            <input
+              id="product-desc"
+              className="input"
+              type="text"
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Opcional"
+            />
+          </div>
+
+          <div className="product-form-grid">
+            <div className="field">
+              <label className="label" htmlFor="product-status">
+                Situação
+              </label>
+              <select
+                id="product-status"
+                className="select"
+                value={form.status}
+                onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as "active" | "inactive" }))}
+              >
+                <option value="active">Ativo</option>
+                <option value="inactive">Inativo</option>
+              </select>
+            </div>
+            <label className="product-form-check">
+              <input
+                type="checkbox"
+                checked={form.uses_proposal}
+                onChange={(e) => setForm((f) => ({ ...f, uses_proposal: e.target.checked }))}
+              />
+              <span>Utiliza proposta?</span>
+            </label>
+          </div>
+
+          <ProductOwnerPicker
+            users={users}
+            selectedIds={form.responsible_user_ids}
+            onChange={(responsible_user_ids) => setForm((f) => ({ ...f, responsible_user_ids }))}
+            disabled={saving}
+          />
+
+          <div className="product-form-actions">
             <button type="button" className="btn" onClick={closeModal}>
               Cancelar
             </button>

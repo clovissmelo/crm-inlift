@@ -10,6 +10,7 @@ type Item = {
   detail: string | null;
   occurred_at: string;
   user_name: string | null;
+  meet_link?: string | null;
 };
 
 export function ClientTimeline({ clientId }: { clientId: number }) {
@@ -57,6 +58,13 @@ export function ClientTimeline({ clientId }: { clientId: number }) {
           </div>
           <strong>{item.title}</strong>
           {item.detail ? <div className="muted">{item.detail}</div> : null}
+          {item.meet_link ? (
+            <div style={{ marginTop: "0.25rem" }}>
+              <a href={item.meet_link} target="_blank" rel="noreferrer">
+                Entrar no Google Meet
+              </a>
+            </div>
+          ) : null}
         </li>
       ))}
     </ul>

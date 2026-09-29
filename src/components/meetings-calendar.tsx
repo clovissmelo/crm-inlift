@@ -28,6 +28,7 @@ type Props = {
   items: CalendarMeeting[];
   rangeKind: CalendarRangeKind;
   anchorYmd: string;
+  selectedId?: number | null;
   onSelect: (id: number) => void;
 };
 
@@ -40,10 +41,12 @@ function eventsForDay(items: CalendarMeeting[], ymd: string) {
 function TimeGrid({
   days,
   items,
+  selectedId,
   onSelect
 }: {
   days: string[];
   items: CalendarMeeting[];
+  selectedId?: number | null;
   onSelect: (id: number) => void;
 }) {
   const hours = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
@@ -86,7 +89,11 @@ function TimeGrid({
                 <button
                   key={m.id}
                   type="button"
-                  className={clsx("meetings-cal-event", m.status === "cancelled" && "is-cancelled")}
+                  className={clsx(
+                    "meetings-cal-event",
+                    m.status === "cancelled" && "is-cancelled",
+                    selectedId === m.id && "is-selected"
+                  )}
                   style={{ top, height }}
                   onClick={() => onSelect(m.id)}
                   title={m.title}
@@ -110,7 +117,17 @@ function TimeGrid({
   );
 }
 
-function MonthGrid({ items, anchorYmd, onSelect }: { items: CalendarMeeting[]; anchorYmd: string; onSelect: (id: number) => void }) {
+function MonthGrid({
+  items,
+  anchorYmd,
+  selectedId,
+  onSelect
+}: {
+  items: CalendarMeeting[];
+  anchorYmd: string;
+  selectedId?: number | null;
+  onSelect: (id: number) => void;
+}) {
   const anchorMonth = anchorYmd.slice(0, 7);
   const days = monthGridDays(anchorYmd);
   const weekdays = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
@@ -131,7 +148,12 @@ function MonthGrid({ items, anchorYmd, onSelect }: { items: CalendarMeeting[]; a
             <span className="meetings-cal-month-dom">{Number(ymd.slice(8, 10))}</span>
             <div className="meetings-cal-month-events">
               {dayEvents.slice(0, 4).map((m) => (
-                <button key={m.id} type="button" className="meetings-cal-month-chip" onClick={() => onSelect(m.id)}>
+                <button
+                  key={m.id}
+                  type="button"
+                  className={clsx("meetings-cal-month-chip", selectedId === m.id && "is-selected")}
+                  onClick={() => onSelect(m.id)}
+                >
                   {new Intl.DateTimeFormat("pt-BR", {
                     timeZone: "America/Sao_Paulo",
                     hour: "2-digit",
@@ -149,11 +171,11 @@ function MonthGrid({ items, anchorYmd, onSelect }: { items: CalendarMeeting[]; a
   );
 }
 
-export function MeetingsCalendar({ items, rangeKind, anchorYmd, onSelect }: Props) {
+export function MeetingsCalendar({ items, rangeKind, anchorYmd, selectedId, onSelect }: Props) {
   if (rangeKind === "month") {
     return (
       <div className="meetings-cal-scroll">
-        <MonthGrid items={items} anchorYmd={anchorYmd} onSelect={onSelect} />
+        <MonthGrid items={items} anchorYmd={anchorYmd} selectedId={selectedId} onSelect={onSelect} />
       </div>
     );
   }
@@ -162,7 +184,7 @@ export function MeetingsCalendar({ items, rangeKind, anchorYmd, onSelect }: Prop
 
   return (
     <div className="meetings-cal-scroll">
-      <TimeGrid days={days} items={items} onSelect={onSelect} />
+      <TimeGrid days={days} items={items} selectedId={selectedId} onSelect={onSelect} />
     </div>
   );
 }

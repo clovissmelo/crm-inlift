@@ -2,21 +2,13 @@
 
 import Link from "next/link";
 import { PageIntro } from "@/components/page-intro";
-import { useCallback, useEffect, useMemo, useState } from "react";
-
-const UFS = ["RS", "PR"] as const;
-
-type Preview = {
-  estimated_total: number;
-  unique_cnpjs: number;
-  existing_in_crm: number;
-  new_estimated: number;
-  cities_scanned: number;
-  cities_total: number;
-  preview_complete: boolean;
-  google_enrichment_available: boolean;
-  unavailable_without_google: string[];
-};
+import {
+  AdminNovosLeadsCityPicker,
+  type CitySelectionPayload,
+  type UfOption
+} from "@/components/admin-novos-leads-city-picker";
+import { LEAD_GEN_SEGMENT_OPTIONS, type LeadGenSegmentFilter } from "@/lib/lead-motor/lead-gen-segments";
+import { useCallback, useEffect, useState } from "react";
 
 type RunRow = {
   id: number;
@@ -35,6 +27,14 @@ type RunDetail = RunRow & {
   filters_json?: { cities: string[]; all_cities_in_uf: boolean; segment: string };
 };
 
+type QuotaPanel = {
+  google_configured: boolean;
+  daily_limit: number;
+  used_today: number;
+  available_today: number;
+  per_run_limit: number;
+};
+
 const PHASE_LABEL: Record<string, string> = {
   anp_load: "Carregando ANP",
   processing: "Processando postos",
@@ -43,19 +43,15 @@ const PHASE_LABEL: Record<string, string> = {
 };
 
 export function AdminNovosLeadsWizard() {
-  const [uf, setUf] = useState<(typeof UFS)[number]>("RS");
+  const [ufOptions, setUfOptions] = useState<UfOption[]>([]);
+  const [uf, setUf] = useState("RS");
   const [allCities, setAllCities] = useState(false);
-  const [cityInput, setCityInput] = useState("");
-  const [segment, setSegment] = useState<"all" | "white_flag_only">("all");
-  const [maxStations, setMaxStations] = useState(50);
-  const [maxGoogle, setMaxGoogle] = useState(50);
-  const [simulation, setSimulation] = useState(true);
-  const [ackCharges, setAckCharges] = useState(false);
+  const [citySelection, setCitySelection] = useState<CitySelectionPayload>({ regions: [], cities: [] });
+  const [segment, setSegment] = useState<LeadGenSegmentFilter>("all");
   const [bdrUserId, setBdrUserId] = useState<number | "">("");
   const [productId, setProductId] = useState<number | "">("");
+  const [quota, setQuota] = useState<QuotaPanel | null>(null);
 
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [activeRunId, setActiveRunId] = useState<number | null>(null);
   const [activeRun, setActiveRun] = useState<RunDetail | null>(null);
@@ -67,20 +63,15 @@ export function AdminNovosLeadsWizard() {
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
-  const cities = useMemo(
-    () =>
-      cityInput
-        .split(/[\n,;]+/)
-        .map((s) => s.trim())
-        .filter(Boolean),
-    [cityInput]
-  );
+  const hasGeoSelection = allCities || citySelection.regions.length > 0 || citySelection.cities.length > 0;
 
   const loadMeta = useCallback(async () => {
-    const [uRes, pRes, rRes] = await Promise.all([
+    const [uRes, pRes, rRes, geoRes, quotaRes] = await Promise.all([
       fetch("/api/users"),
       fetch("/api/products"),
-      fetch("/api/admin/lead-generation/runs")
+      fetch("/api/admin/lead-generation/runs"),
+      fetch("/api/admin/lead-generation/geo"),
+      fetch("/api/admin/lead-generation/quota")
     ]);
     if (uRes.ok) {
       const u = (await uRes.json()) as { users: Array<{ id: number; name: string; roles: string[] }> };
@@ -95,6 +86,13 @@ export function AdminNovosLeadsWizard() {
       setRuns(r.runs ?? []);
       const active = r.runs?.find((x) => ["queued", "running", "paused"].includes(x.status));
       if (active) setActiveRunId(active.id);
+    }
+    if (geoRes.ok) {
+      const g = (await geoRes.json()) as { ufs: UfOption[] };
+      setUfOptions(g.ufs ?? []);
+    }
+    if (quotaRes.ok) {
+      setQuota((await quotaRes.json()) as QuotaPanel);
     }
   }, []);
 
@@ -130,33 +128,9 @@ export function AdminNovosLeadsWizard() {
     }
   }, [activeRunId, activeRun?.status, resultTab, fetchRunDetail]);
 
-  async function runPreview() {
-    setPreviewLoading(true);
-    setError(null);
-    setPreview(null);
-    const res = await fetch("/api/admin/lead-generation/preview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        uf,
-        cities,
-        all_cities_in_uf: allCities,
-        segment,
-        max_stations: maxStations
-      })
-    });
-    const data = (await res.json()) as Preview & { error?: string };
-    setPreviewLoading(false);
-    if (!res.ok) {
-      setError(data.error ?? "Falha na prévia");
-      return;
-    }
-    setPreview(data);
-  }
-
   async function startRun() {
-    if (!simulation && !ackCharges) {
-      setError("Confirme cobranças de API ou ative simulação.");
+    if (!allCities && !hasGeoSelection) {
+      setError("Selecione UF, zona e/ou cidades (ou todas da UF).");
       return;
     }
     setStarting(true);
@@ -166,13 +140,10 @@ export function AdminNovosLeadsWizard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         uf,
-        cities,
+        cities: citySelection.cities,
+        regions: citySelection.regions,
         all_cities_in_uf: allCities,
         segment,
-        max_stations: maxStations,
-        max_google_calls: simulation ? 0 : maxGoogle,
-        simulation,
-        acknowledge_charges: ackCharges,
         bdr_user_id: bdrUserId === "" ? null : bdrUserId,
         product_id: productId === "" ? null : productId
       })
@@ -213,59 +184,66 @@ export function AdminNovosLeadsWizard() {
 
       {error ? <div className="alert alert-error">{error}</div> : null}
 
-      <form
-        className="panel"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void runPreview();
-        }}
-      >
-        <h3 className="panel-title">A. Parâmetros</h3>
-        <div className="filters-row">
-          <div className="field">
-            <label className="label">UF</label>
-            <select className="input" value={uf} onChange={(e) => setUf(e.target.value as (typeof UFS)[number])}>
-              {UFS.map((u) => (
-                <option key={u} value={u}>
-                  {u}
-                </option>
-              ))}
-            </select>
+      <div className="panel">
+        <h3 className="panel-title">Parâmetros</h3>
+        {quota ? (
+          <div className="lead-gen-quota-panel">
+            <div className="lead-gen-quota-stat">
+              <strong>{quota.available_today}</strong>
+              <span>Consultas disponíveis hoje</span>
+            </div>
+            <div className="lead-gen-quota-stat">
+              <strong>{quota.used_today}</strong>
+              <span>Usadas hoje</span>
+            </div>
+            <div className="lead-gen-quota-stat">
+              <strong>{quota.daily_limit}</strong>
+              <span>Limite diário (Admin)</span>
+            </div>
+            <div className="lead-gen-quota-stat">
+              <strong>{quota.per_run_limit}</strong>
+              <span>Máx. por execução (Admin)</span>
+            </div>
           </div>
-          <div className="field">
-            <label className="label">Máx. postos</label>
-            <input className="input" type="number" min={1} max={500} value={maxStations} onChange={(e) => setMaxStations(Number(e.target.value))} />
-          </div>
-          <div className="field">
-            <label className="label">Máx. consultas Google</label>
-            <input
-              className="input"
-              type="number"
-              min={0}
-              max={500}
-              disabled={simulation}
-              value={maxGoogle}
-              onChange={(e) => setMaxGoogle(Number(e.target.value))}
-            />
-          </div>
-        </div>
-        <label style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <input type="checkbox" checked={allCities} onChange={(e) => setAllCities(e.target.checked)} />
-          <span>Todas as cidades mapeadas da UF</span>
-        </label>
-        {!allCities ? (
-          <div className="field">
-            <label className="label">Cidades (nome oficial, vírgula ou linha)</label>
-            <textarea className="textarea" value={cityInput} onChange={(e) => setCityInput(e.target.value)} placeholder="Porto Alegre, Canoas" />
-          </div>
+        ) : (
+          <p className="muted">Carregando limites…</p>
+        )}
+        {!quota?.google_configured ? (
+          <p className="muted" style={{ marginTop: 0 }}>
+            Chave Google Places não configurada: a execução usará só ANP e cadastro, sem enriquecimento Google.
+          </p>
         ) : null}
-        <div className="field">
-          <label className="label">Segmento (ANP)</label>
-          <select className="input" value={segment} onChange={(e) => setSegment(e.target.value as "all" | "white_flag_only")}>
-            <option value="all">Todos os postos</option>
-            <option value="white_flag_only">Somente bandeira branca / sem bandeira</option>
+
+        <div className="lead-gen-form-section">
+          <span className="label">Região</span>
+          <AdminNovosLeadsCityPicker
+            uf={uf}
+            ufOptions={ufOptions}
+            onUfChange={setUf}
+            allCities={allCities}
+            onAllCitiesChange={setAllCities}
+            onSelectionChange={setCitySelection}
+          />
+        </div>
+
+        <div className="lead-gen-form-section field">
+          <label className="label" htmlFor="lead-segment">
+            Segmento
+          </label>
+          <select
+            id="lead-segment"
+            className="input"
+            value={segment}
+            onChange={(e) => setSegment(e.target.value as LeadGenSegmentFilter)}
+          >
+            {LEAD_GEN_SEGMENT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
           </select>
         </div>
+
         <div className="filters-row">
           <div className="field">
             <label className="label">Produto (opcional)</label>
@@ -290,49 +268,18 @@ export function AdminNovosLeadsWizard() {
             </select>
           </div>
         </div>
-        <label style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <input type="checkbox" checked={simulation} onChange={(e) => setSimulation(e.target.checked)} />
-          <span>Simulação (ANP + cadastro; sem Google Places)</span>
-        </label>
-        {!simulation ? (
-          <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            <input type="checkbox" checked={ackCharges} onChange={(e) => setAckCharges(e.target.checked)} />
-            <span>Entendo possíveis cobranças do Google Places.</span>
-          </label>
-        ) : null}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn" type="submit" disabled={previewLoading}>
-            {previewLoading ? "Calculando…" : "Prévia ANP"}
-          </button>
-          <button className="btn btn-primary" type="button" disabled={starting} onClick={() => void startRun()}>
-            {starting ? "Iniciando…" : "Iniciar geração"}
-          </button>
-        </div>
-      </form>
 
-      {preview ? (
-        <div className="panel" style={{ marginTop: "1rem" }}>
-          <h3 className="panel-title">Prévia</h3>
-          <p>
-            Estimativa: <strong>{preview.unique_cnpjs}</strong> CNPJs · Já no CRM: <strong>{preview.existing_in_crm}</strong> · Novos
-            estimados: <strong>{preview.new_estimated}</strong>
-          </p>
-          <p className="muted">
-            Cidades na amostra: {preview.cities_scanned}/{preview.cities_total}
-            {!preview.preview_complete ? " (amostra parcial — contagem exata ao iniciar a execução)" : ""}
-          </p>
-          {!preview.google_enrichment_available ? (
-            <p className="muted">Sem chave Google: {preview.unavailable_without_google.join("; ")}</p>
-          ) : null}
-        </div>
-      ) : null}
+        <button className="btn btn-primary" type="button" disabled={starting} onClick={() => void startRun()}>
+          {starting ? "Iniciando…" : "Iniciar geração"}
+        </button>
+      </div>
 
       {activeRun ? (
         <div className="panel" style={{ marginTop: "1rem" }}>
-          <h3 className="panel-title">B. Execução #{activeRun.id}</h3>
+          <h3 className="panel-title">Execução #{activeRun.id}</h3>
           <p>
             {PHASE_LABEL[activeRun.phase] ?? activeRun.phase} · Status: {activeRun.status} · Progresso: {activeRun.progress_pct}%
-            {activeRun.simulation ? " · Simulação" : ""}
+            {activeRun.simulation ? " · Sem Google (sem chave ou quota)" : ""}
           </p>
           {activeRun.error_message ? <p className="alert alert-error">{activeRun.error_message}</p> : null}
           <ul className="muted" style={{ columns: 2, fontSize: "0.9rem" }}>
@@ -360,7 +307,7 @@ export function AdminNovosLeadsWizard() {
 
           {["completed", "failed", "cancelled"].includes(activeRun.status) ? (
             <div style={{ marginTop: "1rem" }}>
-              <h4>C. Resultados</h4>
+              <h4>Resultados</h4>
               <div className="filters-row" style={{ marginBottom: 8 }}>
                 {(["created", "existing", "ambiguous", "errors"] as const).map((t) => (
                   <button
