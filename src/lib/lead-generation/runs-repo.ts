@@ -65,8 +65,12 @@ export async function createLeadGenerationRun(input: {
   max_stations: number;
   max_google_calls: number;
   simulation: boolean;
+  cities_total?: number;
 }) {
   const counts = emptyCounts();
+  if (input.cities_total != null && input.cities_total > 0) {
+    counts.cities_total = input.cities_total;
+  }
   const result = await run(
     `
       INSERT INTO lead_generation_runs (

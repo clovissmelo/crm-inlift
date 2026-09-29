@@ -203,29 +203,43 @@ export function AdminNovosLeadsWizard() {
     void loadMeta();
   }, [loadMeta]);
 
+  const applyRunRow = useCallback((run: RunDetail) => {
+    setActiveRun(run);
+    setRuns((prev) => prev.map((row) => (row.id === run.id ? { ...row, ...run } : row)));
+  }, []);
+
   const fetchRunDetail = useCallback(
     async (id: number, tab?: typeof resultTab) => {
       const q = tab ? `?tab=${tab}` : "";
       const res = await fetch(`/api/admin/lead-generation/runs/${id}${q}`);
       if (!res.ok) return;
       const data = (await res.json()) as { run: RunDetail; items?: typeof resultItems };
-      setActiveRun(data.run);
-      setRuns((prev) => prev.map((row) => (row.id === data.run.id ? { ...row, ...data.run } : row)));
+      applyRunRow(data.run);
       if (data.items) setResultItems(data.items as typeof resultItems);
     },
-    []
+    [applyRunRow]
+  );
+
+  const tickActiveRun = useCallback(
+    async (id: number) => {
+      const res = await fetch(`/api/admin/lead-generation/runs/${id}/tick`, { method: "POST" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { run: RunDetail };
+      applyRunRow(data.run);
+    },
+    [applyRunRow]
   );
 
   useEffect(() => {
     if (!activeRunId) return;
-    void fetchRunDetail(activeRunId);
-    const pollMs = ["queued", "running"].includes(activeRun?.status ?? "") ? 2500 : 4000;
+    void tickActiveRun(activeRunId);
+    const pollMs = ["queued", "running"].includes(activeRun?.status ?? "") ? 3000 : 4000;
     const t = setInterval(() => {
-      void fetchRunDetail(activeRunId);
+      void tickActiveRun(activeRunId);
       if (["completed", "failed", "cancelled"].includes(activeRun?.status ?? "")) return;
     }, pollMs);
     return () => clearInterval(t);
-  }, [activeRunId, fetchRunDetail, activeRun?.status]);
+  }, [activeRunId, tickActiveRun, activeRun?.status]);
 
   useEffect(() => {
     if (activeRunId && ["completed", "failed", "cancelled"].includes(activeRun?.status ?? "")) {
@@ -437,8 +451,9 @@ export function AdminNovosLeadsWizard() {
           </button>
         </div>
         <p className="muted lead-gen-qty-note">
-          A execução percorre postos da ANP até cadastrar a quantidade solicitada; já existentes ou inválidos são ignorados e o
-          próximo da fila é processado (sem repetir CNPJ já tratado nesta execução).
+          A execução percorre na ANP até a quantidade solicitada;
+          <br />
+          Inválidos ou já existentes são ignorados sem repetir CNPJ na execução.
         </p>
       </div>
 

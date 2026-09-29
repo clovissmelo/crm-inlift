@@ -120,15 +120,18 @@ async function tickAnpLoad(runId: number) {
       rawRows = await fetchAnpMunicipality(pair.api, runRow.uf);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Falha ao consultar ANP";
+      counts.cities_loaded = idx + 1;
       await updateRun(runId, {
-        status: "failed",
-        phase: "done",
-        error_message: `ANP (${pair.official}): ${msg}`,
-        counts_json: { ...counts, cities_loaded: idx },
-        progress_pct: 100,
-        completed_at: nowIso()
+        counts_json: counts,
+        progress_pct: computeRunProgressPct({
+          phase: runRow.phase,
+          status: runRow.status,
+          max_stations: runRow.max_stations,
+          counts_json: counts
+        }),
+        error_message: `ANP (${pair.official}): ${msg} — pulando cidade.`
       });
-      return;
+      continue;
     }
     const mapped: AnpStation[] = [];
     for (const row of rawRows) {
@@ -145,10 +148,22 @@ async function tickAnpLoad(runId: number) {
       filtered.map((s) => ({ cnpj: s.cnpj, station_json: s, anp_raw: s }))
     );
     addedStations += filtered.length;
+    counts.cities_loaded = idx + 1;
+    counts.anp_found = (counts.anp_found ?? 0) + filtered.length;
+    const byStatusMid = await countItemsByStatus(runId);
+    counts.items_total = Object.values(byStatusMid).reduce((a, b) => a + b, 0);
+    await updateRun(runId, {
+      counts_json: counts,
+      progress_pct: computeRunProgressPct({
+        phase: runRow.phase,
+        status: runRow.status,
+        max_stations: runRow.max_stations,
+        counts_json: counts
+      })
+    });
   }
 
   counts.cities_loaded = idx;
-  counts.anp_found = (counts.anp_found ?? 0) + addedStations;
   const byStatus = await countItemsByStatus(runId);
   counts.items_total = Object.values(byStatus).reduce((a, b) => a + b, 0);
   const pending = byStatus.pending ?? 0;

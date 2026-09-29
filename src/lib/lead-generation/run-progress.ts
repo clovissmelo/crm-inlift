@@ -19,9 +19,13 @@ export function computeRunProgressPct(input: {
   const processed = counts.processed ?? 0;
   const itemsTotal = counts.items_total ?? 0;
 
-  const citiesComplete = citiesTotal === 0 || citiesLoaded >= citiesTotal;
+  const citiesComplete = citiesTotal > 0 && citiesLoaded >= citiesTotal;
   const anpRatio =
-    citiesTotal > 0 ? Math.min(1, citiesLoaded / citiesTotal) : input.phase === "anp_load" ? 0.03 : 1;
+    citiesTotal > 0
+      ? Math.min(1, citiesLoaded / citiesTotal)
+      : input.phase === "anp_load"
+        ? 0.02
+        : 1;
 
   let goalRatio = Math.min(1, created / maxStations);
   if (goalRatio === 0 && itemsTotal > 0 && processed > 0 && input.phase !== "anp_load") {
@@ -29,7 +33,9 @@ export function computeRunProgressPct(input: {
   }
 
   let pct: number;
-  if (!citiesComplete) {
+  if (citiesTotal === 0 && input.phase === "anp_load") {
+    pct = 2;
+  } else if (!citiesComplete) {
     const anpPart = anpRatio * ANP_WEIGHT;
     const goalPart = goalRatio * (100 - ANP_WEIGHT) * anpRatio;
     pct = anpPart + goalPart;
@@ -53,8 +59,14 @@ export function runProgressDetail(input: {
   const citiesLoaded = counts.cities_loaded ?? 0;
   const created = counts.created ?? 0;
 
+  if (input.phase === "anp_load" && citiesTotal === 0) {
+    return "Preparando cidades…";
+  }
   if (input.phase === "anp_load" && citiesTotal > 0 && citiesLoaded < citiesTotal) {
     return `ANP ${citiesLoaded}/${citiesTotal} cidades`;
+  }
+  if (input.phase === "anp_load" && citiesTotal > 0 && citiesLoaded >= citiesTotal) {
+    return "ANP completa, enfileirando postos…";
   }
   if (created > 0) return `${created}/${input.max_stations} novos cadastrados`;
   if (input.phase === "processing" && (counts.processed ?? 0) > 0) {

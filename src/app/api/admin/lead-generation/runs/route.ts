@@ -97,7 +97,8 @@ export async function POST(request: Request) {
     bdr_user_id: parsed.data.bdr_user_id ?? null,
     max_stations: maxStations,
     max_google_calls: maxGoogle,
-    simulation
+    simulation,
+    cities_total: cityPairs.length
   });
 
   await drainLeadGenerationTicks({ runId: id, maxTicks: 18, maxMs: 55_000 });
