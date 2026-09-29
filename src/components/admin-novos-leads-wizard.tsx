@@ -11,6 +11,13 @@ import { normalizeLeadGenFilters } from "@/lib/lead-generation/city-resolve";
 import { LEAD_GEN_SEGMENT_OPTIONS, type LeadGenSegmentFilter } from "@/lib/lead-motor/lead-gen-segments";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+type RunFilters = {
+  cities: string[];
+  regions?: string[];
+  all_cities_in_uf: boolean;
+  segment: string;
+};
+
 type RunRow = {
   id: number;
   status: string;
@@ -18,15 +25,19 @@ type RunRow = {
   uf: string;
   simulation: boolean;
   progress_pct: number;
+  max_stations: number;
+  max_google_calls: number;
+  google_calls_used: number;
+  product_id: number | null;
+  bdr_user_id: number | null;
+  filters_json: RunFilters;
   counts_json: Record<string, number>;
   error_message: string | null;
   created_at: string;
   requested_by_name?: string;
 };
 
-type RunDetail = RunRow & {
-  filters_json?: { cities: string[]; all_cities_in_uf: boolean; segment: string };
-};
+type RunDetail = RunRow;
 
 type QuotaPanel = {
   google_configured: boolean;
@@ -42,6 +53,43 @@ const PHASE_LABEL: Record<string, string> = {
   finalizing: "Finalizando",
   done: "Concluído"
 };
+
+const RUN_STATUS_LABEL: Record<string, string> = {
+  queued: "Na fila",
+  running: "Em execução",
+  paused: "Pausada",
+  completed: "Concluída",
+  failed: "Falhou",
+  cancelled: "Cancelada"
+};
+
+function segmentLabel(segment: string): string {
+  return LEAD_GEN_SEGMENT_OPTIONS.find((o) => o.value === segment)?.label ?? segment;
+}
+
+function formatRunGeo(filters: RunFilters, uf: string): { line: string; title?: string } {
+  if (filters.all_cities_in_uf) return { line: `Todas as cidades (${uf})` };
+  const cities = filters.cities ?? [];
+  const regions = filters.regions ?? [];
+  if (cities.length > 0) {
+    return { line: `${cities.length} cidade${cities.length === 1 ? "" : "s"}`, title: cities.join(", ") };
+  }
+  if (regions.length > 0) {
+    return { line: `${regions.length} zona${regions.length === 1 ? "" : "s"}`, title: regions.join(", ") };
+  }
+  return { line: "—" };
+}
+
+function formatRunResults(counts: Record<string, number>): string {
+  const created = counts.created ?? 0;
+  const existing = counts.existing ?? 0;
+  const ambiguous = counts.ambiguous ?? 0;
+  const errors = counts.errors ?? 0;
+  const parts = [`${created} novos`, `${existing} exist.`];
+  if (ambiguous > 0) parts.push(`${ambiguous} revisão`);
+  if (errors > 0) parts.push(`${errors} erro${errors === 1 ? "" : "s"}`);
+  return parts.join(" · ");
+}
 
 export function AdminNovosLeadsWizard() {
   const [ufOptions, setUfOptions] = useState<UfOption[]>([]);
@@ -76,6 +124,9 @@ export function AdminNovosLeadsWizard() {
   );
 
   const hasGeoSelection = allCities || resolvedGeo.cities.length > 0;
+
+  const productNameById = useMemo(() => new Map(products.map((p) => [p.id, p.name])), [products]);
+  const bdrNameById = useMemo(() => new Map(bdrs.map((b) => [b.id, b.name])), [bdrs]);
 
   const loadMeta = useCallback(async () => {
     const [uRes, pRes, rRes, geoRes, quotaRes] = await Promise.all([
@@ -356,16 +407,104 @@ export function AdminNovosLeadsWizard() {
 
       <div className="panel" style={{ marginTop: "1rem" }}>
         <h3 className="panel-title">Histórico</h3>
-        <ul>
-          {runs.map((r) => (
-            <li key={r.id}>
-              <button type="button" className="link-btn" onClick={() => setActiveRunId(r.id)}>
-                #{r.id}
-              </button>{" "}
-              {r.uf} · {r.status} · {new Date(r.created_at).toLocaleString("pt-BR")} · {r.progress_pct}%
-            </li>
-          ))}
-        </ul>
+        {runs.length === 0 ? (
+          <p className="muted">Nenhuma execução ainda.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table lead-gen-history-table">
+              <thead>
+                <tr>
+                  <th>Execução</th>
+                  <th>Quando</th>
+                  <th>Parâmetros</th>
+                  <th>Resultado</th>
+                  <th>Status</th>
+                  <th>Solicitante</th>
+                </tr>
+              </thead>
+              <tbody>
+                {runs.map((r) => {
+                  const filters = r.filters_json ?? {
+                    cities: [],
+                    all_cities_in_uf: false,
+                    segment: "all"
+                  };
+                  const geo = formatRunGeo(filters, r.uf);
+                  const active = ["queued", "running", "paused"].includes(r.status);
+                  const bdrName = r.bdr_user_id ? bdrNameById.get(r.bdr_user_id) : null;
+                  const productName = r.product_id ? productNameById.get(r.product_id) : null;
+                  const isSelected = activeRunId === r.id;
+                  return (
+                    <tr key={r.id} className={isSelected ? "is-selected" : undefined}>
+                      <td>
+                        <button type="button" className="link-btn" onClick={() => setActiveRunId(r.id)}>
+                          #{r.id}
+                        </button>
+                      </td>
+                      <td className="lead-gen-history-when">
+                        {new Date(r.created_at).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        })}
+                      </td>
+                      <td className="lead-gen-history-params">
+                        <span className="lead-gen-history-line">
+                          <strong>{r.uf}</strong> · {geo.line}
+                        </span>
+                        <span className="lead-gen-history-sub muted" title={geo.title}>
+                          {segmentLabel(filters.segment)}
+                        </span>
+                        <span className="lead-gen-history-sub muted">
+                          Até {r.max_stations} posto{r.max_stations === 1 ? "" : "s"}
+                          {r.simulation ? " · sem Google" : ` · Google ${r.google_calls_used}/${r.max_google_calls}`}
+                        </span>
+                        {bdrName || productName ? (
+                          <span className="lead-gen-history-sub muted">
+                            {bdrName ? `BDR: ${bdrName}` : null}
+                            {bdrName && productName ? " · " : null}
+                            {productName ? `Produto: ${productName}` : null}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="lead-gen-history-result">
+                        {(r.counts_json?.processed ?? 0) > 0 || r.status === "completed" ? (
+                          formatRunResults(r.counts_json ?? {})
+                        ) : active ? (
+                          <span className="muted">{Math.round(r.progress_pct)}% processado</span>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                        {(r.counts_json?.items_total ?? 0) > 0 ? (
+                          <span className="lead-gen-history-sub muted">{r.counts_json.items_total} itens ANP</span>
+                        ) : null}
+                      </td>
+                      <td>
+                        <span
+                          className={`lead-gen-status lead-gen-status--${r.status}`}
+                          title={active ? PHASE_LABEL[r.phase] ?? r.phase : undefined}
+                        >
+                          {RUN_STATUS_LABEL[r.status] ?? r.status}
+                        </span>
+                        {active ? (
+                          <span className="lead-gen-history-sub muted">{Math.round(r.progress_pct)}%</span>
+                        ) : null}
+                        {r.error_message ? (
+                          <span className="lead-gen-history-sub lead-gen-history-error" title={r.error_message}>
+                            {r.error_message.length > 72 ? `${r.error_message.slice(0, 72)}…` : r.error_message}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="muted">{r.requested_by_name ?? "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

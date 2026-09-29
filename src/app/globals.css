@@ -2335,6 +2335,66 @@ table.data-table tbody tr.is-selected {
   margin-bottom: 0.5rem;
 }
 
+.lead-gen-history-table td {
+  vertical-align: top;
+  font-size: 0.88rem;
+}
+
+.lead-gen-history-line {
+  display: block;
+}
+
+.lead-gen-history-sub {
+  display: block;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  margin-top: 0.2rem;
+}
+
+.lead-gen-history-when {
+  white-space: nowrap;
+}
+
+.lead-gen-history-params {
+  min-width: 11rem;
+  max-width: 18rem;
+}
+
+.lead-gen-history-result {
+  min-width: 9rem;
+}
+
+.lead-gen-history-error {
+  color: var(--danger);
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.lead-gen-status {
+  display: inline-block;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.lead-gen-status--completed {
+  color: var(--success);
+}
+
+.lead-gen-status--failed,
+.lead-gen-status--cancelled {
+  color: var(--danger);
+}
+
+.lead-gen-status--running,
+.lead-gen-status--queued {
+  color: var(--accent, #00adee);
+}
+
+.lead-gen-status--paused {
+  color: var(--warning, #e6a700);
+}
+
 @media (max-width: 768px) {
   .lead-geo-grid-head,
   .lead-geo-grid {
