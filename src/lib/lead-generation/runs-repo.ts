@@ -44,7 +44,10 @@ function parseFilters(raw: unknown): LeadGenFilters {
   if (o.all_cities_in_uf === true || o.all_cities_in_uf === "true" || o.all_cities_in_uf === 1) {
     d.all_cities_in_uf = true;
   }
-  if (typeof o.segment === "string") d.segment = normalizeSegmentFilter(o.segment);
+  if (typeof o.segment === "string") d.segment = o.segment.trim() || "all";
+  if (typeof o.segment_filter_kind === "string") {
+    d.segment_filter_kind = normalizeSegmentFilter(o.segment_filter_kind);
+  }
   return d;
 }
 

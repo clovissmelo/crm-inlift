@@ -15,7 +15,10 @@ export type LeadGenFilters = {
   /** @deprecated IDs legados anp-regions */
   regions?: string[];
   all_cities_in_uf: boolean;
-  segment: LeadGenSegmentFilter;
+  /** Slug cadastrado em lead_generation_segments */
+  segment: string;
+  /** Regra ANP resolvida ao criar a execução */
+  segment_filter_kind?: LeadGenSegmentFilter;
 };
 
 export type LeadGenCounts = {

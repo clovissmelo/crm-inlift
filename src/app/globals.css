@@ -2338,6 +2338,55 @@ table.data-table tbody tr.is-selected {
   margin-bottom: 1.25rem;
 }
 
+.lead-gen-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.lead-gen-form-row--meta .field {
+  flex: 1 1 12rem;
+  min-width: 10rem;
+  margin: 0;
+}
+
+.lead-gen-form-row--start {
+  align-items: stretch;
+}
+
+.lead-gen-form-row--start .lead-gen-qty-field {
+  flex: 0 1 auto;
+}
+
+.lead-gen-start-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.lead-gen-run-note {
+  flex: 1 1 14rem;
+  min-width: 12rem;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--muted, #9aa4b2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  background: color-mix(in srgb, var(--border) 25%, transparent);
+}
+
+.input-sm {
+  font-size: 0.85rem;
+  padding: 0.35rem 0.5rem;
+}
+
 .lead-gen-form-section > .label {
   display: block;
   margin-bottom: 0.5rem;

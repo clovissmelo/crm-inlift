@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { LeadGenSegmentFilter } from "@/lib/lead-motor/lead-gen-segments";
 
 type GeoZone = { id: number; name: string; ibge_count: number };
 type GeoMunicipality = {
@@ -42,7 +41,7 @@ type Props = {
   onAllCitiesChange: (v: boolean) => void;
   onSelectionChange: (payload: CitySelectionPayload) => void;
   productId: number | "";
-  segment: LeadGenSegmentFilter;
+  segment: string;
   disabled?: boolean;
 };
 

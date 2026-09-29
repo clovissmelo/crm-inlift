@@ -184,7 +184,9 @@ async function tickAnpLoad(runId: number) {
     }
     const filtered = filterStations(mapped, {
       city: runRow.filters_json.all_cities_in_uf ? null : pair.official,
-      segment: runRow.filters_json.segment,
+      segment:
+        runRow.filters_json.segment_filter_kind ??
+        (runRow.filters_json.segment as import("@/lib/lead-motor/lead-gen-segments").LeadGenSegmentFilter),
       limit: 0
     });
     await insertRunItemsSafe(
@@ -584,17 +586,23 @@ export async function previewLeadSelection(input: {
     }
   }
 
+  const { resolveSegmentFilterKind } = await import("@/lib/lead-generation/segments-repo");
+  const { normalizeSegmentFilter } = await import("@/lib/lead-motor/lead-gen-segments");
+  const segmentFilter =
+    input.filters.segment_filter_kind ??
+    normalizeSegmentFilter(await resolveSegmentFilterKind(input.filters.segment));
+
   let filtered = allStations;
   if (!input.filters.all_cities_in_uf && input.filters.cities.length === 1) {
     filtered = filterStations(allStations, {
       city: slice[0]?.official ?? null,
-      segment: input.filters.segment,
+      segment: segmentFilter,
       limit: 0
     });
   } else {
     filtered = filterStations(allStations, {
       city: null,
-      segment: input.filters.segment,
+      segment: segmentFilter,
       limit: 0
     });
   }

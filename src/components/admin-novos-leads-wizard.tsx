@@ -8,7 +8,6 @@ import {
   type UfOption
 } from "@/components/admin-novos-leads-city-picker";
 import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
-import { LEAD_GEN_SEGMENT_OPTIONS, type LeadGenSegmentFilter } from "@/lib/lead-motor/lead-gen-segments";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type RunFilters = {
@@ -64,8 +63,8 @@ const RUN_STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelada"
 };
 
-function segmentLabel(segment: string): string {
-  return LEAD_GEN_SEGMENT_OPTIONS.find((o) => o.value === segment)?.label ?? segment;
+function segmentLabel(segment: string, options: Array<{ slug: string; label: string }>): string {
+  return options.find((o) => o.slug === segment)?.label ?? segment;
 }
 
 function formatRunGeo(filters: RunFilters, uf: string): { line: string; title?: string } {
@@ -125,7 +124,8 @@ export function AdminNovosLeadsWizard() {
   const [uf, setUf] = useState("RS");
   const [allCities, setAllCities] = useState(false);
   const [citySelection, setCitySelection] = useState<CitySelectionPayload>({ municipalities: [], commercial_zone_ids: [] });
-  const [segment, setSegment] = useState<LeadGenSegmentFilter>("all");
+  const [segment, setSegment] = useState("all");
+  const [segmentOptions, setSegmentOptions] = useState<Array<{ slug: string; label: string }>>([]);
   const [bdrUserId, setBdrUserId] = useState<number | "">("");
   const [productId, setProductId] = useState<number | "">("");
   const [quota, setQuota] = useState<QuotaPanel | null>(null);
@@ -170,12 +170,13 @@ export function AdminNovosLeadsWizard() {
   const bdrNameById = useMemo(() => new Map(bdrs.map((b) => [b.id, b.name])), [bdrs]);
 
   const loadMeta = useCallback(async () => {
-    const [uRes, pRes, rRes, geoRes, quotaRes] = await Promise.all([
+    const [uRes, pRes, rRes, geoRes, quotaRes, segRes] = await Promise.all([
       fetch("/api/users"),
       fetch("/api/products"),
       fetch("/api/admin/lead-generation/runs"),
       fetch("/api/admin/lead-generation/geo"),
-      fetch("/api/admin/lead-generation/quota")
+      fetch("/api/admin/lead-generation/quota"),
+      fetch("/api/admin/lead-generation/segments?active=1")
     ]);
     if (uRes.ok) {
       const u = (await uRes.json()) as { users: Array<{ id: number; name: string; roles: string[] }> };
@@ -199,6 +200,12 @@ export function AdminNovosLeadsWizard() {
       const q = (await quotaRes.json()) as QuotaPanel;
       setQuota(q);
       setLeadsRequested((prev) => Math.min(Math.max(1, prev), q.per_run_limit));
+    }
+    if (segRes.ok) {
+      const s = (await segRes.json()) as { segments?: Array<{ slug: string; label: string }> };
+      const opts = s.segments ?? [];
+      setSegmentOptions(opts);
+      setSegment((prev) => (opts.some((o) => o.slug === prev) ? prev : (opts[0]?.slug ?? "all")));
     }
   }, []);
 
@@ -408,25 +415,19 @@ export function AdminNovosLeadsWizard() {
           </p>
         ) : null}
 
-        <div className="lead-gen-form-section field">
-          <label className="label" htmlFor="lead-segment">
-            Segmento
-          </label>
-          <select
-            id="lead-segment"
-            className="input"
-            value={segment}
-            onChange={(e) => setSegment(e.target.value as LeadGenSegmentFilter)}
-          >
-            {LEAD_GEN_SEGMENT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="filters-row">
+        <div className="lead-gen-form-row lead-gen-form-row--meta">
+          <div className="field">
+            <label className="label" htmlFor="lead-segment">
+              Segmento
+            </label>
+            <select id="lead-segment" className="input" value={segment} onChange={(e) => setSegment(e.target.value)}>
+              {segmentOptions.map((o) => (
+                <option key={o.slug} value={o.slug}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="field">
             <label className="label">Produto (opcional)</label>
             <select className="input" value={productId} onChange={(e) => setProductId(e.target.value ? Number(e.target.value) : "")}>
@@ -465,7 +466,7 @@ export function AdminNovosLeadsWizard() {
           />
         </div>
 
-        <div className="lead-gen-start-row">
+        <div className="lead-gen-form-row lead-gen-form-row--start">
           <div className="field lead-gen-qty-field">
             <span className="label" id="lead-gen-qty-label">
               Novos leads a solicitar
@@ -501,30 +502,30 @@ export function AdminNovosLeadsWizard() {
             </div>
             <span className="muted lead-gen-qty-hint">Máx. {maxLeadsRequested} por execução</span>
           </div>
-          <button
-            className="btn btn-primary"
-            type="button"
-            disabled={starting || shownRunActive}
-            onClick={() => void startRun()}
-          >
-            {starting ? "Iniciando…" : "Iniciar geração"}
-          </button>
-          {shownRunActive && shownRun ? (
+          <div className="lead-gen-start-actions">
             <button
-              className="btn lead-gen-cancel-exec-btn"
+              className="btn btn-primary"
               type="button"
-              disabled={cancelling}
-              onClick={() => void cancelRun(shownRun.id)}
+              disabled={starting || shownRunActive}
+              onClick={() => void startRun()}
             >
-              {cancelling ? "Cancelando…" : "Cancelar execução"}
+              {starting ? "Iniciando…" : "Iniciar geração"}
             </button>
-          ) : null}
+            {shownRunActive && shownRun ? (
+              <button
+                className="btn lead-gen-cancel-exec-btn"
+                type="button"
+                disabled={cancelling}
+                onClick={() => void cancelRun(shownRun.id)}
+              >
+                {cancelling ? "Cancelando…" : "Cancelar execução"}
+              </button>
+            ) : null}
+          </div>
+          <div className="lead-gen-run-note" role="note">
+            Inválidos ou já existentes são ignorados sem repetir CNPJ na execução.
+          </div>
         </div>
-        <p className="muted lead-gen-qty-note">
-          A execução percorre na ANP até a quantidade solicitada;
-          <br />
-          Inválidos ou já existentes são ignorados sem repetir CNPJ na execução.
-        </p>
       </div>
 
       {shownRun ? (
@@ -662,7 +663,7 @@ export function AdminNovosLeadsWizard() {
                           <strong>{r.uf}</strong> · {geo.line}
                         </span>
                         <span className="lead-gen-history-sub muted" title={geo.title}>
-                          {segmentLabel(filters.segment)}
+                          {segmentLabel(filters.segment, segmentOptions)}
                         </span>
                         <span className="lead-gen-history-sub muted">
                           Solicitados: {r.max_stations} novo{r.max_stations === 1 ? "" : "s"}

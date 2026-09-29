@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminLeadMotorSegments } from "@/components/admin-lead-motor-segments";
 import { PageIntro } from "@/components/page-intro";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -80,9 +81,11 @@ export function AdminApiVariables() {
 
       {loading ? <p className="muted">Carregando…</p> : null}
 
+      <AdminLeadMotorSegments />
+
       <form onSubmit={save}>
         <div className="panel" style={{ marginBottom: "1rem" }}>
-          <h2 style={{ marginTop: 0, fontSize: "1rem" }}>Motor de leads</h2>
+          <h2 style={{ marginTop: 0, fontSize: "1rem" }}>Parâmetros gerais</h2>
           {settings.map((s) => (
             <div key={s.key} className="field">
               <label className="label" htmlFor={s.key}>

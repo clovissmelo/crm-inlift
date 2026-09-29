@@ -47,7 +47,7 @@ export const ADMIN_CONFIG_CARDS: AdminConfigCardItem[] = [
     id: "variaveis",
     href: "/admin/variaveis",
     title: "Motor de leads",
-    description: "Simulação padrão e parâmetros do gerador ANP.",
+    description: "Segmentos, simulação e parâmetros do gerador ANP.",
     logo: <LogoSettings />,
     iconClassName: "hub-card-icon--settings"
   },

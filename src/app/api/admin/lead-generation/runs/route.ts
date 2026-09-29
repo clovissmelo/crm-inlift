@@ -9,6 +9,7 @@ import { getGooglePlacesApiKey, getGooglePlacesLimit } from "@/lib/google-places
 import { getDailyGoogleUsage } from "@/lib/lead-generation/quota";
 import type { LeadGenFilters, LeadGenMunicipalityRef } from "@/lib/lead-generation/types";
 import { leadGenSegmentZod } from "@/lib/lead-generation/segment-schema";
+import { listLeadGenSegments, resolveSegmentFilterKind } from "@/lib/lead-generation/segments-repo";
 import { z } from "zod";
 
 const municipalitySchema = z.object({
@@ -52,6 +53,12 @@ export async function POST(request: Request) {
   }
 
   const uf = parsed.data.uf.toUpperCase();
+  const segmentSlug = parsed.data.segment;
+  const activeSegments = await listLeadGenSegments({ activeOnly: true });
+  if (!activeSegments.some((s) => s.slug === segmentSlug)) {
+    return Response.json({ error: "Segmento inválido ou inativo." }, { status: 400 });
+  }
+  const segment_filter_kind = await resolveSegmentFilterKind(segmentSlug);
   const ibge = await getMunicipalitiesForUf(uf);
 
   let selected: LeadGenMunicipalityRef[] = parsed.data.municipalities.map((m) => ({
@@ -85,7 +92,8 @@ export async function POST(request: Request) {
     commercial_zone_ids: parsed.data.commercial_zone_ids,
     regions: parsed.data.regions,
     all_cities_in_uf: parsed.data.all_cities_in_uf,
-    segment: parsed.data.segment
+    segment: segmentSlug,
+    segment_filter_kind
   };
 
   const hasKey = Boolean(await getGooglePlacesApiKey());
