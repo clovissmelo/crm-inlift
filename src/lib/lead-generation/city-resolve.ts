@@ -5,6 +5,7 @@ import {
 } from "@/lib/lead-motor/anp-cities";
 import { citiesForRegionIds } from "@/lib/lead-motor/anp-regions";
 import { BRAZIL_UFS } from "@/lib/lead-motor/brazil-ufs";
+import { resolveAnpPairForMunicipality } from "@/lib/lead-generation/city-resolve-ibge";
 import type { LeadGenFilters } from "@/lib/lead-generation/types";
 
 export type CityPair = { official: string; api: string };
@@ -42,6 +43,19 @@ export function normalizeLeadGenFilters(uf: string, filters: LeadGenFilters): Le
 export function resolveCityPairs(uf: string, filters: LeadGenFilters): CityPair[] {
   const u = uf.toUpperCase();
   const map = ANP_CITIES_BY_UF[u];
+
+  if (filters.municipalities && filters.municipalities.length > 0) {
+    const pairs: CityPair[] = [];
+    const seen = new Set<string>();
+    for (const m of filters.municipalities) {
+      const pair = resolveAnpPairForMunicipality(u, { ibge_code: m.ibge_code, name: m.name });
+      if (!pair || seen.has(pair.api)) continue;
+      seen.add(pair.api);
+      pairs.push(pair);
+    }
+    return pairs;
+  }
+
   if (!map) return [];
 
   const normalized = normalizeLeadGenFilters(u, filters);

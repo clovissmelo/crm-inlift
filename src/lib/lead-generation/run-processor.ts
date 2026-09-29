@@ -484,13 +484,23 @@ async function tickFinalizing(runId: number) {
     await updateRun(runId, { phase: "processing", counts_json: counts });
     return;
   }
+  const created = counts.created ?? 0;
+  const target = runRow.max_stations;
+  let status: "completed" | "partial" = "completed";
+  if (target > 0 && created < target && (counts.processed ?? 0) > 0) {
+    status = "partial";
+  }
+  if ((counts.errors ?? 0) > 0 && created === 0) {
+    status = "partial";
+  }
+
   await updateRun(runId, {
-    status: "completed",
+    status,
     phase: "done",
     counts_json: counts,
     progress_pct: 100,
     completed_at: nowIso(),
-    error_message: null
+    error_message: status === "partial" && created < target ? `Meta: ${created}/${target} novos cadastrados.` : null
   });
 }
 

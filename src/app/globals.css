@@ -2594,6 +2594,61 @@ table.data-table tbody tr.is-selected {
   border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
 }
 
+.alert-warning {
+  background: color-mix(in srgb, var(--warning, #e6a700) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning, #e6a700) 45%, var(--border));
+  color: inherit;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius, 8px);
+  font-size: 0.88rem;
+}
+
+.lead-geo-ibge-warn {
+  margin-bottom: 0.75rem;
+}
+
+.lead-geo-ibge-code {
+  font-size: 0.75rem;
+}
+
+.lead-geo-ind {
+  font-size: 0.72rem;
+  white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.lead-geo-ind--ok {
+  color: var(--success);
+}
+
+.lead-geo-ind--partial {
+  color: var(--warning, #e6a700);
+}
+
+.lead-geo-ind--fail {
+  color: var(--danger);
+}
+
+.lead-geo-ind-hint {
+  font-size: 0.78rem;
+  margin: 0.35rem 0;
+}
+
+.lead-geo-meta {
+  font-size: 0.78rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.lead-geo-no-anp {
+  font-size: 0.75rem;
+  color: var(--warning, #e6a700);
+}
+
+.lead-gen-status--partial {
+  color: var(--warning, #e6a700);
+}
+
 @media (max-width: 768px) {
   .lead-geo-grid-head,
   .lead-geo-grid {

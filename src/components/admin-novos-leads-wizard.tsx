@@ -7,7 +7,6 @@ import {
   type CitySelectionPayload,
   type UfOption
 } from "@/components/admin-novos-leads-city-picker";
-import { normalizeLeadGenFilters } from "@/lib/lead-generation/city-resolve";
 import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
 import { LEAD_GEN_SEGMENT_OPTIONS, type LeadGenSegmentFilter } from "@/lib/lead-motor/lead-gen-segments";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -60,6 +59,7 @@ const RUN_STATUS_LABEL: Record<string, string> = {
   running: "Em execução",
   paused: "Pausada",
   completed: "Concluída",
+  partial: "Parcial",
   failed: "Falhou",
   cancelled: "Cancelada"
 };
@@ -124,7 +124,7 @@ export function AdminNovosLeadsWizard() {
   const [ufOptions, setUfOptions] = useState<UfOption[]>([]);
   const [uf, setUf] = useState("RS");
   const [allCities, setAllCities] = useState(false);
-  const [citySelection, setCitySelection] = useState<CitySelectionPayload>({ regions: [], cities: [] });
+  const [citySelection, setCitySelection] = useState<CitySelectionPayload>({ municipalities: [], commercial_zone_ids: [] });
   const [segment, setSegment] = useState<LeadGenSegmentFilter>("all");
   const [bdrUserId, setBdrUserId] = useState<number | "">("");
   const [productId, setProductId] = useState<number | "">("");
@@ -164,18 +164,7 @@ export function AdminNovosLeadsWizard() {
     return Math.min(max, Math.max(1, Math.floor(value)));
   }
 
-  const resolvedGeo = useMemo(
-    () =>
-      normalizeLeadGenFilters(uf, {
-        cities: citySelection.cities,
-        regions: citySelection.regions,
-        all_cities_in_uf: allCities,
-        segment
-      }),
-    [uf, citySelection, allCities, segment]
-  );
-
-  const hasGeoSelection = allCities || resolvedGeo.cities.length > 0;
+  const hasGeoSelection = allCities || citySelection.municipalities.length > 0;
 
   const productNameById = useMemo(() => new Map(products.map((p) => [p.id, p.name])), [products]);
   const bdrNameById = useMemo(() => new Map(bdrs.map((b) => [b.id, b.name])), [bdrs]);
@@ -256,21 +245,54 @@ export function AdminNovosLeadsWizard() {
     const pollMs = ["queued", "running"].includes(activeRun?.status ?? "") ? 3000 : 4000;
     const t = setInterval(() => {
       void tickActiveRun(activeRunId);
-      if (["completed", "failed", "cancelled"].includes(activeRun?.status ?? "")) return;
+      if (["completed", "partial", "failed", "cancelled"].includes(activeRun?.status ?? "")) return;
     }, pollMs);
     return () => clearInterval(t);
   }, [activeRunId, tickActiveRun, activeRun?.status]);
 
   useEffect(() => {
-    if (activeRunId && ["completed", "failed", "cancelled"].includes(activeRun?.status ?? "")) {
+    if (activeRunId && ["completed", "partial", "failed", "cancelled"].includes(activeRun?.status ?? "")) {
       void fetchRunDetail(activeRunId, resultTab);
     }
   }, [activeRunId, activeRun?.status, resultTab, fetchRunDetail]);
 
   async function startRun() {
     if (!allCities && !hasGeoSelection) {
-      setError("Selecione UF, zona e/ou cidades (ou todas da UF).");
+      setError("Selecione UF, zona comercial e/ou cidades (ou todas da UF).");
       return;
+    }
+    if (productId !== "" && citySelection.municipalities.length > 0) {
+      const indRes = await fetch("/api/admin/lead-generation/geo/indicators", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uf,
+          product_id: productId,
+          segment,
+          ibge_codes: citySelection.municipalities.map((m) => m.ibge_code)
+        })
+      });
+      if (indRes.ok) {
+        const indData = (await indRes.json()) as {
+          indicators?: Record<string, { status: string; last_at: string }>;
+        };
+        const prior = citySelection.municipalities.filter((m) => {
+          const i = indData.indicators?.[String(m.ibge_code)];
+          return i && (i.status === "completed" || i.status === "partial" || i.status === "failed");
+        });
+        if (prior.length > 0) {
+          const lines = prior.slice(0, 8).map((m) => {
+            const i = indData.indicators![String(m.ibge_code)]!;
+            const d = new Date(i.last_at).toLocaleDateString("pt-BR");
+            return `· ${m.name} (${i.status}, ${d})`;
+          });
+          const more = prior.length > 8 ? `\n… e mais ${prior.length - 8} cidade(s).` : "";
+          const ok = window.confirm(
+            `Algumas cidades já tiveram geração para este produto e segmento:\n${lines.join("\n")}${more}\n\nClientes já cadastrados não serão alterados. Deseja continuar?`
+          );
+          if (!ok) return;
+        }
+      }
     }
     setStarting(true);
     setError(null);
@@ -279,8 +301,8 @@ export function AdminNovosLeadsWizard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         uf,
-        cities: citySelection.cities,
-        regions: citySelection.regions,
+        municipalities: citySelection.municipalities,
+        commercial_zone_ids: citySelection.commercial_zone_ids,
         all_cities_in_uf: allCities,
         segment,
         bdr_user_id: bdrUserId === "" ? null : bdrUserId,
@@ -386,18 +408,6 @@ export function AdminNovosLeadsWizard() {
           </p>
         ) : null}
 
-        <div className="lead-gen-form-section">
-          <span className="label">Região</span>
-          <AdminNovosLeadsCityPicker
-            uf={uf}
-            ufOptions={ufOptions}
-            onUfChange={setUf}
-            allCities={allCities}
-            onAllCitiesChange={setAllCities}
-            onSelectionChange={setCitySelection}
-          />
-        </div>
-
         <div className="lead-gen-form-section field">
           <label className="label" htmlFor="lead-segment">
             Segmento
@@ -439,6 +449,20 @@ export function AdminNovosLeadsWizard() {
               ))}
             </select>
           </div>
+        </div>
+
+        <div className="lead-gen-form-section">
+          <span className="label">Região</span>
+          <AdminNovosLeadsCityPicker
+            uf={uf}
+            ufOptions={ufOptions}
+            onUfChange={setUf}
+            allCities={allCities}
+            onAllCitiesChange={setAllCities}
+            onSelectionChange={setCitySelection}
+            productId={productId}
+            segment={segment}
+          />
         </div>
 
         <div className="lead-gen-start-row">
@@ -554,7 +578,7 @@ export function AdminNovosLeadsWizard() {
             </div>
           ) : null}
 
-          {["completed", "failed", "cancelled"].includes(shownRun.status) ? (
+          {["completed", "partial", "failed", "cancelled"].includes(shownRun.status) ? (
             <div style={{ marginTop: "1rem" }}>
               <h4>Resultados</h4>
               <div className="filters-row" style={{ marginBottom: 8 }}>

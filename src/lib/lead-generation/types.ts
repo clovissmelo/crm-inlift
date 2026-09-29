@@ -1,8 +1,18 @@
 import type { LeadGenSegmentFilter } from "@/lib/lead-motor/motor-config";
 
+export type LeadGenMunicipalityRef = {
+  ibge_code: number;
+  name: string;
+  commercial_zone_id?: number | null;
+};
+
 export type LeadGenFilters = {
   cities: string[];
-  /** IDs de região (anp-regions) selecionados na UI */
+  /** Municípios selecionados (IBGE) — gravados na execução */
+  municipalities?: LeadGenMunicipalityRef[];
+  /** IDs de zona comercial (CRM) */
+  commercial_zone_ids?: number[];
+  /** @deprecated IDs legados anp-regions */
   regions?: string[];
   all_cities_in_uf: boolean;
   segment: LeadGenSegmentFilter;

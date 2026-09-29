@@ -21,6 +21,25 @@ function parseFilters(raw: unknown): LeadGenFilters {
   if (!value || typeof value !== "object") return d;
   const o = value as Record<string, unknown>;
   if (Array.isArray(o.cities)) d.cities = o.cities.map(String);
+  if (Array.isArray(o.municipalities)) {
+    d.municipalities = o.municipalities
+      .map((x) => {
+        if (!x || typeof x !== "object") return null;
+        const m = x as Record<string, unknown>;
+        const ibge_code = Number(m.ibge_code);
+        const name = String(m.name ?? "");
+        if (!Number.isFinite(ibge_code) || !name) return null;
+        return {
+          ibge_code,
+          name,
+          commercial_zone_id: m.commercial_zone_id != null ? Number(m.commercial_zone_id) : null
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x != null);
+  }
+  if (Array.isArray(o.commercial_zone_ids)) {
+    d.commercial_zone_ids = o.commercial_zone_ids.map((x) => Number(x)).filter((n) => Number.isFinite(n));
+  }
   if (Array.isArray(o.regions)) d.regions = o.regions.map(String);
   if (o.all_cities_in_uf === true || o.all_cities_in_uf === "true" || o.all_cities_in_uf === 1) {
     d.all_cities_in_uf = true;
