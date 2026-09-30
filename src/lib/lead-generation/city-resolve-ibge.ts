@@ -7,7 +7,28 @@ export type SelectedMunicipality = {
   ibge_code: number;
   name: string;
   commercial_zone_id?: number | null;
+  ibge_immediate_region_id?: number | null;
+  ibge_immediate_region_name?: string | null;
 };
+
+function toSelectedMunicipality(m: IbgeMunicipality | SelectedMunicipality): SelectedMunicipality {
+  if ("immediate_region_id" in m) {
+    return {
+      ibge_code: m.ibge_code,
+      name: m.name,
+      commercial_zone_id: null,
+      ibge_immediate_region_id: m.immediate_region_id,
+      ibge_immediate_region_name: m.immediate_region_name
+    };
+  }
+  return {
+    ibge_code: m.ibge_code,
+    name: m.name,
+    commercial_zone_id: m.commercial_zone_id ?? null,
+    ibge_immediate_region_id: m.ibge_immediate_region_id ?? null,
+    ibge_immediate_region_name: m.ibge_immediate_region_name ?? null
+  };
+}
 
 function normalizeName(s: string): string {
   return s
@@ -53,19 +74,30 @@ export function resolveCityPairsFromMunicipalities(
   const seen = new Set<string>();
 
   for (const m of pool) {
-    if (m.ibge_code <= 0) {
-      skipped.push(m);
+    const row = toSelectedMunicipality(m as IbgeMunicipality | SelectedMunicipality);
+    if (row.ibge_code <= 0) {
+      skipped.push(row);
       continue;
     }
-    const pair = resolveAnpPairForMunicipality(uf, m);
+    const pair = resolveAnpPairForMunicipality(
+      uf,
+      "immediate_region_id" in m
+        ? (m as IbgeMunicipality)
+        : {
+            ibge_code: m.ibge_code,
+            name: m.name,
+            immediate_region_id: row.ibge_immediate_region_id ?? null,
+            immediate_region_name: row.ibge_immediate_region_name ?? null
+          }
+    );
     if (!pair) {
-      skipped.push(m);
+      skipped.push(row);
       continue;
     }
     if (seen.has(pair.api)) continue;
     seen.add(pair.api);
     pairs.push(pair);
-    municipalities.push(m);
+    municipalities.push(row);
   }
   return { pairs, municipalities, skipped };
 }

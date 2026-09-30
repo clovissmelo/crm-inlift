@@ -5,6 +5,8 @@ export type LeadGenMunicipalityRef = {
   ibge_code: number;
   name: string;
   commercial_zone_id?: number | null;
+  ibge_immediate_region_id?: number | null;
+  ibge_immediate_region_name?: string | null;
 };
 
 export type LeadGenFilters = {

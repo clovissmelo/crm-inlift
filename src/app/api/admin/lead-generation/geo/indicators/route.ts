@@ -1,13 +1,10 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { getMunicipalityGenerationIndicators } from "@/lib/lead-generation/municipality-runs";
-import { leadGenSegmentZod } from "@/lib/lead-generation/segment-schema";
 import { z } from "zod";
 
 const bodySchema = z.object({
-  uf: z.string().length(2),
-  product_id: z.number().int().positive().nullable().optional(),
-  segment: leadGenSegmentZod.default("all"),
+  product_id: z.number().int().positive(),
   ibge_codes: z.array(z.number().int()).max(600)
 });
 
@@ -22,9 +19,7 @@ export async function POST(request: Request) {
   }
 
   const indicators = await getMunicipalityGenerationIndicators({
-    uf: parsed.data.uf.toUpperCase(),
-    product_id: parsed.data.product_id ?? null,
-    segment: parsed.data.segment,
+    product_id: parsed.data.product_id,
     ibge_codes: parsed.data.ibge_codes.filter((c) => c > 0)
   });
 

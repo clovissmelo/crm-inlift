@@ -79,7 +79,7 @@ export function ProspeccaoListView({
 
   return (
     <div>
-      <PageIntro>Lista para entrar em contato</PageIntro>
+      <PageIntro>Leads para contato</PageIntro>
       <FilterBar>
         <FilterInput
           label="Busca"

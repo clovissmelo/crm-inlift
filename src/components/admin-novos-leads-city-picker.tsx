@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { History } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type GeoZone = { id: number; name: string; ibge_count: number };
 type GeoMunicipality = {
   ibge_code: number;
   name: string;
+  immediate_region_id: number | null;
   zone_ids: number[];
   anp_supported: boolean;
 };
@@ -23,15 +25,23 @@ type GeoResponse = {
 export type UfOption = { code: string; name: string; has_motor_mapping: boolean };
 
 export type CitySelectionPayload = {
-  municipalities: Array<{ ibge_code: number; name: string; commercial_zone_id?: number | null }>;
+  municipalities: Array<{
+    ibge_code: number;
+    name: string;
+    ibge_immediate_region_id?: number | null;
+    ibge_immediate_region_name?: string | null;
+    commercial_zone_id?: number | null;
+  }>;
   commercial_zone_ids: number[];
 };
 
 type GenerationIndicator = {
-  status: "completed" | "partial" | "failed";
+  status: string;
   last_at: string;
   run_id: number;
 };
+
+const ALL_ZONES = "";
 
 type Props = {
   uf: string;
@@ -41,8 +51,15 @@ type Props = {
   onAllCitiesChange: (v: boolean) => void;
   onSelectionChange: (payload: CitySelectionPayload) => void;
   productId: number | "";
-  segment: string;
   disabled?: boolean;
+};
+
+const RUN_STATUS_PT: Record<string, string> = {
+  running: "Em execução",
+  paused: "Pausada",
+  completed: "Concluída",
+  partial: "Parcial",
+  failed: "Falhou"
 };
 
 function formatIndicatorDate(iso: string): string {
@@ -53,25 +70,13 @@ function formatIndicatorDate(iso: string): string {
   }
 }
 
-function IndicatorBadge({ ind }: { ind: GenerationIndicator }) {
+function HistoryIcon({ ind }: { ind: GenerationIndicator }) {
   const date = formatIndicatorDate(ind.last_at);
-  if (ind.status === "completed") {
-    return (
-      <span className="lead-geo-ind lead-geo-ind--ok" title={`Geração concluída em ${date}`}>
-        ✓ {date}
-      </span>
-    );
-  }
-  if (ind.status === "partial") {
-    return (
-      <span className="lead-geo-ind lead-geo-ind--partial" title={`Execução parcial em ${date}`}>
-        ◐ {date}
-      </span>
-    );
-  }
+  const statusLabel = RUN_STATUS_PT[ind.status] ?? ind.status;
+  const title = `Já houve geração para este produto nesta cidade. Última execução: ${date} (${statusLabel}).`;
   return (
-    <span className="lead-geo-ind lead-geo-ind--fail" title={`Falhou em ${date}`}>
-      ✕ {date}
+    <span className="lead-geo-history-icon" title={title} aria-label={title} role="img">
+      <History size={16} aria-hidden="true" />
     </span>
   );
 }
@@ -84,125 +89,121 @@ export function AdminNovosLeadsCityPicker({
   onAllCitiesChange,
   onSelectionChange,
   productId,
-  segment,
   disabled
 }: Props) {
   const [geo, setGeo] = useState<GeoResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [cityFilter, setCityFilter] = useState("");
-  const [checkedZones, setCheckedZones] = useState<Set<number>>(new Set());
+  const [zoneFilter, setZoneFilter] = useState("");
+  const [selectedZoneId, setSelectedZoneId] = useState<string>(ALL_ZONES);
   const [checkedIbge, setCheckedIbge] = useState<Set<number>>(new Set());
   const [indicators, setIndicators] = useState<Record<string, GenerationIndicator>>({});
-
-  useEffect(() => {
-    setCheckedZones(new Set());
-    setCheckedIbge(new Set());
-    setCityFilter("");
-    setIndicators({});
-    onAllCitiesChange(false);
-    onSelectionChange({ municipalities: [], commercial_zone_ids: [] });
-  }, [uf, onAllCitiesChange, onSelectionChange]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setGeoError(null);
-    void fetch(`/api/admin/lead-generation/geo?uf=${encodeURIComponent(uf)}`)
-      .then(async (r) => {
-        const data = (await r.json()) as GeoResponse & { error?: string };
-        if (!r.ok) throw new Error(data.error ?? "Falha ao carregar municípios");
-        if (!cancelled) setGeo(data);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setGeo(null);
-          setGeoError(e instanceof Error ? e.message : "Erro ao carregar IBGE");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [uf]);
-
-  const zoneToIbge = useMemo(() => {
-    const m = new Map<number, number[]>();
-    if (!geo) return m;
-    for (const z of geo.zones) {
-      const codes = geo.municipalities.filter((c) => c.zone_ids.includes(z.id)).map((c) => c.ibge_code);
-      m.set(z.id, codes);
-    }
-    return m;
-  }, [geo]);
+  const fetchGenerationRef = useRef(0);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  const onAllCitiesChangeRef = useRef(onAllCitiesChange);
+  onSelectionChangeRef.current = onSelectionChange;
+  onAllCitiesChangeRef.current = onAllCitiesChange;
 
   const emitSelection = useCallback(
-    (zones: Set<number>, ibge: Set<number>) => {
-      if (!geo) {
-        onSelectionChange({ municipalities: [], commercial_zone_ids: [...zones] });
+    (ibge: Set<number>, geoData: GeoResponse | null) => {
+      if (!geoData) {
+        onSelectionChange({ municipalities: [], commercial_zone_ids: [] });
         return;
       }
       const municipalities: CitySelectionPayload["municipalities"] = [];
       for (const code of ibge) {
-        const city = geo.municipalities.find((c) => c.ibge_code === code);
+        const city = geoData.municipalities.find((c) => c.ibge_code === code);
         if (!city) continue;
-        const zoneId = city.zone_ids.find((zid) => zones.has(zid)) ?? null;
+        const regionName =
+          geoData.zones.find((z) => z.id === city.immediate_region_id)?.name ?? null;
         municipalities.push({
           ibge_code: city.ibge_code,
           name: city.name,
-          commercial_zone_id: zoneId
+          ibge_immediate_region_id: city.immediate_region_id,
+          ibge_immediate_region_name: regionName,
+          commercial_zone_id: null
         });
       }
-      onSelectionChange({ municipalities, commercial_zone_ids: [...zones] });
+      onSelectionChange({ municipalities, commercial_zone_ids: [] });
     },
-    [geo, onSelectionChange]
+    [onSelectionChange]
   );
 
-  const toggleZone = (zoneId: number, on: boolean) => {
-    const nextZones = new Set(checkedZones);
-    const nextIbge = new Set(checkedIbge);
-    const inZone = zoneToIbge.get(zoneId) ?? [];
-    if (on) {
-      nextZones.add(zoneId);
-      for (const c of inZone) nextIbge.add(c);
-    } else {
-      nextZones.delete(zoneId);
-      for (const c of inZone) {
-        const still = [...nextZones].some((zid) => (zoneToIbge.get(zid) ?? []).includes(c));
-        if (!still) nextIbge.delete(c);
-      }
-    }
-    setCheckedZones(nextZones);
-    setCheckedIbge(nextIbge);
-    emitSelection(nextZones, nextIbge);
-  };
+  useEffect(() => {
+    setSelectedZoneId(ALL_ZONES);
+    setCheckedIbge(new Set());
+    setCityFilter("");
+    setZoneFilter("");
+    setIndicators({});
+    onAllCitiesChangeRef.current(false);
+    onSelectionChangeRef.current({ municipalities: [], commercial_zone_ids: [] });
+    setGeo(null);
+    setGeoError(null);
+    if (!uf || uf.length !== 2) return;
 
-  const toggleCity = (m: GeoMunicipality, on: boolean) => {
-    const nextIbge = new Set(checkedIbge);
-    if (on) nextIbge.add(m.ibge_code);
-    else nextIbge.delete(m.ibge_code);
-    const nextZones = new Set(checkedZones);
-    for (const z of geo?.zones ?? []) {
-      const rc = zoneToIbge.get(z.id) ?? [];
-      if (rc.length && rc.every((c) => nextIbge.has(c))) nextZones.add(z.id);
-      else nextZones.delete(z.id);
-    }
-    setCheckedIbge(nextIbge);
-    setCheckedZones(nextZones);
-    emitSelection(nextZones, nextIbge);
-  };
+    const generation = ++fetchGenerationRef.current;
+    setLoading(true);
+    setGeoError(null);
+
+    void fetch(`/api/admin/lead-generation/geo?uf=${encodeURIComponent(uf)}`)
+      .then(async (r) => {
+        const data = (await r.json()) as GeoResponse & { error?: string };
+        if (!r.ok) throw new Error(data.error ?? "Falha ao carregar localidades");
+        if (fetchGenerationRef.current !== generation) return;
+        setGeo(data);
+      })
+      .catch((e: unknown) => {
+        if (fetchGenerationRef.current !== generation) return;
+        setGeo(null);
+        setGeoError(e instanceof Error ? e.message : "Erro ao carregar IBGE");
+      })
+      .finally(() => {
+        if (fetchGenerationRef.current === generation) setLoading(false);
+      });
+  }, [uf]);
+
+  const ufList = ufOptions.length > 0 ? ufOptions : [];
+
+  const filteredZones = useMemo(() => {
+    const list = geo?.zones ?? [];
+    const q = zoneFilter.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((z) => z.name.toLowerCase().includes(q));
+  }, [geo?.zones, zoneFilter]);
+
+  const citiesInScope = useMemo(() => {
+    const all = geo?.municipalities ?? [];
+    if (selectedZoneId === ALL_ZONES) return all;
+    const zoneId = Number(selectedZoneId);
+    if (!Number.isFinite(zoneId)) return all;
+    return all.filter((c) => c.immediate_region_id === zoneId || c.zone_ids.includes(zoneId));
+  }, [geo?.municipalities, selectedZoneId]);
 
   const q = cityFilter.trim().toLowerCase();
-  const filteredCities = (geo?.municipalities ?? []).filter((c) => !q || c.name.toLowerCase().includes(q));
+  const filteredCities = citiesInScope.filter((c) => !q || c.name.toLowerCase().includes(q));
+
+  useEffect(() => {
+    if (selectedZoneId === ALL_ZONES) return;
+    const zoneId = Number(selectedZoneId);
+    setCheckedIbge((prev) => {
+      const next = new Set([...prev].filter((code) => {
+        const city = geo?.municipalities.find((c) => c.ibge_code === code);
+        if (!city) return false;
+        return city.immediate_region_id === zoneId || city.zone_ids.includes(zoneId);
+      }));
+      if (next.size === prev.size && [...next].every((c) => prev.has(c))) return prev;
+      emitSelection(next, geo);
+      return next;
+    });
+  }, [selectedZoneId, geo, emitSelection]);
 
   const visibleCodes = useMemo(
     () => filteredCities.map((c) => c.ibge_code).filter((c) => c > 0),
     [filteredCities]
   );
 
-  const visibleCodesKey = useMemo(() => visibleCodes.join(","), [visibleCodes]);
+  const visibleCodesKey = visibleCodes.join(",");
 
   useEffect(() => {
     if (productId === "" || visibleCodes.length === 0) {
@@ -215,9 +216,7 @@ export function AdminNovosLeadsCityPicker({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          uf,
           product_id: productId,
-          segment,
           ibge_codes: visibleCodes.slice(0, 500)
         })
       })
@@ -233,65 +232,141 @@ export function AdminNovosLeadsCityPicker({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [uf, productId, segment, visibleCodes, visibleCodesKey]);
+  }, [productId, visibleCodesKey, visibleCodes]);
 
-  const ufList =
-    ufOptions.length > 0 ? ufOptions : [{ code: "RS", name: "Rio Grande do Sul", has_motor_mapping: true }];
-
-  const totalMuni = geo?.municipalities.length ?? 0;
+  const toggleCity = (m: GeoMunicipality, on: boolean) => {
+    const nextIbge = new Set(checkedIbge);
+    if (on) nextIbge.add(m.ibge_code);
+    else nextIbge.delete(m.ibge_code);
+    setCheckedIbge(nextIbge);
+    emitSelection(nextIbge, geo);
+  };
 
   function clearManualSelection() {
-    setCheckedZones(new Set());
     setCheckedIbge(new Set());
     onSelectionChange({ municipalities: [], commercial_zone_ids: [] });
   }
 
+  function retryLoad() {
+    if (!uf || uf.length !== 2) return;
+    const generation = ++fetchGenerationRef.current;
+    setLoading(true);
+    setGeoError(null);
+    void fetch(`/api/admin/lead-generation/geo?uf=${encodeURIComponent(uf)}`)
+      .then(async (r) => {
+        const data = (await r.json()) as GeoResponse & { error?: string };
+        if (!r.ok) throw new Error(data.error ?? "Falha ao carregar localidades");
+        if (fetchGenerationRef.current !== generation) return;
+        setGeo(data);
+      })
+      .catch((e: unknown) => {
+        if (fetchGenerationRef.current !== generation) return;
+        setGeo(null);
+        setGeoError(e instanceof Error ? e.message : "Erro ao carregar IBGE");
+      })
+      .finally(() => {
+        if (fetchGenerationRef.current === generation) setLoading(false);
+      });
+  }
+
+  const totalMuni = geo?.municipalities.length ?? 0;
+  const ufSelected = uf.length === 2;
+  const zoneDisabled = !ufSelected || loading || !geo;
+
   return (
     <div className="lead-geo-picker">
       {geo?.ibge_warning ? <p className="alert alert-warning lead-geo-ibge-warn">{geo.ibge_warning}</p> : null}
-      {geoError ? <p className="alert alert-error">{geoError}</p> : null}
+      {geoError ? (
+        <div className="alert alert-error lead-geo-error">
+          <p>{geoError}</p>
+          <button className="button button--ghost" type="button" onClick={retryLoad}>
+            Tentar novamente
+          </button>
+        </div>
+      ) : null}
 
       <div className="lead-geo-grid-head">
         <span>UF</span>
-        <span>Cidades (IBGE)</span>
-        <span>Zona comercial</span>
+        <span>Zona (IBGE)</span>
+        <span>Cidades</span>
       </div>
 
       <div className="lead-geo-grid">
         <div className="lead-geo-col lead-geo-col-uf">
-          <select className="input" value={uf} disabled={disabled} onChange={(e) => onUfChange(e.target.value)}>
+          <select
+            className="input"
+            value={uf}
+            disabled={disabled}
+            onChange={(e) => onUfChange(e.target.value)}
+          >
+            <option value="">Selecione uma UF</option>
             {ufList.map((u) => (
               <option key={u.code} value={u.code}>
-                {u.code}
+                {u.code} — {u.name}
               </option>
             ))}
           </select>
-          <p className="muted lead-geo-uf-name">{ufList.find((x) => x.code === uf)?.name ?? uf}</p>
-          {geo ? (
+          {ufSelected && geo ? (
             <p className="muted lead-geo-meta">
-              {totalMuni} municípios · fonte {geo.source}
+              {totalMuni} municípios · {geo.zones.length} zonas · fonte {geo.source}
               {geo.has_motor_mapping ? ` · ${geo.anp_supported_count} com ANP` : null}
             </p>
           ) : null}
-          <label className="lead-geo-all-uf">
-            <input
-              type="checkbox"
-              checked={allCities}
-              disabled={disabled || totalMuni === 0}
-              onChange={(e) => {
-                onAllCitiesChange(e.target.checked);
-                if (e.target.checked) clearManualSelection();
-              }}
-            />
-            <span>Todas da UF ({totalMuni})</span>
-          </label>
+          {ufSelected ? (
+            <label className="lead-geo-all-uf">
+              <input
+                type="checkbox"
+                checked={allCities}
+                disabled={disabled || totalMuni === 0 || loading}
+                onChange={(e) => {
+                  onAllCitiesChange(e.target.checked);
+                  if (e.target.checked) clearManualSelection();
+                }}
+              />
+              <span>Todas da UF ({totalMuni})</span>
+            </label>
+          ) : null}
         </div>
 
         <div className="lead-geo-col">
-          {loading && !geo ? (
+          {!ufSelected ? (
+            <p className="muted">Selecione uma UF para carregar zonas.</p>
+          ) : loading && !geo ? (
+            <p className="muted">Consultando IBGE…</p>
+          ) : (
+            <>
+              <input
+                className="input lead-geo-filter"
+                type="search"
+                placeholder="Filtrar zona…"
+                value={zoneFilter}
+                disabled={disabled || zoneDisabled}
+                onChange={(e) => setZoneFilter(e.target.value)}
+              />
+              <select
+                className="input"
+                value={selectedZoneId}
+                disabled={disabled || zoneDisabled}
+                onChange={(e) => setSelectedZoneId(e.target.value)}
+              >
+                <option value={ALL_ZONES}>Todas as zonas</option>
+                {filteredZones.map((z) => (
+                  <option key={z.id} value={String(z.id)}>
+                    {z.name} ({z.ibge_count})
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+        </div>
+
+        <div className="lead-geo-col">
+          {!ufSelected ? (
+            <p className="muted">Selecione uma UF para carregar cidades.</p>
+          ) : loading && !geo ? (
             <p className="muted">Consultando IBGE…</p>
           ) : allCities ? (
-            <p className="muted">Todos os municípios da UF na consulta IBGE (motor ANP onde houver mapa).</p>
+            <p className="muted">Todos os municípios da UF serão incluídos na geração.</p>
           ) : totalMuni === 0 ? (
             <p className="muted">Nenhum município carregado para esta UF.</p>
           ) : (
@@ -305,7 +380,7 @@ export function AdminNovosLeadsCityPicker({
                 onChange={(e) => setCityFilter(e.target.value)}
               />
               {productId === "" ? (
-                <p className="muted lead-geo-ind-hint">Selecione produto e segmento para ver histórico por cidade.</p>
+                <p className="muted lead-geo-ind-hint">Selecione um produto para ver histórico de geração por cidade.</p>
               ) : null}
               <ul className="lead-geo-list lead-geo-list-cities">
                 {filteredCities.map((c) => {
@@ -329,46 +404,13 @@ export function AdminNovosLeadsCityPicker({
                             </span>
                           ) : null}
                         </span>
-                        {ind ? <IndicatorBadge ind={ind} /> : null}
+                        {ind ? <HistoryIcon ind={ind} /> : null}
                       </label>
                     </li>
                   );
                 })}
               </ul>
             </>
-          )}
-        </div>
-
-        <div className="lead-geo-col">
-          {geo && !allCities ? (
-            geo.zones.length === 0 ? (
-              <p className="muted">
-                {geo.has_motor_mapping
-                  ? "Zonas comerciais indisponíveis (tabelas do CRM ou migration 029). Use cidades IBGE."
-                  : "Nesta UF não há zonas pré-definidas no CRM (só RS/PR). Use cidades IBGE — o IBGE não publica “zona comercial” de postos."}
-              </p>
-            ) : (
-              <ul className="lead-geo-list">
-                {geo.zones.map((z) => (
-                  <li key={z.id}>
-                    <label className="lead-geo-row">
-                      <input
-                        type="checkbox"
-                        disabled={disabled}
-                        checked={checkedZones.has(z.id)}
-                        onChange={(e) => toggleZone(z.id, e.target.checked)}
-                      />
-                      <span className="lead-geo-label">
-                        {z.name}
-                        <span className="muted"> ({z.ibge_count})</span>
-                      </span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            )
-          ) : (
-            <p className="muted">{allCities ? "—" : "Selecione cidades ou zonas."}</p>
           )}
         </div>
       </div>

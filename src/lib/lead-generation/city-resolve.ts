@@ -48,7 +48,12 @@ export function resolveCityPairs(uf: string, filters: LeadGenFilters): CityPair[
     const pairs: CityPair[] = [];
     const seen = new Set<string>();
     for (const m of filters.municipalities) {
-      const pair = resolveAnpPairForMunicipality(u, { ibge_code: m.ibge_code, name: m.name });
+      const pair = resolveAnpPairForMunicipality(u, {
+        ibge_code: m.ibge_code,
+        name: m.name,
+        immediate_region_id: m.ibge_immediate_region_id ?? null,
+        immediate_region_name: m.ibge_immediate_region_name ?? null
+      });
       if (!pair || seen.has(pair.api)) continue;
       seen.add(pair.api);
       pairs.push(pair);

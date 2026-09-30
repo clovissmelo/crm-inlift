@@ -9,7 +9,7 @@ import {
 } from "@/components/admin-novos-leads-city-picker";
 import { LeadGenFlowField } from "@/components/lead-gen-flow-field";
 import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type RunFilters = {
   cities: string[];
@@ -53,6 +53,8 @@ const PHASE_LABEL: Record<string, string> = {
   finalizing: "Finalizando",
   done: "Concluído"
 };
+
+const RUN_POLL_STATUSES = new Set(["queued", "running", "paused"]);
 
 const RUN_STATUS_LABEL: Record<string, string> = {
   queued: "Na fila",
@@ -122,7 +124,7 @@ function formatRunResults(counts: Record<string, number>): string {
 
 export function AdminNovosLeadsWizard() {
   const [ufOptions, setUfOptions] = useState<UfOption[]>([]);
-  const [uf, setUf] = useState("RS");
+  const [uf, setUf] = useState("");
   const [allCities, setAllCities] = useState(false);
   const [citySelection, setCitySelection] = useState<CitySelectionPayload>({ municipalities: [], commercial_zone_ids: [] });
   const [segment, setSegment] = useState("all");
@@ -305,16 +307,52 @@ export function AdminNovosLeadsWizard() {
     }
   }, [listActiveRun, activeRunId]);
 
+  const tickInFlightRef = useRef(false);
+
+  const runIdToPoll = useMemo(() => {
+    if (listActiveRun && RUN_POLL_STATUSES.has(listActiveRun.status)) return listActiveRun.id;
+    if (
+      activeRunId != null &&
+      activeRun?.id === activeRunId &&
+      activeRun?.status &&
+      RUN_POLL_STATUSES.has(activeRun.status)
+    ) {
+      return activeRunId;
+    }
+    return null;
+  }, [listActiveRun, activeRunId, activeRun?.id, activeRun?.status]);
+
   useEffect(() => {
-    if (!activeRunId) return;
-    void tickActiveRun(activeRunId);
-    const pollMs = ["queued", "running"].includes(activeRun?.status ?? "") ? 3000 : 4000;
-    const t = setInterval(() => {
-      void tickActiveRun(activeRunId);
-      if (["completed", "partial", "failed", "cancelled"].includes(activeRun?.status ?? "")) return;
-    }, pollMs);
-    return () => clearInterval(t);
-  }, [activeRunId, tickActiveRun, activeRun?.status]);
+    if (runIdToPoll == null) return;
+
+    let cancelled = false;
+
+    async function tickOnce() {
+      if (cancelled || tickInFlightRef.current || document.visibilityState === "hidden") return;
+      tickInFlightRef.current = true;
+      try {
+        await tickActiveRun(runIdToPoll!);
+      } finally {
+        tickInFlightRef.current = false;
+      }
+    }
+
+    void tickOnce();
+    const pollMs =
+      listActiveRun?.status === "queued" || listActiveRun?.status === "running" ? 4000 : 5000;
+    const t = window.setInterval(() => void tickOnce(), pollMs);
+
+    function onVisibility() {
+      if (document.visibilityState === "visible") void tickOnce();
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [runIdToPoll, listActiveRun?.status, tickActiveRun]);
 
   useEffect(() => {
     if (activeRunId && ["completed", "partial", "failed", "cancelled"].includes(activeRun?.status ?? "")) {
@@ -323,8 +361,12 @@ export function AdminNovosLeadsWizard() {
   }, [activeRunId, activeRun?.status, resultTab, fetchRunDetail]);
 
   async function startRun() {
+    if (!uf || uf.length !== 2) {
+      setError("Selecione uma UF.");
+      return;
+    }
     if (!allCities && !hasGeoSelection) {
-      setError("Selecione UF, zona comercial e/ou cidades (ou todas da UF).");
+      setError("Selecione cidades ou marque todas da UF.");
       return;
     }
     if (productId !== "" && citySelection.municipalities.length > 0) {
@@ -332,9 +374,7 @@ export function AdminNovosLeadsWizard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          uf,
           product_id: productId,
-          segment,
           ibge_codes: citySelection.municipalities.map((m) => m.ibge_code)
         })
       });
@@ -354,7 +394,7 @@ export function AdminNovosLeadsWizard() {
           });
           const more = prior.length > 8 ? `\n… e mais ${prior.length - 8} cidade(s).` : "";
           const ok = window.confirm(
-            `Algumas cidades já tiveram geração para este produto e segmento:\n${lines.join("\n")}${more}\n\nClientes já cadastrados não serão alterados. Deseja continuar?`
+            `Algumas cidades já tiveram geração para este produto:\n${lines.join("\n")}${more}\n\nClientes já cadastrados não serão alterados. Deseja continuar?`
           );
           if (!ok) return;
         }
@@ -539,7 +579,6 @@ export function AdminNovosLeadsWizard() {
             onAllCitiesChange={setAllCities}
             onSelectionChange={setCitySelection}
             productId={productId}
-            segment={segment}
           />
         </div>
 

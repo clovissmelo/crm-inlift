@@ -3,7 +3,7 @@ import { requireApiUser } from "@/lib/auth";
 import { resolveCityPairsFromMunicipalities } from "@/lib/lead-generation/city-resolve-ibge";
 import { drainLeadGenerationTicks } from "@/lib/lead-generation/drain-ticks";
 import { buildFlowSnapshot, getDefaultFlowForSegment, getLeadGenerationFlow } from "@/lib/lead-generation/flows-repo";
-import { getMunicipalitiesForUf } from "@/lib/lead-generation/ibge-localidades";
+import { getUfGeoFromIbge } from "@/lib/lead-generation/ibge-localidades";
 import { persistRunMunicipalities } from "@/lib/lead-generation/municipality-runs";
 import { createLeadGenerationRun, listLeadGenerationRuns } from "@/lib/lead-generation/runs-repo";
 import { getProduct } from "@/lib/products";
@@ -17,7 +17,9 @@ import { z } from "zod";
 const municipalitySchema = z.object({
   ibge_code: z.number().int(),
   name: z.string().min(1).max(120),
-  commercial_zone_id: z.number().int().positive().nullable().optional()
+  commercial_zone_id: z.number().int().positive().nullable().optional(),
+  ibge_immediate_region_id: z.number().int().positive().nullable().optional(),
+  ibge_immediate_region_name: z.string().max(200).nullable().optional()
 });
 
 const createSchema = z.object({
@@ -79,12 +81,14 @@ export async function POST(request: Request) {
   }
   const flowSnapshot = buildFlowSnapshot(flow);
   const initialSource = flowSnapshot.initial_source;
-  const ibge = await getMunicipalitiesForUf(uf);
+  const ibge = await getUfGeoFromIbge(uf);
 
   const selected: LeadGenMunicipalityRef[] = parsed.data.municipalities.map((m) => ({
     ibge_code: m.ibge_code,
     name: m.name,
-    commercial_zone_id: m.commercial_zone_id ?? null
+    commercial_zone_id: m.commercial_zone_id ?? null,
+    ibge_immediate_region_id: m.ibge_immediate_region_id ?? null,
+    ibge_immediate_region_name: m.ibge_immediate_region_name ?? null
   }));
 
   if (!parsed.data.all_cities_in_uf && selected.length === 0) {
@@ -111,13 +115,25 @@ export async function POST(request: Request) {
     if (parsed.data.all_cities_in_uf) {
       for (const m of ibge.municipalities) {
         pairs.push({ official: m.name, api: m.name });
-        municipalities.push({ ibge_code: m.ibge_code, name: m.name, commercial_zone_id: null });
+        municipalities.push({
+          ibge_code: m.ibge_code,
+          name: m.name,
+          commercial_zone_id: null,
+          ibge_immediate_region_id: m.immediate_region_id,
+          ibge_immediate_region_name: m.immediate_region_name
+        });
       }
     } else if (selected.length > 0) {
       for (const m of selected) {
         pairs.push({ official: m.name, api: m.name });
         if (!municipalities.some((x) => x.ibge_code === m.ibge_code)) {
-          municipalities.push({ ibge_code: m.ibge_code, name: m.name, commercial_zone_id: m.commercial_zone_id ?? null });
+          municipalities.push({
+            ibge_code: m.ibge_code,
+            name: m.name,
+            commercial_zone_id: m.commercial_zone_id ?? null,
+            ibge_immediate_region_id: m.ibge_immediate_region_id ?? null,
+            ibge_immediate_region_name: m.ibge_immediate_region_name ?? null
+          });
         }
       }
     }
@@ -175,7 +191,9 @@ export async function POST(request: Request) {
       ibge_code: m.ibge_code,
       name: m.name,
       uf,
-      commercial_zone_id: m.commercial_zone_id
+      commercial_zone_id: m.commercial_zone_id,
+      ibge_immediate_region_id: m.ibge_immediate_region_id ?? null,
+      ibge_immediate_region_name: m.ibge_immediate_region_name ?? null
     }))
   );
 
