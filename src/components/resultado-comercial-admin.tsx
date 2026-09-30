@@ -24,6 +24,8 @@ import "./resultado-comercial-admin.css";
 type ResultRow = {
   id: number;
   name: string;
+  layer?: string;
+  description?: string | null;
   status: string;
   suggest_follow_up: boolean;
   lead_qualification: LeadQualification | null;
@@ -55,7 +57,13 @@ function normalizeAllowedForForm(row: Pick<ResultRow, "allowed_next_actions" | "
   return resolveAllowedNextActions(row).filter((k) => RESULT_REGISTRATION_ACTION_KEYS.includes(k));
 }
 
-export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boolean }) {
+export function ResultadoComercialAdmin({
+  canDelete = false,
+  commercialOnly = false
+}: {
+  canDelete?: boolean;
+  commercialOnly?: boolean;
+}) {
   const [results, setResults] = useState<ResultRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,7 +86,8 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
 
   const load = useCallback(async () => {
     const r = await fetch("/api/approach-result-types").then((res) => res.json());
-    setResults((r as { items: ResultRow[] }).items ?? []);
+    const rows = (r as { items: ResultRow[] }).items ?? [];
+    setResults(commercialOnly ? rows.filter((x) => x.layer !== "legacy_telephony") : rows);
   }, []);
 
   useEffect(() => {

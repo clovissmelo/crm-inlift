@@ -1,5 +1,8 @@
 import { defaultNextTypeForResult, resolveAllowedNextActions } from "@/lib/approach-next-actions";
-import { inferApproachResultSlugFromCall } from "@/lib/api4com/infer-approach-result";
+import {
+  matchTechnicalResultFromCatalog,
+  type TechnicalResultTypeRow
+} from "@/lib/classifications/technical-result-match";
 
 type ResultTypeRow = {
   id: number;
@@ -24,7 +27,7 @@ type CallRow = {
   answered_at: string | null;
 };
 
-/** Registro automático quando o resultado inferido não exige complemento manual. */
+/** Registro automático quando o resultado técnico indica sem conversa e o comercial não exige complemento. */
 export async function tryAutoRegisterApi4comCall(callId: number): Promise<boolean> {
   const callRes = await fetch(`/api/api4com/calls/${callId}`);
   if (!callRes.ok) return false;
@@ -32,14 +35,24 @@ export async function tryAutoRegisterApi4comCall(callId: number): Promise<boolea
   const call = callJson.call;
   if (!call?.client_id) return false;
 
-  const slug = inferApproachResultSlugFromCall(call);
-  if (!slug) return false;
+  const classRes = await fetch("/api/approach-classifications");
+  if (!classRes.ok) return false;
+  const classJson = (await classRes.json()) as {
+    technical?: TechnicalResultTypeRow[];
+    contact?: Array<{ id: number; slug: string }>;
+    commercial?: ResultTypeRow[];
+  };
 
-  const rtRes = await fetch("/api/approach-result-types");
-  if (!rtRes.ok) return false;
-  const rtJson = (await rtRes.json()) as { items?: ResultTypeRow[] };
-  const resultType = rtJson.items?.find((r) => r.slug === slug && r.require_final_registration === false);
-  if (!resultType) return false;
+  const techSlug =
+    matchTechnicalResultFromCatalog(classJson.technical ?? [], call)?.slug ??
+    null;
+  if (!techSlug || techSlug === "answered") return false;
+
+  const resultType = classJson.commercial?.find(
+    (r) => r.slug === "sem_contato" && r.require_final_registration === false
+  );
+  const contactOutcome = classJson.contact?.find((c) => c.slug === "nenhum_contato");
+  if (!resultType || !contactOutcome) return false;
 
   const allowed = resolveAllowedNextActions(resultType);
   const nextKey = defaultNextTypeForResult(resultType);
@@ -58,8 +71,11 @@ export async function tryAutoRegisterApi4comCall(callId: number): Promise<boolea
       channel: "call",
       occurred_at: call.ended_at ?? call.started_at,
       result_type_id: resultType.id,
+      contact_outcome_type_id: contactOutcome.id,
+      api4com_call_row_id: call.id,
       notes: null,
       external_call_id: call.api4com_call_id,
+      registration_status: "final",
       next_action
     })
   });

@@ -1,5 +1,8 @@
 import { validateNextActionChoice, type ApproachNextActionKey } from "@/lib/approach-next-actions";
 import { createApproach, markLeadContactPhoneVerified } from "@/lib/approaches";
+import { getContactOutcomeTypeById } from "@/lib/classifications/contact-commercial";
+import { getTechnicalResultTypeById } from "@/lib/classifications/technical-result";
+import { validateThreeLayerApproach } from "@/lib/classifications/validate-approach-registration";
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { get, nowIso, run } from "@/lib/db";
 import { completeFollowUp } from "@/lib/follow-ups";
@@ -16,30 +19,85 @@ export async function POST(request: Request) {
   }
 
   const data = parsed.data;
+  const registrationStatus = data.registration_status ?? "final";
+
+  if (data.api4com_call_row_id) {
+    const dup = await get<{ id: number }>(
+      "SELECT id FROM approaches WHERE api4com_call_row_id = @callRowId LIMIT 1",
+      { callRowId: data.api4com_call_row_id }
+    );
+    if (dup) {
+      return Response.json({ error: "Esta ligação já possui atendimento registrado." }, { status: 409 });
+    }
+  }
+
   const resultType = await get<{
+    name: string;
     suggest_follow_up: boolean;
     lead_qualification: string | null;
     require_schedule_return: boolean;
+    requires_meeting: boolean;
     allowed_next_actions: unknown;
     ask_decision_maker: boolean;
     mark_phone_verified: boolean;
+    layer: string;
   }>(
-    "SELECT suggest_follow_up, lead_qualification, require_schedule_return, allowed_next_actions, ask_decision_maker, mark_phone_verified FROM approach_result_types WHERE id = @id AND status = 'active'",
+    `SELECT name, suggest_follow_up, lead_qualification, require_schedule_return, requires_meeting,
+      allowed_next_actions, ask_decision_maker, mark_phone_verified, layer
+     FROM approach_result_types WHERE id = @id AND status = 'active'`,
     { id: data.result_type_id }
   );
   if (!resultType) return Response.json({ error: "Resultado inválido" }, { status: 400 });
 
-  if (resultType.ask_decision_maker && typeof data.spoke_with_decision_maker !== "boolean") {
-    return Response.json({ error: "Informe se houve contato com o decisor." }, { status: 400 });
-  }
+  const layerErr = await validateThreeLayerApproach({
+    channel: data.channel,
+    registration_status: registrationStatus,
+    contact_outcome_type_id: data.contact_outcome_type_id,
+    result_type_id: data.result_type_id,
+    api4com_call_row_id: data.api4com_call_row_id,
+    contacted_person_name: data.contacted_person_name,
+    contacted_person_job_title: data.contacted_person_job_title,
+    linked_contact_id: data.linked_contact_id
+  });
+  if (layerErr) return Response.json({ error: layerErr }, { status: 400 });
 
-  const nextValidation = validateNextActionChoice(resultType, data.next_action.type as ApproachNextActionKey);
-  if (nextValidation) return Response.json({ error: nextValidation }, { status: 400 });
+  if (registrationStatus === "final") {
+    if (resultType.ask_decision_maker && typeof data.spoke_with_decision_maker !== "boolean") {
+      return Response.json({ error: "Informe se houve contato com o decisor." }, { status: 400 });
+    }
+
+    const nextValidation = validateNextActionChoice(resultType, data.next_action.type as ApproachNextActionKey);
+    if (nextValidation) return Response.json({ error: nextValidation }, { status: 400 });
+
+    if (resultType.require_schedule_return && data.next_action.type !== "schedule_return") {
+      return Response.json({ error: "Este resultado exige data e horário de retorno." }, { status: 400 });
+    }
+    if (resultType.requires_meeting && data.next_action.type !== "schedule_meeting") {
+      return Response.json({ error: "Este resultado exige reunião agendada." }, { status: 400 });
+    }
+  }
 
   if (data.occurred_at) {
     const occurred = new Date(data.occurred_at);
     if (occurred.getTime() > Date.now()) {
       return Response.json({ error: "Data da abordagem não pode ser futura." }, { status: 400 });
+    }
+  }
+
+  let contactSnapshot: string | null = null;
+  if (data.contact_outcome_type_id) {
+    const co = await getContactOutcomeTypeById(data.contact_outcome_type_id);
+    contactSnapshot = co?.name ?? null;
+  }
+  let technicalSnapshot: string | null = null;
+  if (data.api4com_call_row_id) {
+    const call = await get<{ technical_result_type_id: number | null }>(
+      "SELECT technical_result_type_id FROM api4com_calls WHERE id = @id",
+      { id: data.api4com_call_row_id }
+    );
+    if (call?.technical_result_type_id) {
+      const t = await getTechnicalResultTypeById(call.technical_result_type_id);
+      technicalSnapshot = t?.display_name ?? null;
     }
   }
 
@@ -55,7 +113,17 @@ export async function POST(request: Request) {
       notes: data.notes,
       external_call_id: data.external_call_id,
       spoke_with_decision_maker: resultType.ask_decision_maker ? data.spoke_with_decision_maker : null,
-      next_action: data.next_action
+      next_action: registrationStatus === "final" ? data.next_action : { type: "none" },
+      api4com_call_row_id: data.api4com_call_row_id,
+      contact_outcome_type_id: data.contact_outcome_type_id,
+      contact_outcome_name_snapshot: contactSnapshot,
+      commercial_result_name_snapshot: resultType.name,
+      technical_result_name_snapshot: technicalSnapshot,
+      contacted_person_name: data.contacted_person_name,
+      contacted_person_job_title: data.contacted_person_job_title,
+      contacted_person_notes: data.contacted_person_notes,
+      linked_contact_id: data.linked_contact_id,
+      registration_status: registrationStatus
     });
 
     if (data.follow_up_id) {
@@ -63,9 +131,10 @@ export async function POST(request: Request) {
     }
 
     if (
-      resultType.lead_qualification === "cold" ||
-      resultType.lead_qualification === "warm" ||
-      resultType.lead_qualification === "hot"
+      registrationStatus === "final" &&
+      (resultType.lead_qualification === "cold" ||
+        resultType.lead_qualification === "warm" ||
+        resultType.lead_qualification === "hot")
     ) {
       await run(
         `

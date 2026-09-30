@@ -221,11 +221,14 @@ export async function getCallDetailForUser(id: number, userId: number) {
       SELECT c.*,
         COALESCE(cl.trade_name, cl.legal_name) AS client_name,
         ct.name AS contact_name,
-        p.name AS product_name
+        p.name AS product_name,
+        tr.display_name AS technical_display_name,
+        tr.slug AS technical_slug
       FROM api4com_calls c
       LEFT JOIN clients cl ON cl.id = c.client_id
       LEFT JOIN contacts ct ON ct.id = c.contact_id
       LEFT JOIN products p ON p.id = c.product_id
+      LEFT JOIN call_technical_result_types tr ON tr.id = c.technical_result_type_id
       WHERE c.id = @id AND c.user_id = @userId
     `,
     { id, userId }
@@ -555,6 +558,8 @@ export async function processApi4comWebhook(payload: Api4comWebhookPayload, webh
         now
       }
     );
+      const { persistCallTechnicalResult } = await import("@/lib/api4com/persist-technical-result");
+    if (insert.lastInsertRowid) await persistCallTechnicalResult(Number(insert.lastInsertRowid));
     return { ok: true, call_id: insert.lastInsertRowid, created: true };
   }
 
@@ -609,6 +614,11 @@ export async function processApi4comWebhook(payload: Api4comWebhookPayload, webh
       now: nowIso()
     }
   );
+
+  if (isHangup) {
+    const { persistCallTechnicalResult } = await import("@/lib/api4com/persist-technical-result");
+    await persistCallTechnicalResult(callRow.id);
+  }
 
   return { ok: true, call_id: callRow.id, completed: isHangup };
 }

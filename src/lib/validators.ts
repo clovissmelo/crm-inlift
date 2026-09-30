@@ -117,6 +117,13 @@ export const approachCreateSchema = z.object({
   external_call_id: z.string().trim().optional().nullable(),
   follow_up_id: z.number().int().positive().optional().nullable(),
   spoke_with_decision_maker: z.boolean().optional().nullable(),
+  api4com_call_row_id: z.number().int().positive().optional().nullable(),
+  contact_outcome_type_id: z.number().int().positive().optional().nullable(),
+  contacted_person_name: z.string().trim().optional().nullable(),
+  contacted_person_job_title: z.string().trim().optional().nullable(),
+  contacted_person_notes: z.string().trim().optional().nullable(),
+  linked_contact_id: z.number().int().positive().optional().nullable(),
+  registration_status: z.enum(["draft", "final"]).optional(),
   next_action: z.discriminatedUnion("type", [
     z.object({ type: z.literal("none") }),
     z.object({

@@ -15,28 +15,6 @@ export type TimelineItem = {
 export async function getClientTimeline(clientId: number): Promise<TimelineItem[]> {
   const items: TimelineItem[] = [];
 
-  const approaches = await all<{
-    id: number;
-    occurred_at: string;
-    channel: string;
-    notes: string | null;
-    result_name: string | null;
-    user_name: string | null;
-    product_name: string | null;
-  }>(
-    `
-      SELECT a.id, a.occurred_at, a.channel, a.notes, rt.name AS result_name, u.name AS user_name, p.name AS product_name
-      FROM approaches a
-      LEFT JOIN approach_result_types rt ON rt.id = a.result_type_id
-      LEFT JOIN users u ON u.id = a.user_id
-      LEFT JOIN products p ON p.id = a.product_id
-      WHERE a.client_id = @clientId
-        AND NOT EXISTS (SELECT 1 FROM api4com_calls ac WHERE ac.approach_id = a.id)
-      ORDER BY a.occurred_at DESC
-    `,
-    { clientId }
-  );
-
   const apiCalls = await all<{
     id: number;
     status: string;
@@ -46,20 +24,36 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     duration_seconds: number | null;
     phone_dialed: string;
     hangup_cause_label: string | null;
+    technical_provider_code: string | null;
+    technical_provider_label: string | null;
     user_name: string | null;
     approach_id: number | null;
     result_name: string | null;
     approach_notes: string | null;
     error_message: string | null;
+    technical_name: string | null;
+    contact_outcome_name: string | null;
+    commercial_name: string | null;
+    contacted_person_name: string | null;
+    bdr_name: string | null;
   }>(
     `
       SELECT c.id, c.status, c.created_at, c.ended_at, c.started_at, c.duration_seconds, c.phone_dialed,
-        c.hangup_cause_label, c.error_message,
-        u.name AS user_name, c.approach_id, rt.name AS result_name, a.notes AS approach_notes
+        c.hangup_cause_label, c.technical_provider_code, c.technical_provider_label, c.error_message,
+        u.name AS user_name, c.approach_id,
+        COALESCE(a.commercial_result_name_snapshot, rt.name) AS result_name,
+        a.notes AS approach_notes,
+        COALESCE(a.technical_result_name_snapshot, tr.display_name) AS technical_name,
+        a.contact_outcome_name_snapshot AS contact_outcome_name,
+        COALESCE(a.commercial_result_name_snapshot, rt.name) AS commercial_name,
+        a.contacted_person_name,
+        bu.name AS bdr_name
       FROM api4com_calls c
       LEFT JOIN users u ON u.id = c.user_id
       LEFT JOIN approaches a ON a.id = c.approach_id
+      LEFT JOIN users bu ON bu.id = a.user_id
       LEFT JOIN approach_result_types rt ON rt.id = a.result_type_id
+      LEFT JOIN call_technical_result_types tr ON tr.id = c.technical_result_type_id
       WHERE c.client_id = @clientId
         AND c.status IN ('initiating', 'ringing', 'in_progress', 'completed', 'failed')
       ORDER BY COALESCE(c.ended_at, c.started_at, c.created_at) DESC
@@ -72,23 +66,33 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     const techParts = [
       call.phone_dialed,
       call.duration_seconds != null ? `${call.duration_seconds}s` : null,
-      call.hangup_cause_label ? `desligamento: ${call.hangup_cause_label}` : null
+      call.technical_name ? `Técnico: ${call.technical_name}` : null,
+      call.technical_provider_label
+        ? `Provedor: ${call.technical_provider_label}${call.technical_provider_code ? ` (${call.technical_provider_code})` : ""}`
+        : call.hangup_cause_label
+          ? `Provedor: ${call.hangup_cause_label}`
+          : null
     ].filter(Boolean);
-    let title = "Ligação API4COM";
-    if (call.status === "failed") title = "Ligação API4COM (falhou ao discar)";
+    let title = "Ligação";
+    if (call.status === "failed") title = "Ligação (falhou ao discar)";
     else if (call.status === "initiating" || call.status === "ringing" || call.status === "in_progress") {
-      title = "Ligação API4COM (em andamento)";
-    } else if (call.approach_id) title = "Ligação API4COM (registrada)";
+      title = "Ligação (em andamento)";
+    } else if (call.approach_id) title = "Ligação registrada";
 
     let bdrParts: string[];
     if (call.status === "failed") {
       bdrParts = call.error_message ? [call.error_message] : ["Discagem não concluída"];
     } else if (call.status !== "completed") {
-      bdrParts = ["Aguardando retorno da telefonia (webhook API4COM)"];
-    } else if (call.result_name) {
-      bdrParts = [`Resultado BDR: ${call.result_name}`, call.approach_notes].filter(Boolean) as string[];
+      bdrParts = ["Aguardando retorno da telefonia"];
+    } else if (call.approach_id) {
+      bdrParts = [
+        call.contact_outcome_name ? `Contato: ${call.contact_outcome_name}` : null,
+        call.contacted_person_name ? `Pessoa: ${call.contacted_person_name}` : null,
+        call.commercial_name ? `Comercial: ${call.commercial_name}` : null,
+        call.approach_notes
+      ].filter(Boolean) as string[];
     } else {
-      bdrParts = ["Resultado comercial pendente"];
+      bdrParts = ["Classificação BDR pendente"];
     }
 
     items.push({
@@ -97,17 +101,55 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       title,
       detail: [...techParts, ...bdrParts].join(" · ") || null,
       occurred_at: when,
-      user_name: call.user_name
+      user_name: call.bdr_name ?? call.user_name
     });
   }
 
+  const approaches = await all<{
+    id: number;
+    occurred_at: string;
+    channel: string;
+    notes: string | null;
+    result_name: string | null;
+    user_name: string | null;
+    product_name: string | null;
+    contact_outcome_name: string | null;
+    commercial_name: string | null;
+    technical_name: string | null;
+    contacted_person_name: string | null;
+  }>(
+    `
+      SELECT a.id, a.occurred_at, a.channel, a.notes,
+        COALESCE(a.commercial_result_name_snapshot, rt.name) AS result_name,
+        u.name AS user_name, p.name AS product_name,
+        a.contact_outcome_name_snapshot AS contact_outcome_name,
+        COALESCE(a.commercial_result_name_snapshot, rt.name) AS commercial_name,
+        a.technical_result_name_snapshot AS technical_name,
+        a.contacted_person_name
+      FROM approaches a
+      LEFT JOIN approach_result_types rt ON rt.id = a.result_type_id
+      LEFT JOIN users u ON u.id = a.user_id
+      LEFT JOIN products p ON p.id = a.product_id
+      WHERE a.client_id = @clientId
+        AND NOT EXISTS (SELECT 1 FROM api4com_calls ac WHERE ac.approach_id = a.id)
+      ORDER BY a.occurred_at DESC
+    `,
+    { clientId }
+  );
+
   for (const a of approaches) {
     const channelLabel = a.channel === "whatsapp" ? "WhatsApp" : a.channel === "email" ? "E-mail" : "Ligação";
+    const layerParts = [
+      a.technical_name ? `Técnico: ${a.technical_name}` : null,
+      a.contact_outcome_name ? `Contato: ${a.contact_outcome_name}` : null,
+      a.contacted_person_name ? `Pessoa: ${a.contacted_person_name}` : null,
+      a.commercial_name ? `Comercial: ${a.commercial_name}` : null
+    ].filter(Boolean);
     items.push({
       id: `approach-${a.id}`,
       kind: "approach",
       title: `Abordagem (${channelLabel})${a.result_name ? ` — ${a.result_name}` : ""}`,
-      detail: [a.product_name, a.notes].filter(Boolean).join(" · ") || null,
+      detail: [a.product_name, ...layerParts, a.notes].filter(Boolean).join(" · ") || null,
       occurred_at: a.occurred_at,
       user_name: a.user_name
     });

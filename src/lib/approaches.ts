@@ -29,18 +29,37 @@ export async function createApproach(input: {
   external_call_id?: string | null;
   spoke_with_decision_maker?: boolean | null;
   next_action: NextActionInput;
+  api4com_call_row_id?: number | null;
+  contact_outcome_type_id?: number | null;
+  contact_outcome_name_snapshot?: string | null;
+  commercial_result_name_snapshot?: string | null;
+  technical_result_name_snapshot?: string | null;
+  contacted_person_name?: string | null;
+  contacted_person_job_title?: string | null;
+  contacted_person_notes?: string | null;
+  linked_contact_id?: number | null;
+  registration_status?: "draft" | "final";
 }) {
   const occurredAt = input.occurred_at ?? nowIso();
   const recordedAt = nowIso();
+  const registrationStatus = input.registration_status ?? "final";
 
   const approachResult = await run(
     `
       INSERT INTO approaches (
         client_id, contact_id, product_id, user_id, channel, notes,
-        occurred_at, recorded_at, result_type_id, external_call_id, spoke_with_decision_maker, created_at
+        occurred_at, recorded_at, result_type_id, external_call_id, spoke_with_decision_maker,
+        api4com_call_row_id, contact_outcome_type_id, contact_outcome_name_snapshot,
+        commercial_result_name_snapshot, technical_result_name_snapshot,
+        contacted_person_name, contacted_person_job_title, contacted_person_notes,
+        linked_contact_id, registration_status, created_at
       ) VALUES (
         @clientId, @contactId, @productId, @userId, @channel, @notes,
-        @occurredAt, @recordedAt, @resultTypeId, @externalCallId, @spokeWithDecisionMaker, @createdAt
+        @occurredAt, @recordedAt, @resultTypeId, @externalCallId, @spokeWithDecisionMaker,
+        @api4comCallRowId, @contactOutcomeTypeId, @contactOutcomeSnapshot,
+        @commercialSnapshot, @technicalSnapshot,
+        @contactedPersonName, @contactedPersonJobTitle, @contactedPersonNotes,
+        @linkedContactId, @registrationStatus, @createdAt
       )
     `,
     {
@@ -55,6 +74,16 @@ export async function createApproach(input: {
       resultTypeId: input.result_type_id,
       externalCallId: input.external_call_id ?? null,
       spokeWithDecisionMaker: input.spoke_with_decision_maker ?? null,
+      api4comCallRowId: input.api4com_call_row_id ?? null,
+      contactOutcomeTypeId: input.contact_outcome_type_id ?? null,
+      contactOutcomeSnapshot: input.contact_outcome_name_snapshot ?? null,
+      commercialSnapshot: input.commercial_result_name_snapshot ?? null,
+      technicalSnapshot: input.technical_result_name_snapshot ?? null,
+      contactedPersonName: input.contacted_person_name ?? null,
+      contactedPersonJobTitle: input.contacted_person_job_title ?? null,
+      contactedPersonNotes: input.contacted_person_notes ?? null,
+      linkedContactId: input.linked_contact_id ?? null,
+      registrationStatus,
       createdAt: recordedAt
     }
   );

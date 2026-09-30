@@ -6,7 +6,14 @@ import { LEAD_QUALIFICATION_LABELS, type LeadQualification } from "@/lib/lead-qu
 import { formatSpDateTime } from "@/lib/datetime";
 import type { Product } from "@/lib/types";
 import { formatPhoneDisplay } from "@/lib/format";
-import { inferApproachResultSlugFromCall } from "@/lib/api4com/infer-approach-result";
+import {
+  applyThreeLayerSuggestions,
+  CallThreeLayerRegistrationFields,
+  resolveCallTechnicalSlug,
+  type CommercialOption,
+  type ContactOutcomeOption
+} from "@/components/call-three-layer-registration-fields";
+import type { TechnicalResultTypeRow } from "@/lib/classifications/technical-result-match";
 import { formatCallScriptLogForNotes, normalizeCallScriptLog } from "@/lib/call-script-log";
 import { ApproachNextStepField } from "@/components/approach-next-step-field";
 import {
@@ -29,6 +36,10 @@ type CallDetail = {
   hangup_cause_code: string | null;
   hangup_cause_label: string | null;
   answered_at: string | null;
+  technical_display_name?: string | null;
+  technical_slug?: string | null;
+  technical_provider_code?: string | null;
+  technical_provider_label?: string | null;
   client_name: string | null;
   contact_name: string | null;
   record_url: string | null;
@@ -112,62 +123,61 @@ export function Api4comCallResultForm({
   const [dialLoading, setDialLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultLockedByIntegration, setResultLockedByIntegration] = useState(false);
+  const [contactLocked, setContactLocked] = useState(false);
   const [spokeWithDecisionMaker, setSpokeWithDecisionMaker] = useState<boolean | null>(null);
+  const [, setTechnicalTypes] = useState<TechnicalResultTypeRow[]>([]);
+  const [contactTypes, setContactTypes] = useState<ContactOutcomeOption[]>([]);
+  const [compatMap, setCompatMap] = useState<Record<string, number[]>>({});
+  const [contactOutcomeId, setContactOutcomeId] = useState("");
+  const [, setTechnicalSlug] = useState<string | null>(null);
+  const [technicalLabel, setTechnicalLabel] = useState("");
+  const [contactedPersonName, setContactedPersonName] = useState("");
+  const [contactedPersonJobTitle, setContactedPersonJobTitle] = useState("");
+  const [contactedPersonNotes, setContactedPersonNotes] = useState("");
 
   const call = ctx?.call ?? null;
 
-  function parseResultTypes(rt: {
-    items?: Array<
-      ResultType & {
-        status?: string;
-        lead_qualification?: string | null;
-        slug?: string;
-        collect_notes?: boolean;
-        require_schedule_return?: boolean;
-        allowed_next_actions?: unknown;
-        require_final_registration?: boolean;
-      }
-    >;
-  }) {
-    return (rt.items ?? [])
-      .filter((i) => i.id && (!i.status || i.status === "active"))
-      .map((i) => ({
-        id: i.id,
-        slug: i.slug ?? "",
-        name: i.name,
-        suggest_follow_up: Boolean(i.suggest_follow_up),
-        lead_qualification:
-          i.lead_qualification === "warm" || i.lead_qualification === "hot" || i.lead_qualification === "cold"
-            ? i.lead_qualification
-            : null,
-        collect_notes: i.collect_notes !== false,
-        require_schedule_return: i.require_schedule_return === true,
-        require_final_registration: i.require_final_registration !== false,
-        allowed_next_actions: i.allowed_next_actions
-      }));
-  }
-
-  function applyCallContext(ctxData: DialContext, activeResults: ResultType[]) {
+  function applyCallContext(
+    ctxData: DialContext,
+    activeResults: ResultType[],
+    techTypes: TechnicalResultTypeRow[],
+    contacts: ContactOutcomeOption[],
+    commercial: CommercialOption[]
+  ) {
     setCtx(ctxData);
     const autoProductId =
       ctxData.call.product_id ??
       (ctxData.client_product_ids.length > 0 ? ctxData.client_product_ids[0] : null);
     setProductId(autoProductId != null ? String(autoProductId) : "");
 
-    const inferredSlug = inferApproachResultSlugFromCall({
+    const slug = resolveCallTechnicalSlug(techTypes, {
+      technical_slug: ctxData.call.technical_slug,
       hangup_cause_code: ctxData.call.hangup_cause_code ?? null,
       hangup_cause_label: ctxData.call.hangup_cause_label ?? null,
       duration_seconds: ctxData.call.duration_seconds,
       answered_at: ctxData.call.answered_at ?? null
     });
-    const inferredMatch = inferredSlug ? activeResults.find((r) => r.slug === inferredSlug) : undefined;
-    if (inferredMatch) {
-      setResultTypeId(String(inferredMatch.id));
-      setResultLockedByIntegration(true);
-    } else {
-      setResultTypeId("");
-      setResultLockedByIntegration(false);
-    }
+    setTechnicalSlug(slug);
+    const techRow =
+      techTypes.find((t) => t.slug === slug) ??
+      (ctxData.call.technical_display_name
+        ? { display_name: ctxData.call.technical_display_name, slug: slug ?? "" }
+        : null);
+    setTechnicalLabel(
+      ctxData.call.technical_display_name ??
+        (techRow && "display_name" in techRow ? techRow.display_name : "") ??
+        "Aguardando telefonia"
+    );
+
+    const suggestions = applyThreeLayerSuggestions({
+      technicalSlug: slug,
+      contactTypes: contacts,
+      commercialTypes: commercial
+    });
+    setContactOutcomeId(suggestions.contactId);
+    setResultTypeId(suggestions.commercialId);
+    setContactLocked(suggestions.lockContact);
+    setResultLockedByIntegration(suggestions.lockCommercial);
 
     setStep(ctxData.remaining.length > 0 ? "next_dial" : "result");
   }
@@ -177,9 +187,9 @@ export function Api4comCallResultForm({
     setError(null);
     setContextLoading(true);
     try {
-      const [ctxRes, rtRes, basicRes, crRes] = await Promise.all([
+      const [ctxRes, classRes, basicRes, crRes] = await Promise.all([
         fetch(`/api/api4com/calls/${callId}/dial-context`),
-        fetch("/api/approach-result-types"),
+        fetch("/api/approach-classifications"),
         fetch(`/api/api4com/calls/${callId}`),
         fetch("/api/closure-reason-types")
       ]);
@@ -188,11 +198,44 @@ export function Api4comCallResultForm({
         setClosureReasons(cr.items ?? []);
       }
 
-      const rt = (await rtRes.json()) as { items?: ResultType[]; error?: string };
-      const activeResults = rtRes.ok ? parseResultTypes(rt) : [];
-      if (!rtRes.ok) {
-        setError(rt.error ?? "Não foi possível carregar resultados comerciais.");
+      const classJson = (await classRes.json()) as {
+        technical?: TechnicalResultTypeRow[];
+        contact?: ContactOutcomeOption[];
+        commercial?: CommercialOption[];
+        contact_commercial_compat?: Record<string, number[]>;
+        error?: string;
+      };
+      const techTypes = classRes.ok ? (classJson.technical ?? []) : [];
+      const contacts = classRes.ok ? (classJson.contact ?? []) : [];
+      const commercialRaw = classRes.ok ? (classJson.commercial ?? []) : [];
+      type CommercialFromApi = CommercialOption & {
+        suggest_follow_up?: boolean;
+        lead_qualification?: string | null;
+        require_final_registration?: boolean;
+        ask_decision_maker?: boolean;
+        allowed_next_actions?: unknown;
+      };
+      const activeResults: ResultType[] = (commercialRaw as CommercialFromApi[]).map((c) => ({
+        id: c.id,
+        slug: c.slug,
+        name: c.name,
+        suggest_follow_up: Boolean(c.suggest_follow_up),
+        lead_qualification:
+          c.lead_qualification === "warm" || c.lead_qualification === "hot" || c.lead_qualification === "cold"
+            ? c.lead_qualification
+            : null,
+        collect_notes: c.collect_notes !== false,
+        require_schedule_return: c.require_schedule_return === true,
+        require_final_registration: c.require_final_registration !== false,
+        ask_decision_maker: c.ask_decision_maker === true,
+        allowed_next_actions: c.allowed_next_actions
+      }));
+      if (!classRes.ok) {
+        setError(classJson.error ?? "Não foi possível carregar classificações.");
       }
+      setTechnicalTypes(techTypes);
+      setContactTypes(contacts);
+      setCompatMap(classJson.contact_commercial_compat ?? {});
       setResultTypes(activeResults);
 
       const ctxJson = (await ctxRes.json()) as DialContext & { error?: string };
@@ -230,7 +273,7 @@ export function Api4comCallResultForm({
         }
       }
 
-      applyCallContext(ctxData, activeResults);
+      applyCallContext(ctxData, activeResults, techTypes, contacts, commercialRaw);
     } finally {
       setContextLoading(false);
     }
@@ -242,6 +285,10 @@ export function Api4comCallResultForm({
     setResultTypes([]);
     setResultTypeId("");
     setResultLockedByIntegration(false);
+    setContactLocked(false);
+    setContactOutcomeId("");
+    setTechnicalSlug(null);
+    setTechnicalLabel("");
     setNotes("");
     setNextType("none");
     setReasonId("");
@@ -259,6 +306,17 @@ export function Api4comCallResultForm({
   }, [layout, modalTitle, onModalTitleChange]);
 
   const selectedResult = resultTypes.find((r) => String(r.id) === resultTypeId);
+  const selectedContact = contactTypes.find((c) => String(c.id) === contactOutcomeId);
+  const compatIds = contactOutcomeId ? compatMap[contactOutcomeId] ?? null : null;
+
+  useEffect(() => {
+    if (!contactOutcomeId || resultLockedByIntegration) return;
+    const contact = contactTypes.find((c) => String(c.id) === contactOutcomeId);
+    if (contact?.slug === "nenhum_contato") {
+      const sem = resultTypes.find((r) => r.slug === "sem_contato");
+      if (sem) setResultTypeId(String(sem.id));
+    }
+  }, [contactOutcomeId, contactTypes, resultTypes, resultLockedByIntegration]);
   const effectiveProductId = useMemo(() => {
     if (call?.product_id != null) return call.product_id;
     const ids = ctx?.client_product_ids ?? [];
@@ -374,25 +432,34 @@ export function Api4comCallResultForm({
     return [base, lines.join("\n\n")].filter(Boolean).join("\n\n");
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function saveRegistration(registrationStatus: "draft" | "final") {
     if (!call || !call.client_id || !resultTypeId) {
       setError("Selecione o resultado comercial.");
       return;
     }
-    if (selectedResult?.collect_notes === true && !notes.trim()) {
-      setError("Informe as observações exigidas para este resultado.");
+    if (!contactOutcomeId) {
+      setError("Selecione o contato realizado.");
       return;
     }
-    if (selectedResult?.ask_decision_maker && spokeWithDecisionMaker === null) {
-      setError("Informe se houve contato com o decisor.");
-      return;
-    }
-    if (selectedResult && showRegistrationSteps) {
-      const nextErr = validateNextActionChoice(selectedResult, nextType);
-      if (nextErr) {
-        setError(nextErr);
+    if (registrationStatus === "final") {
+      if (selectedContact?.requires_conversation && !contactedPersonName.trim()) {
+        setError("Informe o nome da pessoa contatada.");
         return;
+      }
+      if (selectedResult?.collect_notes === true && !notes.trim()) {
+        setError("Informe as observações exigidas para este resultado.");
+        return;
+      }
+      if (selectedResult?.ask_decision_maker && spokeWithDecisionMaker === null) {
+        setError("Informe se houve contato com o decisor.");
+        return;
+      }
+      if (selectedResult && showRegistrationSteps) {
+        const nextErr = validateNextActionChoice(selectedResult, nextType);
+        if (nextErr) {
+          setError(nextErr);
+          return;
+        }
       }
     }
     setLoading(true);
@@ -444,6 +511,12 @@ export function Api4comCallResultForm({
         channel: "call",
         occurred_at: call.ended_at ?? call.started_at,
         result_type_id: Number(resultTypeId),
+        contact_outcome_type_id: Number(contactOutcomeId),
+        api4com_call_row_id: call.id,
+        contacted_person_name: contactedPersonName.trim() || null,
+        contacted_person_job_title: contactedPersonJobTitle.trim() || null,
+        contacted_person_notes: contactedPersonNotes.trim() || null,
+        registration_status: registrationStatus,
         notes: finalNotes || null,
         external_call_id: call.api4com_call_id,
         spoke_with_decision_maker: showDecisionMakerField ? spokeWithDecisionMaker : null,
@@ -466,8 +539,21 @@ export function Api4comCallResultForm({
     }
 
     setLoading(false);
+    if (registrationStatus === "draft") {
+      onClose();
+      return;
+    }
     onClose();
     onCompleted();
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    await saveRegistration("final");
+  }
+
+  async function submitDraft() {
+    await saveRegistration("draft");
   }
 
   const duration =
@@ -539,55 +625,43 @@ export function Api4comCallResultForm({
               ligar novamente pela ficha do lead.
             </div>
           ) : null}
-          <div className="field">
-            <label className="label">Resultado comercial *</label>
-            {resultLockedByIntegration && selectedResult ? (
-              <p style={{ margin: 0, fontSize: "0.9375rem" }}>
-                <strong>{selectedResult.name}</strong>
-                {selectedResult.lead_qualification
-                  ? ` · ${LEAD_QUALIFICATION_LABELS[selectedResult.lead_qualification]}`
-                  : ""}
-              </p>
-            ) : (
-              <select
-                className="select"
-                value={resultTypeId}
-                onChange={(e) => setResultTypeId(e.target.value)}
-                required
-                disabled={resultTypes.length === 0}
-              >
-                <option value="">Selecione…</option>
-                {resultTypes.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                    {r.lead_qualification ? ` · ${LEAD_QUALIFICATION_LABELS[r.lead_qualification]}` : ""}
-                  </option>
-                ))}
-              </select>
-            )}
-            {resultTypes.length === 0 ? (
-              <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
-                Nenhum resultado comercial disponível. Recarregue a página ou peça ao admin para revisar Abordagens →
-                Resultados.
-              </p>
-            ) : null}
-            {selectedResult?.lead_qualification && !resultLockedByIntegration ? (
-              <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
-                Qualificação do lead será definida automaticamente como{" "}
-                <strong>{LEAD_QUALIFICATION_LABELS[selectedResult.lead_qualification]}</strong>.
-                {selectedResult.lead_qualification === "cold"
-                  ? " Leads frios saem da fila de prospecção após salvar."
-                  : " Leads mornos e quentes permanecem no funil e na prospecção."}
-              </p>
-            ) : null}
-            {selectedResult?.lead_qualification && resultLockedByIntegration ? (
-              <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
-                {selectedResult.lead_qualification === "cold"
-                  ? "Lead frio — sai da fila de prospecção após salvar."
-                  : "Permanece no funil e na prospecção após salvar."}
-              </p>
-            ) : null}
-          </div>
+          <CallThreeLayerRegistrationFields
+            technicalLabel={technicalLabel}
+            providerLabel={call?.technical_provider_label ?? call?.hangup_cause_label}
+            providerCode={call?.technical_provider_code ?? call?.hangup_cause_code}
+            contactTypes={contactTypes}
+            contactOutcomeId={contactOutcomeId}
+            onContactOutcomeChange={(id) => {
+              setContactOutcomeId(id);
+              if (!resultLockedByIntegration) setResultTypeId("");
+            }}
+            contactLocked={contactLocked}
+            commercialTypes={resultTypes.map((r) => ({
+              id: r.id,
+              slug: r.slug,
+              name: r.name,
+              description: null,
+              collect_notes: r.collect_notes,
+              require_schedule_return: r.require_schedule_return
+            }))}
+            compatIds={compatIds}
+            commercialId={resultTypeId}
+            onCommercialChange={setResultTypeId}
+            commercialLocked={resultLockedByIntegration}
+            requiresConversation={selectedContact?.requires_conversation === true}
+            contactedPersonName={contactedPersonName}
+            onContactedPersonNameChange={setContactedPersonName}
+            contactedPersonJobTitle={contactedPersonJobTitle}
+            onContactedPersonJobTitleChange={setContactedPersonJobTitle}
+            contactedPersonNotes={contactedPersonNotes}
+            onContactedPersonNotesChange={setContactedPersonNotes}
+            disabled={loading}
+          />
+          {selectedResult?.lead_qualification ? (
+            <p className="muted" style={{ fontSize: "0.75rem", margin: "0 0 0.75rem" }}>
+              Qualificação do lead: <strong>{LEAD_QUALIFICATION_LABELS[selectedResult.lead_qualification]}</strong>
+            </p>
+          ) : null}
           <div className="field">
             <label className="label">Produto</label>
             <p style={{ margin: 0, fontSize: "0.9375rem" }}>{productDisplayName ?? "—"}</p>
@@ -638,11 +712,19 @@ export function Api4comCallResultForm({
               </button>
             ) : null}
             <button
+              type="button"
+              className="btn"
+              disabled={loading || !call?.client_id}
+              onClick={() => void submitDraft()}
+            >
+              Salvar rascunho
+            </button>
+            <button
               className="btn btn-primary"
               type="submit"
               disabled={loading || !call?.client_id || resultTypes.length === 0}
             >
-              {loading ? "Salvando…" : "Salvar resultado"}
+              {loading ? "Salvando…" : "Finalizar atendimento"}
             </button>
           </div>
         </form>
