@@ -3156,6 +3156,12 @@ table.data-table tbody tr.is-selected {
   margin-top: 0.25rem;
 }
 
+.lead-gen-history-error--block {
+  line-height: 1.35;
+  max-width: 22rem;
+  white-space: normal;
+}
+
 .lead-gen-status {
   display: inline-block;
   font-size: 0.82rem;

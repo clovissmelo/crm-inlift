@@ -21,7 +21,7 @@ export {
 export async function listActiveTechnicalResultTypes(): Promise<TechnicalResultTypeRow[]> {
   return all<TechnicalResultTypeRow>(
     `
-      SELECT id, slug, display_name, provider_rules, sort_order, status
+      SELECT id, slug, display_name, provider_rules, sort_order, status, answered
       FROM call_technical_result_types
       WHERE status = 'active'
       ORDER BY sort_order, id
@@ -37,7 +37,7 @@ export async function resolveTechnicalResultForCall(input: CallHangupSignals): P
 
 export async function getTechnicalResultTypeById(id: number) {
   return get<TechnicalResultTypeRow>(
-    "SELECT id, slug, display_name, provider_rules, sort_order, status FROM call_technical_result_types WHERE id = @id",
+    "SELECT id, slug, display_name, provider_rules, sort_order, status, answered FROM call_technical_result_types WHERE id = @id",
     { id }
   );
 }

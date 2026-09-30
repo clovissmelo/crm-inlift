@@ -13,6 +13,11 @@ import {
   type CommercialOption,
   type ContactOutcomeOption
 } from "@/components/call-three-layer-registration-fields";
+import {
+  associationOverrides,
+  mergeRegistrationRules,
+  type AssociationRulePayload
+} from "@/lib/classifications/registration-rules";
 import type { TechnicalResultTypeRow } from "@/lib/classifications/technical-result-match";
 import { formatCallScriptLogForNotes, normalizeCallScriptLog } from "@/lib/call-script-log";
 import { ApproachNextStepField } from "@/components/approach-next-step-field";
@@ -56,6 +61,7 @@ type ResultType = {
   require_schedule_return: boolean;
   require_final_registration: boolean;
   ask_decision_maker?: boolean;
+  mark_phone_verified?: boolean;
   allowed_next_actions?: unknown;
 };
 
@@ -128,6 +134,8 @@ export function Api4comCallResultForm({
   const [, setTechnicalTypes] = useState<TechnicalResultTypeRow[]>([]);
   const [contactTypes, setContactTypes] = useState<ContactOutcomeOption[]>([]);
   const [compatMap, setCompatMap] = useState<Record<string, number[]>>({});
+  const [associations, setAssociations] = useState<AssociationRulePayload[]>([]);
+  const [technicalTypeId, setTechnicalTypeId] = useState<number | null>(null);
   const [contactOutcomeId, setContactOutcomeId] = useState("");
   const [, setTechnicalSlug] = useState<string | null>(null);
   const [technicalLabel, setTechnicalLabel] = useState("");
@@ -163,6 +171,7 @@ export function Api4comCallResultForm({
       (ctxData.call.technical_display_name
         ? { display_name: ctxData.call.technical_display_name, slug: slug ?? "" }
         : null);
+    setTechnicalTypeId(techRow && "id" in techRow ? techRow.id : null);
     setTechnicalLabel(
       ctxData.call.technical_display_name ??
         (techRow && "display_name" in techRow ? techRow.display_name : "") ??
@@ -203,6 +212,7 @@ export function Api4comCallResultForm({
         contact?: ContactOutcomeOption[];
         commercial?: CommercialOption[];
         contact_commercial_compat?: Record<string, number[]>;
+        result_registration_associations?: AssociationRulePayload[];
         error?: string;
       };
       const techTypes = classRes.ok ? (classJson.technical ?? []) : [];
@@ -228,6 +238,7 @@ export function Api4comCallResultForm({
         require_schedule_return: c.require_schedule_return === true,
         require_final_registration: c.require_final_registration !== false,
         ask_decision_maker: c.ask_decision_maker === true,
+        mark_phone_verified: (c as { mark_phone_verified?: boolean }).mark_phone_verified === true,
         allowed_next_actions: c.allowed_next_actions
       }));
       if (!classRes.ok) {
@@ -236,6 +247,7 @@ export function Api4comCallResultForm({
       setTechnicalTypes(techTypes);
       setContactTypes(contacts);
       setCompatMap(classJson.contact_commercial_compat ?? {});
+      setAssociations(classJson.result_registration_associations ?? []);
       setResultTypes(activeResults);
 
       const ctxJson = (await ctxRes.json()) as DialContext & { error?: string };
@@ -305,9 +317,41 @@ export function Api4comCallResultForm({
     if (layout === "modal") onModalTitleChange?.(modalTitle);
   }, [layout, modalTitle, onModalTitleChange]);
 
-  const selectedResult = resultTypes.find((r) => String(r.id) === resultTypeId);
+  const selectedResultBase = resultTypes.find((r) => String(r.id) === resultTypeId);
   const selectedContact = contactTypes.find((c) => String(c.id) === contactOutcomeId);
   const compatIds = contactOutcomeId ? compatMap[contactOutcomeId] ?? null : null;
+
+  const allowedCommercialIds = useMemo(() => {
+    if (technicalTypeId == null || associations.length === 0) return null;
+    return associations
+      .filter((a) => a.call_technical_result_type_id === technicalTypeId && a.status === "active")
+      .map((a) => a.commercial_result_type_id);
+  }, [associations, technicalTypeId]);
+
+  const activeAssociation = useMemo(() => {
+    if (!technicalTypeId || !resultTypeId) return null;
+    return (
+      associations.find(
+        (a) =>
+          a.status === "active" &&
+          a.call_technical_result_type_id === technicalTypeId &&
+          a.commercial_result_type_id === Number(resultTypeId)
+      ) ?? null
+    );
+  }, [associations, technicalTypeId, resultTypeId]);
+
+  const selectedResult = useMemo(() => {
+    if (!selectedResultBase) return undefined;
+    const merged = mergeRegistrationRules(selectedResultBase, associationOverrides(activeAssociation));
+    return {
+      ...selectedResultBase,
+      collect_notes: merged.collect_notes,
+      require_schedule_return: merged.require_schedule_return,
+      require_final_registration: merged.require_final_registration,
+      ask_decision_maker: merged.ask_decision_maker,
+      allowed_next_actions: merged.allowed_next_actions
+    };
+  }, [selectedResultBase, activeAssociation]);
 
   useEffect(() => {
     if (!contactOutcomeId || resultLockedByIntegration) return;
@@ -645,6 +689,7 @@ export function Api4comCallResultForm({
               require_schedule_return: r.require_schedule_return
             }))}
             compatIds={compatIds}
+            allowedCommercialIds={allowedCommercialIds}
             commercialId={resultTypeId}
             onCommercialChange={setResultTypeId}
             commercialLocked={resultLockedByIntegration}

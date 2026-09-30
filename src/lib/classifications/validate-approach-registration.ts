@@ -1,7 +1,5 @@
-import {
-  getContactOutcomeTypeById,
-  isCommercialCompatible
-} from "@/lib/classifications/contact-commercial";
+import { getContactOutcomeTypeById } from "@/lib/classifications/contact-commercial";
+import { isCommercialAllowedForTechnical } from "@/lib/classifications/result-associations";
 import { getTechnicalResultTypeById, requiresContactSelection } from "@/lib/classifications/technical-result";
 import { get } from "@/lib/db";
 
@@ -22,6 +20,7 @@ export async function validateThreeLayerApproach(input: ApproachRegistrationInpu
   if (!input.api4com_call_row_id) return null;
 
   let technicalSlug: string | null = null;
+  let technicalTypeId: number | null = null;
   let answeredAt: string | null = null;
   if (input.api4com_call_row_id) {
     const call = await get<{ technical_result_type_id: number | null; answered_at: string | null }>(
@@ -30,6 +29,7 @@ export async function validateThreeLayerApproach(input: ApproachRegistrationInpu
     );
     answeredAt = call?.answered_at ?? null;
     if (call?.technical_result_type_id) {
+      technicalTypeId = call.technical_result_type_id;
       const t = await getTechnicalResultTypeById(call.technical_result_type_id);
       technicalSlug = t?.slug ?? null;
     }
@@ -61,9 +61,17 @@ export async function validateThreeLayerApproach(input: ApproachRegistrationInpu
     return "Resultado comercial inválido.";
   }
 
-  const compatible = await isCommercialCompatible(input.contact_outcome_type_id!, input.result_type_id);
-  if (!compatible) {
-    return "Este resultado comercial não é compatível com o contato realizado selecionado.";
+  if (technicalTypeId != null) {
+    const allowed = await isCommercialAllowedForTechnical(technicalTypeId, input.result_type_id);
+    if (!allowed) {
+      return "Este resultado comercial não está associado ao resultado da ligação desta chamada.";
+    }
+  } else {
+    const { isCommercialCompatible } = await import("@/lib/classifications/contact-commercial");
+    const compatible = await isCommercialCompatible(input.contact_outcome_type_id!, input.result_type_id);
+    if (!compatible) {
+      return "Este resultado comercial não é compatível com o contato realizado selecionado.";
+    }
   }
 
   if (contactType.requires_conversation) {

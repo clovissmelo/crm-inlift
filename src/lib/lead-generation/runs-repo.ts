@@ -176,6 +176,7 @@ export async function updateRun(
     status: string;
     phase: string;
     counts_json: LeadGenCounts;
+    filters_json: LeadGenFilters;
     progress_pct: number;
     error_message: string | null;
     started_at: string;
@@ -195,6 +196,10 @@ export async function updateRun(
   if (patch.counts_json) {
     sets.push("counts_json = @counts::jsonb");
     params.counts = JSON.stringify(patch.counts_json);
+  }
+  if (patch.filters_json) {
+    sets.push("filters_json = @filters::jsonb");
+    params.filters = JSON.stringify(patch.filters_json);
   }
   if (patch.progress_pct != null) {
     sets.push("progress_pct = @pct");

@@ -1,3 +1,5 @@
+import type { LeadGenCounts } from "@/lib/lead-generation/types";
+
 /** Progresso 0–100 para UI e persistência (ANP ~35%, meta de novos ~65%). */
 
 const ANP_WEIGHT = 35;
@@ -6,7 +8,7 @@ export function computeRunProgressPct(input: {
   phase: string;
   status?: string;
   max_stations: number;
-  counts_json: Record<string, number>;
+  counts_json: LeadGenCounts | Record<string, number>;
 }): number {
   const status = input.status;
   if (status === "completed") return 100;
@@ -52,7 +54,7 @@ export function computeRunProgressPct(input: {
 export function runProgressDetail(input: {
   phase: string;
   max_stations: number;
-  counts_json: Record<string, number>;
+  counts_json: LeadGenCounts | Record<string, number>;
 }): string {
   const counts = input.counts_json ?? {};
   const citiesTotal = counts.cities_total ?? 0;

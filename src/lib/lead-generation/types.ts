@@ -39,6 +39,13 @@ export type LeadGenCounts = {
   cities_loaded: number;
   cities_total: number;
   distributor_loaded?: number;
+  /** Quantas vezes a execução ampliou cidades (região → UF). */
+  geo_expansion_level?: number;
+  geo_expanded?: boolean;
+  /** Controle anti-travamento */
+  last_created_count?: number;
+  last_processed_count?: number;
+  no_progress_ticks?: number;
 };
 
 export function emptyCounts(): LeadGenCounts {

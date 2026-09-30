@@ -7,6 +7,7 @@ export type TechnicalResultTypeRow = {
   provider_rules: unknown;
   sort_order: number;
   status: string;
+  answered?: boolean;
 };
 
 type ProviderRule = {

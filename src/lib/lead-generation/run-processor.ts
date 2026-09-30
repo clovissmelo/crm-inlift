@@ -15,8 +15,47 @@ import {
   discoverPlacesInCity,
   placeRowToStation
 } from "@/lib/lead-motor/google-city-discover";
+import {
+  buildPartialRunLog,
+  buildStuckRunError,
+  shouldFailNoSuccess
+} from "@/lib/lead-generation/run-outcome";
+import { isGeoExpansionExhausted, tryExpandRunGeography } from "@/lib/lead-generation/run-geo-expand";
+import { canSpendGoogleCalls, touchRunGoogleUsage } from "@/lib/lead-generation/quota";
+import {
+  countItemsByStatus,
+  fetchPendingItemIds,
+  getGoogleCache,
+  getItem,
+  getLeadGenerationRun,
+  insertRunItemsSafe,
+  listRunItems,
+  updateItem,
+  updateRun,
+  upsertGoogleCache
+} from "@/lib/lead-generation/runs-repo";
+import { computeRunProgressPct } from "@/lib/lead-generation/run-progress";
+import type { LeadGenCounts } from "@/lib/lead-generation/types";
+import { createClientFromLead, findExistingClientIdByCnpj } from "@/lib/lead-motor/persist-client";
+import { getGooglePlacesApiKey } from "@/lib/google-places-settings";
+import { run, nowIso } from "@/lib/db";
 
 const STALE_RUN_MS = 25 * 60 * 1000;
+const NO_PROGRESS_TICK_FAIL = 35;
+
+function bumpProgressTracking(counts: LeadGenCounts, phase: string): LeadGenCounts {
+  if (phase === "anp_load" || phase === "queued") {
+    return { ...counts, no_progress_ticks: 0 };
+  }
+  const created = counts.created ?? 0;
+  const processed = counts.processed ?? 0;
+  const lastC = counts.last_created_count ?? 0;
+  const lastP = counts.last_processed_count ?? 0;
+  if (created > lastC || processed > lastP) {
+    return { ...counts, last_created_count: created, last_processed_count: processed, no_progress_ticks: 0 };
+  }
+  return { ...counts, no_progress_ticks: (counts.no_progress_ticks ?? 0) + 1 };
+}
 
 /** Corrige metadados de execuções antigas; pausa se ficou horas sem tick. */
 async function syncRunProgressMetadata(
@@ -59,24 +98,6 @@ async function syncRunProgressMetadata(
   }
   return { paused: false };
 }
-import { canSpendGoogleCalls, touchRunGoogleUsage } from "@/lib/lead-generation/quota";
-import {
-  countItemsByStatus,
-  fetchPendingItemIds,
-  getGoogleCache,
-  getItem,
-  getLeadGenerationRun,
-  insertRunItemsSafe,
-  listRunItems,
-  updateItem,
-  updateRun,
-  upsertGoogleCache
-} from "@/lib/lead-generation/runs-repo";
-import { computeRunProgressPct } from "@/lib/lead-generation/run-progress";
-import type { LeadGenCounts } from "@/lib/lead-generation/types";
-import { createClientFromLead, findExistingClientIdByCnpj } from "@/lib/lead-motor/persist-client";
-import { getGooglePlacesApiKey } from "@/lib/google-places-settings";
-import { run, nowIso } from "@/lib/db";
 
 function parseStation(raw: unknown): AnpStation | null {
   if (!raw || typeof raw !== "object") return null;
@@ -710,14 +731,34 @@ async function tickProcessing(runId: number) {
 
   const ids = await fetchPendingItemIds(runId, ITEMS_PER_CRON_TICK);
   if (ids.length === 0) {
-    const { counts } = await recomputeCounts(runId, runRow);
+    let { counts } = await recomputeCounts(runId, runRow);
+    counts = bumpProgressTracking(counts, runRow.phase);
+    const created = counts.created ?? 0;
+    const target = runRow.max_stations;
     const citiesDone = (counts.cities_loaded ?? 0) >= (counts.cities_total ?? 0);
-    const targetPending =
-      runRow.max_stations > 0 && (counts.created ?? 0) < runRow.max_stations && !citiesDone;
-    if (targetPending) {
+
+    if (target > 0 && created < target && !citiesDone) {
       await updateRun(runId, { phase: "anp_load", counts_json: counts });
       return;
     }
+
+    if (target > 0 && created < target && citiesDone) {
+      const expanded = await tryExpandRunGeography(runId);
+      if (expanded) return;
+    }
+
+    if (shouldFailNoSuccess(counts, target)) {
+      await updateRun(runId, {
+        status: "failed",
+        phase: "done",
+        counts_json: counts,
+        progress_pct: 100,
+        completed_at: nowIso(),
+        error_message: buildStuckRunError({ counts, target, reason: "no_success" })
+      });
+      return;
+    }
+
     await updateRun(runId, { phase: "finalizing", counts_json: counts });
     return;
   }
@@ -748,7 +789,8 @@ async function tickProcessing(runId: number) {
     return;
   }
 
-  const { counts } = await recomputeCounts(runId, freshRun);
+  let { counts } = await recomputeCounts(runId, freshRun);
+  counts = bumpProgressTracking(counts, freshRun.phase);
   counts.google_matched = counts.created + counts.ambiguous;
   counts.enriched = counts.created;
   const progress_pct = Math.max(
@@ -773,12 +815,20 @@ async function tickFinalizing(runId: number) {
   }
   const created = counts.created ?? 0;
   const target = runRow.max_stations;
-  let status: "completed" | "partial" = "completed";
-  if (target > 0 && created < target && (counts.processed ?? 0) > 0) {
+  let status: "completed" | "partial" | "failed" = "completed";
+  let error_message: string | null = null;
+
+  if (shouldFailNoSuccess(counts, target)) {
+    status = "failed";
+    error_message = buildStuckRunError({ counts, target, reason: "no_success" });
+  } else if (target > 0 && created < target && ((counts.processed ?? 0) > 0 || (counts.errors ?? 0) > 0)) {
     status = "partial";
-  }
-  if ((counts.errors ?? 0) > 0 && created === 0) {
-    status = "partial";
+    error_message = buildPartialRunLog({
+      target,
+      counts,
+      geoExpanded: Boolean(counts.geo_expanded),
+      exhaustedGeo: isGeoExpansionExhausted(counts, runRow.filters_json.all_cities_in_uf)
+    });
   }
 
   await updateRun(runId, {
@@ -787,7 +837,7 @@ async function tickFinalizing(runId: number) {
     counts_json: counts,
     progress_pct: 100,
     completed_at: nowIso(),
-    error_message: status === "partial" && created < target ? `Meta: ${created}/${target} novos cadastrados.` : null
+    error_message
   });
 }
 
@@ -818,6 +868,29 @@ export async function processLeadGenerationTick(
     return { processedRunId: runId, action: "stale_paused" };
   }
   runRow = (await getLeadGenerationRun(runId))!;
+
+  if (runRow.status === "running") {
+    const { counts: liveCounts } = await recomputeCounts(runId, runRow);
+    const tracked = bumpProgressTracking(liveCounts, runRow.phase);
+    if ((tracked.no_progress_ticks ?? 0) >= NO_PROGRESS_TICK_FAIL) {
+      await updateRun(runId, {
+        status: "failed",
+        phase: "done",
+        counts_json: tracked,
+        progress_pct: 100,
+        completed_at: nowIso(),
+        error_message: buildStuckRunError({
+          counts: tracked,
+          target: runRow.max_stations,
+          reason: "no_progress"
+        })
+      });
+      return { processedRunId: runId, action: "stuck_failed" };
+    }
+    if (tracked.no_progress_ticks !== liveCounts.no_progress_ticks) {
+      await updateRun(runId, { counts_json: tracked });
+    }
+  }
 
   if (runRow.status === "queued") {
     await updateRun(runId, { status: "running", started_at: nowIso() });

@@ -9,6 +9,8 @@ import {
 } from "@/components/admin-novos-leads-city-picker";
 import { LeadGenFlowField } from "@/components/lead-gen-flow-field";
 import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
+import { formatRunResultsSummary } from "@/lib/lead-generation/run-outcome";
+import type { LeadGenCounts } from "@/lib/lead-generation/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type RunFilters = {
@@ -112,14 +114,12 @@ function LeadGenRunProgressBar({
 }
 
 function formatRunResults(counts: Record<string, number>): string {
-  const created = counts.created ?? 0;
-  const existing = counts.existing ?? 0;
-  const ambiguous = counts.ambiguous ?? 0;
-  const errors = counts.errors ?? 0;
-  const parts = [`${created} novos`, `${existing} exist.`];
-  if (ambiguous > 0) parts.push(`${ambiguous} revisão`);
-  if (errors > 0) parts.push(`${errors} erro${errors === 1 ? "" : "s"}`);
-  return parts.join(" · ");
+  return formatRunResultsSummary(counts as unknown as LeadGenCounts);
+}
+
+function showRunResultColumn(r: RunRow): boolean {
+  if (["completed", "partial", "failed"].includes(r.status)) return true;
+  return (r.counts_json?.processed ?? 0) > 0;
 }
 
 export function AdminNovosLeadsWizard() {
@@ -801,7 +801,7 @@ export function AdminNovosLeadsWizard() {
                         ) : null}
                       </td>
                       <td className="lead-gen-history-result">
-                        {(r.counts_json?.processed ?? 0) > 0 || r.status === "completed" ? (
+                        {showRunResultColumn(r) ? (
                           formatRunResults(r.counts_json ?? {})
                         ) : active ? (
                           <LeadGenRunProgressBar run={r} compact />
@@ -825,8 +825,17 @@ export function AdminNovosLeadsWizard() {
                           </span>
                         ) : null}
                         {r.error_message ? (
-                          <span className="lead-gen-history-sub lead-gen-history-error" title={r.error_message}>
-                            {r.error_message.length > 72 ? `${r.error_message.slice(0, 72)}…` : r.error_message}
+                          <span
+                            className={`lead-gen-history-sub lead-gen-history-error${
+                              r.status === "partial" || r.status === "failed" ? " lead-gen-history-error--block" : ""
+                            }`}
+                            title={r.error_message}
+                          >
+                            {r.status === "partial" || r.status === "failed"
+                              ? r.error_message
+                              : r.error_message.length > 72
+                                ? `${r.error_message.slice(0, 72)}…`
+                                : r.error_message}
                           </span>
                         ) : null}
                       </td>

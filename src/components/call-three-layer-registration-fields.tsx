@@ -82,6 +82,7 @@ export function CallThreeLayerRegistrationFields({
   contactLocked,
   commercialTypes,
   compatIds,
+  allowedCommercialIds,
   commercialId,
   onCommercialChange,
   commercialLocked,
@@ -103,6 +104,8 @@ export function CallThreeLayerRegistrationFields({
   contactLocked?: boolean;
   commercialTypes: CommercialOption[];
   compatIds: number[] | null;
+  /** Quando definido (ex.: matriz técnico×comercial), filtra opções comerciais. */
+  allowedCommercialIds?: number[] | null;
   commercialId: string;
   onCommercialChange: (id: string) => void;
   commercialLocked?: boolean;
@@ -116,9 +119,11 @@ export function CallThreeLayerRegistrationFields({
   disabled?: boolean;
 }) {
   const filteredCommercial =
-    compatIds && contactOutcomeId
-      ? commercialTypes.filter((c) => compatIds.includes(c.id))
-      : commercialTypes;
+    allowedCommercialIds && allowedCommercialIds.length > 0
+      ? commercialTypes.filter((c) => allowedCommercialIds.includes(c.id))
+      : compatIds && contactOutcomeId
+        ? commercialTypes.filter((c) => compatIds.includes(c.id))
+        : commercialTypes;
 
   return (
     <div className="call-three-layer-fields">
@@ -131,6 +136,35 @@ export function CallThreeLayerRegistrationFields({
           <p className="muted" style={{ fontSize: "0.75rem", margin: "4px 0 0" }}>
             Provedor: {providerLabel ?? "—"}
             {providerCode ? ` (${providerCode})` : ""}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="field">
+        <label className="label">Resultado comercial *</label>
+        {commercialLocked && commercialId ? (
+          <p style={{ margin: 0, fontSize: "0.9375rem" }}>
+            <strong>{commercialTypes.find((c) => String(c.id) === commercialId)?.name}</strong>
+          </p>
+        ) : (
+          <select
+            className="select"
+            value={commercialId}
+            onChange={(e) => onCommercialChange(e.target.value)}
+            required
+            disabled={disabled || filteredCommercial.length === 0}
+          >
+            <option value="">Selecione…</option>
+            {filteredCommercial.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        )}
+        {filteredCommercial.length === 0 ? (
+          <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
+            Nenhum resultado comercial associado a este resultado da ligação.
           </p>
         ) : null}
       </div>
@@ -197,30 +231,6 @@ export function CallThreeLayerRegistrationFields({
           </div>
         </>
       ) : null}
-
-      <div className="field">
-        <label className="label">Resultado comercial *</label>
-        {commercialLocked && commercialId ? (
-          <p style={{ margin: 0, fontSize: "0.9375rem" }}>
-            <strong>{commercialTypes.find((c) => String(c.id) === commercialId)?.name}</strong>
-          </p>
-        ) : (
-          <select
-            className="select"
-            value={commercialId}
-            onChange={(e) => onCommercialChange(e.target.value)}
-            required
-            disabled={disabled || filteredCommercial.length === 0}
-          >
-            <option value="">Selecione…</option>
-            {filteredCommercial.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
     </div>
   );
 }
