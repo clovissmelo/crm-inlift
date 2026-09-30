@@ -1,5 +1,5 @@
 import { validateNextActionChoice, type ApproachNextActionKey } from "@/lib/approach-next-actions";
-import { createApproach } from "@/lib/approaches";
+import { createApproach, markLeadContactPhoneVerified } from "@/lib/approaches";
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { get, nowIso, run } from "@/lib/db";
 import { completeFollowUp } from "@/lib/follow-ups";
@@ -22,8 +22,9 @@ export async function POST(request: Request) {
     require_schedule_return: boolean;
     allowed_next_actions: unknown;
     ask_decision_maker: boolean;
+    mark_phone_verified: boolean;
   }>(
-    "SELECT suggest_follow_up, lead_qualification, require_schedule_return, allowed_next_actions, ask_decision_maker FROM approach_result_types WHERE id = @id AND status = 'active'",
+    "SELECT suggest_follow_up, lead_qualification, require_schedule_return, allowed_next_actions, ask_decision_maker, mark_phone_verified FROM approach_result_types WHERE id = @id AND status = 'active'",
     { id: data.result_type_id }
   );
   if (!resultType) return Response.json({ error: "Resultado inválido" }, { status: 400 });
@@ -81,6 +82,10 @@ export async function POST(request: Request) {
           now: nowIso()
         }
       );
+    }
+
+    if (resultType.mark_phone_verified) {
+      await markLeadContactPhoneVerified(data.client_id, data.contact_id);
     }
 
     return Response.json({ id: approachId }, { status: 201 });

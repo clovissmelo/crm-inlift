@@ -31,6 +31,7 @@ type ResultRow = {
   require_schedule_return: boolean;
   require_final_registration: boolean;
   ask_decision_maker?: boolean;
+  mark_phone_verified?: boolean;
   allowed_next_actions?: unknown;
 };
 
@@ -44,6 +45,7 @@ type ResultForm = {
   require_schedule_return: boolean;
   require_final_registration: boolean;
   ask_decision_maker: boolean;
+  mark_phone_verified: boolean;
   allowed_next_actions: ApproachNextActionKey[];
 };
 
@@ -69,6 +71,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
     require_schedule_return: false,
     require_final_registration: true,
     ask_decision_maker: false,
+    mark_phone_verified: false,
     allowed_next_actions: ["none"]
   });
   const [resultSaving, setResultSaving] = useState(false);
@@ -94,6 +97,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
       require_schedule_return: false,
       require_final_registration: true,
       ask_decision_maker: false,
+      mark_phone_verified: false,
       allowed_next_actions: ["none"]
     });
     setError(null);
@@ -112,6 +116,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
       require_schedule_return: row.require_schedule_return === true,
       require_final_registration: row.require_final_registration !== false,
       ask_decision_maker: row.ask_decision_maker === true,
+      mark_phone_verified: row.mark_phone_verified === true,
       allowed_next_actions: normalizeAllowedForForm(row)
     });
     setError(null);
@@ -162,12 +167,14 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
           require_schedule_return: resultForm.require_schedule_return,
           require_final_registration: resultForm.require_final_registration,
           ask_decision_maker: resultForm.ask_decision_maker,
+          mark_phone_verified: resultForm.mark_phone_verified,
           allowed_next_actions: allowed
         }
       : {
           ...resultForm,
           lead_qualification: qualPayload,
           ask_decision_maker: resultForm.ask_decision_maker,
+          mark_phone_verified: resultForm.mark_phone_verified,
           allowed_next_actions: allowed,
           suggest_follow_up: suggestFollowUp
         };
@@ -214,6 +221,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
               <th>Exigir obs.</th>
               <th>Retorno obrig.</th>
               <th>Perg. decisor</th>
+              <th>Verif. tel.</th>
               <th>Próximos passos</th>
               <th style={{ width: canDelete ? 180 : 100 }} />
             </tr>
@@ -228,6 +236,7 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
                 <td>{r.collect_notes === true ? "Sim" : "—"}</td>
                 <td>{r.require_schedule_return ? "Sim" : "—"}</td>
                 <td>{r.ask_decision_maker ? "Sim" : "—"}</td>
+                <td>{r.mark_phone_verified ? "Sim" : "—"}</td>
                 <td style={{ fontSize: "0.8125rem", maxWidth: 280 }}>{formatAllowedNextActionsSummary(r)}</td>
                 <td>
                   <CadastroRowActions
@@ -365,7 +374,19 @@ export function ResultadoComercialAdmin({ canDelete = false }: { canDelete?: boo
                 />
                 <span>Pergunta sobre decisor</span>
               </label>
+              <label className="resultado-check-row">
+                <input
+                  type="checkbox"
+                  checked={resultForm.mark_phone_verified}
+                  onChange={(e) => setResultForm((f) => ({ ...f, mark_phone_verified: e.target.checked }))}
+                />
+                <span>Marcar telefone como verificado</span>
+              </label>
             </div>
+            <p className="muted" style={{ fontSize: "0.75rem", margin: "8px 0 0" }}>
+              Com esta opção ativa, ao registrar a abordagem o contato do lead passa a{" "}
+              <strong>Verificado</strong> (telefone confirmado).
+            </p>
           </div>
 
           <div className="resultado-modal-section">

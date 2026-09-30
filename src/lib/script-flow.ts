@@ -218,9 +218,9 @@ Se preferir, retorno em outro momento — qual período costuma ser melhor?`,
 export function defaultEmptyCallFlow(): ScriptFlow {
   return {
     v: 1,
-    start: "step-1",
+    start: "1",
     steps: {
-      "step-1": {
+      "1": {
         type: "linear",
         title: "Etapa 1 — Saudação",
         content: "Olá, {{contato_nome}}, aqui é da {{produto_nome}}...",

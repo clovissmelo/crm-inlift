@@ -67,6 +67,34 @@ export async function createApproach(input: {
   return approachId;
 }
 
+/** Confirma telefone do contato usado na abordagem (ou contato principal do cliente). */
+export async function markLeadContactPhoneVerified(clientId: number, contactId: number | null | undefined) {
+  const now = nowIso();
+  if (contactId != null) {
+    await run(
+      `
+        UPDATE contacts SET verification_status = 'confirmed', updated_at = @now
+        WHERE id = @contactId AND client_id = @clientId
+      `,
+      { contactId, clientId, now }
+    );
+    return;
+  }
+  await run(
+    `
+      UPDATE contacts SET verification_status = 'confirmed', updated_at = @now
+      WHERE client_id = @clientId
+        AND id = (
+          SELECT c.id FROM contacts c
+          WHERE c.client_id = @clientId
+          ORDER BY c.is_primary_phone DESC NULLS LAST, c.id
+          LIMIT 1
+        )
+    `,
+    { clientId, now }
+  );
+}
+
 async function handleNextAction(clientId: number, approachId: number, userId: number, action: NextActionInput) {
   if (action.type === "none") return;
 

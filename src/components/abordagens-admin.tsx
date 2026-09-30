@@ -1,5 +1,6 @@
 "use client";
 
+import { Mail, MessageCircle, Phone } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
 import { FilterBar, FilterSelect } from "@/components/filter-bar";
@@ -42,6 +43,17 @@ function scriptTypeLabel(type: string) {
   if (type === "call") return "Ligação";
   if (type === "email") return "E-mail";
   return "WhatsApp";
+}
+
+function ScriptTypeWithIcon({ type }: { type: string }) {
+  const label = scriptTypeLabel(type);
+  const Icon = type === "call" ? Phone : type === "email" ? Mail : MessageCircle;
+  return (
+    <span className="script-type-with-icon">
+      <Icon size={16} aria-hidden className="script-type-with-icon__glyph" />
+      <span>{label}</span>
+    </span>
+  );
 }
 
 export function AbordagensAdmin({ products, canDelete = false }: { products: Product[]; canDelete?: boolean }) {
@@ -183,7 +195,9 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
                 <tr key={s.id}>
                   <td>{s.title}</td>
                   <td>{s.product_id != null ? productNameById.get(s.product_id) ?? "—" : "Geral"}</td>
-                  <td>{scriptTypeLabel(s.script_type)}</td>
+                  <td>
+                    <ScriptTypeWithIcon type={s.script_type} />
+                  </td>
                   <td>{s.status === "active" ? "Ativo" : "Inativo"}</td>
                   <td>
                     <CadastroRowActions
@@ -203,7 +217,7 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
         open={scriptModal}
         title={scriptEditingId ? "Editar script" : "Novo script / modelo"}
         onClose={() => setScriptModal(false)}
-        wide
+        extraWide
       >
         <form onSubmit={saveScript}>
           {error ? <div className="alert alert-error">{error}</div> : null}
@@ -235,34 +249,23 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
                 ))}
               </select>
             </div>
-          </div>
-          <div className="field">
-            <label className="label">Situação</label>
-            <select className="select" value={scriptForm.status} onChange={(e) => setScriptForm((f) => ({ ...f, status: e.target.value as "active" | "inactive" }))}>
-              <option value="active">Ativo</option>
-              <option value="inactive">Inativo</option>
-            </select>
+            <div className="field">
+              <label className="label">Situação</label>
+              <select className="select" value={scriptForm.status} onChange={(e) => setScriptForm((f) => ({ ...f, status: e.target.value as "active" | "inactive" }))}>
+                <option value="active">Ativo</option>
+                <option value="inactive">Inativo</option>
+              </select>
+            </div>
           </div>
           {scriptForm.script_type === "call" ? (
-            <div className="field">
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-                <span className="label" style={{ margin: 0, alignSelf: "center" }}>
-                  Fluxo da ligação
-                </span>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() =>
-                    setScriptForm((f) => ({ ...f, body: serializeCallScriptFlow(defaultPostoCredCallFlow()) }))
-                  }
-                >
-                  Carregar modelo PostoCred
-                </button>
-              </div>
+            <div className="field script-flow-modal-field">
               <ScriptFlowEditor
                 key={`flow-${scriptEditingId ?? "new"}-${scriptModal}`}
                 body={scriptForm.body}
                 onBodyChange={(body) => setScriptForm((f) => ({ ...f, body }))}
+                onLoadPostoCredTemplate={() =>
+                  setScriptForm((f) => ({ ...f, body: serializeCallScriptFlow(defaultPostoCredCallFlow()) }))
+                }
               />
             </div>
           ) : (

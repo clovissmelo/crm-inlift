@@ -32,8 +32,8 @@ export async function POST(request: Request) {
   try {
     const result = await run(
       `
-        INSERT INTO approach_result_types (slug, name, status, suggest_follow_up, lead_qualification, collect_notes, require_schedule_return, require_final_registration, ask_decision_maker, allowed_next_actions, created_at, updated_at)
-        VALUES (@slug, @name, @status, @suggestFollowUp, @leadQualification, @collectNotes, @requireScheduleReturn, @requireFinalRegistration, @askDecisionMaker, @allowedNextActions::jsonb, @now, @now)
+        INSERT INTO approach_result_types (slug, name, status, suggest_follow_up, lead_qualification, collect_notes, require_schedule_return, require_final_registration, ask_decision_maker, mark_phone_verified, allowed_next_actions, created_at, updated_at)
+        VALUES (@slug, @name, @status, @suggestFollowUp, @leadQualification, @collectNotes, @requireScheduleReturn, @requireFinalRegistration, @askDecisionMaker, @markPhoneVerified, @allowedNextActions::jsonb, @now, @now)
       `,
       {
         slug: slug.trim(),
@@ -45,6 +45,7 @@ export async function POST(request: Request) {
         requireScheduleReturn: parsed.data.require_schedule_return ?? false,
         requireFinalRegistration: parsed.data.require_final_registration ?? true,
         askDecisionMaker: parsed.data.ask_decision_maker ?? false,
+        markPhoneVerified: parsed.data.mark_phone_verified ?? false,
         allowedNextActions: serializeAllowedNextActions(allowedKeys),
         now: nowIso()
       }

@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { HelpCircle, Plus, Trash2 } from "lucide-react";
 import {
   draftsToFlow,
   flowToDrafts,
   parseCallScriptBody,
   serializeCallScriptFlow,
-  type ScriptFlow,
   type ScriptFlowStepDraft
 } from "@/lib/script-flow";
 import { PLACEHOLDER_HELP } from "@/lib/message-templates";
@@ -15,18 +14,47 @@ import { PLACEHOLDER_HELP } from "@/lib/message-templates";
 type Props = {
   body: string;
   onBodyChange: (body: string) => void;
+  onLoadPostoCredTemplate?: () => void;
 };
 
 function newStepId(existing: ScriptFlowStepDraft[]) {
-  let n = existing.length + 1;
-  while (existing.some((s) => s.id === `step-${n}`)) n++;
-  return `step-${n}`;
+  let n = 1;
+  while (existing.some((s) => s.id === String(n))) n++;
+  return String(n);
 }
 
-export function ScriptFlowEditor({ body, onBodyChange }: Props) {
+function nextSuggestedId(existing: ScriptFlowStepDraft[]) {
+  return newStepId(existing);
+}
+
+function PlaceholderHelpButton() {
+  return (
+    <span className="script-flow-help-wrap">
+      <button type="button" className="script-flow-help-btn" aria-label="Variáveis disponíveis no texto">
+        <HelpCircle size={15} aria-hidden />
+      </button>
+      <div className="script-flow-help-popover" role="tooltip">
+        <p className="script-flow-help-popover-title">Variáveis no texto</p>
+        <ul className="script-flow-help-list">
+          {PLACEHOLDER_HELP.map((p) => (
+            <li key={p.key}>
+              <code>{p.key}</code>
+              <span>{p.label}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="muted script-flow-help-note">
+          Etapas sequenciais usam o botão <strong>Próximo</strong>; ramificações usam opções (ex.: Sim/Não).
+        </p>
+      </div>
+    </span>
+  );
+}
+
+export function ScriptFlowEditor({ body, onBodyChange, onLoadPostoCredTemplate }: Props) {
   const parsed = useMemo(() => parseCallScriptBody(body), [body]);
   const [drafts, setDrafts] = useState<ScriptFlowStepDraft[]>(() =>
-    parsed ? flowToDrafts(parsed) : flowToDrafts({ v: 1, start: "step-1", steps: {} })
+    parsed ? flowToDrafts(parsed) : flowToDrafts({ v: 1, start: "1", steps: {} })
   );
   const [selectedId, setSelectedId] = useState<string | null>(drafts[0]?.id ?? null);
 
@@ -39,6 +67,7 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
 
   const selected = drafts.find((d) => d.id === selectedId) ?? drafts[0] ?? null;
   const stepIds = drafts.map((d) => d.id);
+  const suggestedId = nextSuggestedId(drafts);
 
   function updateSelected(patch: Partial<ScriptFlowStepDraft>) {
     if (!selected) return;
@@ -80,56 +109,63 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
     if (selectedId === id) setSelectedId(drafts.find((d) => d.id !== id)?.id ?? null);
   }
 
+  function stepLabel(id: string) {
+    const d = drafts.find((x) => x.id === id);
+    return d?.title?.trim() || id;
+  }
+
   return (
-    <div>
-      <p className="muted" style={{ fontSize: "0.8125rem", marginTop: 0 }}>
-        Fluxo por etapas: texto livre, botão <strong>Próximo</strong> ou ramificações (Sim/Não). Placeholders:{" "}
-        {PLACEHOLDER_HELP.map((p) => p.key).join(", ")}
-      </p>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 220px) 1fr", gap: 16, alignItems: "start" }}>
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+    <div className="script-flow-editor">
+      <div className="script-flow-layout">
+        <aside className="script-flow-steps">
+          <div className="script-flow-steps-head">
             <span className="label">Etapas</span>
-            <button type="button" className="btn btn-icon-sm" onClick={addStep} title="Nova etapa">
-              <Plus size={16} />
-            </button>
+            <div className="script-flow-steps-actions">
+              {onLoadPostoCredTemplate ? (
+                <button type="button" className="btn btn-sm script-flow-template-btn" onClick={onLoadPostoCredTemplate}>
+                  Modelo PostoCred
+                </button>
+              ) : null}
+              <button type="button" className="btn btn-icon-sm" onClick={addStep} title="Nova etapa">
+                <Plus size={16} />
+              </button>
+            </div>
           </div>
-          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          <ul className="script-flow-steps-list">
             {drafts.map((d, i) => (
-              <li key={d.id} style={{ marginBottom: 4 }}>
+              <li key={d.id}>
                 <button
                   type="button"
-                  className="btn"
-                  style={{
-                    width: "100%",
-                    justifyContent: "flex-start",
-                    fontWeight: selected?.id === d.id ? 600 : 400,
-                    opacity: selected?.id === d.id ? 1 : 0.85
-                  }}
+                  className={`script-flow-step-btn${selected?.id === d.id ? " script-flow-step-btn--active" : ""}`}
                   onClick={() => setSelectedId(d.id)}
                 >
-                  {i + 1}. {d.title.slice(0, 28) || d.id}
+                  <span className="script-flow-step-num">{i + 1}</span>
+                  <span className="script-flow-step-title">{d.title.slice(0, 36) || d.id}</span>
                 </button>
               </li>
             ))}
           </ul>
-        </div>
+        </aside>
 
         {selected ? (
-          <div className="panel" style={{ padding: "1rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+          <div className="script-flow-step-panel panel">
+            <div className="script-flow-step-panel-head">
               <span className="label">Editar etapa</span>
               <button type="button" className="btn btn-icon-sm" onClick={() => removeStep(selected.id)} title="Remover etapa">
                 <Trash2 size={16} />
               </button>
             </div>
             <div className="field">
-              <label className="label">ID (único, sem espaços)</label>
+              <label className="label" htmlFor="script-step-id">
+                ID (único)
+              </label>
               <input
+                id="script-step-id"
                 className="input"
                 value={selected.id}
+                placeholder={String(suggestedId)}
                 onChange={(e) => {
-                  const newId = e.target.value.replace(/\s+/g, "-");
+                  const newId = e.target.value.replace(/\s+/g, "");
                   setDrafts((list) =>
                     list.map((d) => {
                       if (d.id === selected.id) return { ...d, id: newId };
@@ -146,14 +182,25 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                   setSelectedId(newId);
                 }}
               />
+              <span className="muted script-flow-field-hint">Sugestão para novas etapas: {suggestedId}</span>
             </div>
             <div className="field">
-              <label className="label">Título da etapa</label>
-              <input className="input" value={selected.title} onChange={(e) => updateSelected({ title: e.target.value })} />
+              <label className="label" htmlFor="script-step-title">
+                Título da etapa
+              </label>
+              <input
+                id="script-step-title"
+                className="input"
+                value={selected.title}
+                onChange={(e) => updateSelected({ title: e.target.value })}
+              />
             </div>
             <div className="field">
-              <label className="label">Tipo</label>
+              <label className="label" htmlFor="script-step-type">
+                Tipo
+              </label>
               <select
+                id="script-step-type"
                 className="select"
                 value={selected.type}
                 onChange={(e) => {
@@ -177,18 +224,27 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
               </select>
             </div>
             <div className="field">
-              <label className="label">Texto / fala sugerida</label>
+              <div className="label-with-help">
+                <label className="label" htmlFor="script-step-content">
+                  Texto / fala sugerida
+                </label>
+                <PlaceholderHelpButton />
+              </div>
               <textarea
-                className="textarea"
-                rows={8}
+                id="script-step-content"
+                className="textarea script-flow-textarea"
+                rows={10}
                 value={selected.content}
                 onChange={(e) => updateSelected({ content: e.target.value })}
               />
             </div>
             {selected.type === "linear" ? (
               <div className="field">
-                <label className="label">Próxima etapa</label>
+                <label className="label" htmlFor="script-step-next">
+                  Próxima etapa
+                </label>
                 <select
+                  id="script-step-next"
                   className="select"
                   value={selected.next ?? ""}
                   onChange={(e) => updateSelected({ next: e.target.value || null })}
@@ -198,7 +254,7 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                     .filter((id) => id !== selected.id)
                     .map((id) => (
                       <option key={id} value={id}>
-                        {id}
+                        {stepLabel(id)} ({id})
                       </option>
                     ))}
                 </select>
@@ -206,15 +262,18 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
             ) : (
               <>
                 <div className="field">
-                  <label className="label">Pergunta de ramificação</label>
+                  <label className="label" htmlFor="script-step-question">
+                    Pergunta de ramificação
+                  </label>
                   <input
+                    id="script-step-question"
                     className="input"
                     value={selected.question ?? ""}
                     onChange={(e) => updateSelected({ question: e.target.value })}
                   />
                 </div>
                 {(selected.choices ?? []).map((choice, idx) => (
-                  <div key={idx} className="filters-row" style={{ alignItems: "flex-end" }}>
+                  <div key={idx} className="filters-row script-flow-branch-row">
                     <div className="field" style={{ flex: 1 }}>
                       <label className="label">Opção {idx + 1}</label>
                       <input
@@ -243,7 +302,7 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                           .filter((id) => id !== selected.id)
                           .map((id) => (
                             <option key={id} value={id}>
-                              {id}
+                              {stepLabel(id)} ({id})
                             </option>
                           ))}
                       </select>
@@ -275,7 +334,9 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
               </>
             )}
           </div>
-        ) : null}
+        ) : (
+          <p className="muted script-flow-empty">Adicione uma etapa para começar o fluxo.</p>
+        )}
       </div>
     </div>
   );

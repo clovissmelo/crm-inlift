@@ -208,6 +208,7 @@ export const catalogItemSchema = z.object({
   require_schedule_return: z.boolean().optional(),
   require_final_registration: z.boolean().optional(),
   ask_decision_maker: z.boolean().optional(),
+  mark_phone_verified: z.boolean().optional(),
   allowed_next_actions: z.array(approachNextActionKeySchema).optional().nullable()
 });
 

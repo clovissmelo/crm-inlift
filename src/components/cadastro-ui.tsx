@@ -58,20 +58,29 @@ export function CadastroModal({
   title,
   onClose,
   children,
-  wide
+  wide,
+  extraWide
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  /** Modal largo para editores (ex.: fluxo de ligação). */
+  extraWide?: boolean;
 }) {
   if (!open) return null;
+
+  const panelClass = extraWide
+    ? " cadastro-modal-panel-extra-wide"
+    : wide
+      ? " cadastro-modal-panel-wide"
+      : "";
 
   return (
     <div className="cadastro-modal-root" role="presentation" onClick={onClose}>
       <div
-        className={`cadastro-modal-panel${wide ? " cadastro-modal-panel-wide" : ""}`}
+        className={`cadastro-modal-panel${panelClass}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="cadastro-modal-title"

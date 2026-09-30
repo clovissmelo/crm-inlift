@@ -1298,6 +1298,11 @@ table.data-table th {
   width: min(640px, 100%);
 }
 
+.cadastro-modal-panel-extra-wide {
+  width: min(1040px, 96vw);
+  max-height: min(92vh, 920px);
+}
+
 .cadastro-modal-head {
   display: flex;
   align-items: center;
@@ -2267,6 +2272,246 @@ table.data-table tbody tr.is-selected {
     font-size: 0.875rem;
     padding: 0.55rem 0.65rem;
   }
+}
+
+.script-type-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.script-type-with-icon__glyph {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.script-flow-modal-field {
+  margin-top: 0.25rem;
+}
+
+.script-flow-editor {
+  margin-top: 0.35rem;
+}
+
+.script-flow-layout {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) 1fr;
+  gap: 1rem;
+  align-items: start;
+  min-height: min(52vh, 520px);
+}
+
+.script-flow-steps {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.script-flow-steps-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.script-flow-steps-head .label {
+  margin: 0;
+}
+
+.script-flow-steps-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.script-flow-template-btn {
+  font-size: 0.72rem;
+  padding: 0.3rem 0.55rem;
+  white-space: nowrap;
+}
+
+.script-flow-steps-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: auto;
+  max-height: min(52vh, 520px);
+  background: var(--bg-elevated);
+}
+
+.script-flow-step-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.script-flow-step-btn:last-child {
+  border-bottom: none;
+}
+
+.script-flow-step-btn:hover {
+  background: var(--nav-hover-bg);
+}
+
+.script-flow-step-btn--active {
+  background: var(--nav-active-bg);
+  color: #fff;
+  box-shadow: inset 3px 0 0 var(--brand-blue);
+}
+
+.script-flow-step-num {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 0.75rem;
+  opacity: 0.85;
+  min-width: 1.1rem;
+}
+
+.script-flow-step-title {
+  line-height: 1.35;
+}
+
+.script-flow-step-panel {
+  padding: 1rem 1.15rem;
+  min-height: min(52vh, 520px);
+  display: flex;
+  flex-direction: column;
+}
+
+.script-flow-step-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.script-flow-step-panel-head .label {
+  margin: 0;
+}
+
+.script-flow-textarea {
+  min-height: 11rem;
+  resize: vertical;
+}
+
+.script-flow-field-hint {
+  display: block;
+  font-size: 0.72rem;
+  margin-top: 0.25rem;
+}
+
+.script-flow-branch-row {
+  margin-bottom: 0.5rem;
+}
+
+.script-flow-empty {
+  align-self: center;
+  padding: 2rem;
+}
+
+.label-with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.label-with-help .label {
+  margin: 0;
+}
+
+.script-flow-help-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.script-flow-help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: help;
+}
+
+.script-flow-help-btn:hover,
+.script-flow-help-wrap:focus-within .script-flow-help-btn {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--brand-blue) 45%, var(--border));
+}
+
+.script-flow-help-popover {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 80;
+  width: min(280px, 70vw);
+  padding: 0.65rem 0.75rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  background: var(--panel, var(--bg-elevated));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+  transition: opacity 0.15s, visibility 0.15s;
+}
+
+.script-flow-help-wrap:hover .script-flow-help-popover,
+.script-flow-help-wrap:focus-within .script-flow-help-popover {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.script-flow-help-popover-title {
+  margin: 0 0 0.4rem;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.script-flow-help-list {
+  margin: 0 0 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.script-flow-help-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-bottom: 0.35rem;
+}
+
+.script-flow-help-list code {
+  font-size: 0.75rem;
+  color: #93c5fd;
+}
+
+.script-flow-help-note {
+  margin: 0;
+  font-size: 0.72rem;
 }
 
 .lead-geo-picker {
