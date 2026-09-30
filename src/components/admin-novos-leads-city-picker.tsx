@@ -41,8 +41,6 @@ type GenerationIndicator = {
   run_id: number;
 };
 
-const ALL_ZONES = "";
-
 type Props = {
   uf: string;
   ufOptions: UfOption[];
@@ -96,7 +94,7 @@ export function AdminNovosLeadsCityPicker({
   const [geoError, setGeoError] = useState<string | null>(null);
   const [cityFilter, setCityFilter] = useState("");
   const [zoneFilter, setZoneFilter] = useState("");
-  const [selectedZoneId, setSelectedZoneId] = useState<string>(ALL_ZONES);
+  const [checkedZoneIds, setCheckedZoneIds] = useState<Set<number>>(new Set());
   const [checkedIbge, setCheckedIbge] = useState<Set<number>>(new Set());
   const [indicators, setIndicators] = useState<Record<string, GenerationIndicator>>({});
   const fetchGenerationRef = useRef(0);
@@ -131,7 +129,7 @@ export function AdminNovosLeadsCityPicker({
   );
 
   useEffect(() => {
-    setSelectedZoneId(ALL_ZONES);
+    setCheckedZoneIds(new Set());
     setCheckedIbge(new Set());
     setCityFilter("");
     setZoneFilter("");
@@ -172,31 +170,35 @@ export function AdminNovosLeadsCityPicker({
     return list.filter((z) => z.name.toLowerCase().includes(q));
   }, [geo?.zones, zoneFilter]);
 
+  const cityMatchesZones = useCallback((c: GeoMunicipality, zoneIds: Set<number>) => {
+    if (zoneIds.size === 0) return true;
+    if (c.immediate_region_id != null && zoneIds.has(c.immediate_region_id)) return true;
+    return c.zone_ids.some((id) => zoneIds.has(id));
+  }, []);
+
   const citiesInScope = useMemo(() => {
     const all = geo?.municipalities ?? [];
-    if (selectedZoneId === ALL_ZONES) return all;
-    const zoneId = Number(selectedZoneId);
-    if (!Number.isFinite(zoneId)) return all;
-    return all.filter((c) => c.immediate_region_id === zoneId || c.zone_ids.includes(zoneId));
-  }, [geo?.municipalities, selectedZoneId]);
+    if (checkedZoneIds.size === 0) return all;
+    return all.filter((c) => cityMatchesZones(c, checkedZoneIds));
+  }, [geo?.municipalities, checkedZoneIds, cityMatchesZones]);
 
   const q = cityFilter.trim().toLowerCase();
   const filteredCities = citiesInScope.filter((c) => !q || c.name.toLowerCase().includes(q));
 
   useEffect(() => {
-    if (selectedZoneId === ALL_ZONES) return;
-    const zoneId = Number(selectedZoneId);
     setCheckedIbge((prev) => {
-      const next = new Set([...prev].filter((code) => {
-        const city = geo?.municipalities.find((c) => c.ibge_code === code);
-        if (!city) return false;
-        return city.immediate_region_id === zoneId || city.zone_ids.includes(zoneId);
-      }));
+      const next = new Set(
+        [...prev].filter((code) => {
+          const city = geo?.municipalities.find((c) => c.ibge_code === code);
+          if (!city) return false;
+          return cityMatchesZones(city, checkedZoneIds);
+        })
+      );
       if (next.size === prev.size && [...next].every((c) => prev.has(c))) return prev;
       emitSelection(next, geo);
       return next;
     });
-  }, [selectedZoneId, geo, emitSelection]);
+  }, [checkedZoneIds, geo, emitSelection, cityMatchesZones]);
 
   const visibleCodes = useMemo(
     () => filteredCities.map((c) => c.ibge_code).filter((c) => c > 0),
@@ -240,6 +242,13 @@ export function AdminNovosLeadsCityPicker({
     else nextIbge.delete(m.ibge_code);
     setCheckedIbge(nextIbge);
     emitSelection(nextIbge, geo);
+  };
+
+  const toggleZone = (zoneId: number, on: boolean) => {
+    const next = new Set(checkedZoneIds);
+    if (on) next.add(zoneId);
+    else next.delete(zoneId);
+    setCheckedZoneIds(next);
   };
 
   function clearManualSelection() {
@@ -343,19 +352,31 @@ export function AdminNovosLeadsCityPicker({
                 disabled={disabled || zoneDisabled}
                 onChange={(e) => setZoneFilter(e.target.value)}
               />
-              <select
-                className="input"
-                value={selectedZoneId}
-                disabled={disabled || zoneDisabled}
-                onChange={(e) => setSelectedZoneId(e.target.value)}
-              >
-                <option value={ALL_ZONES}>Todas as zonas</option>
+              {checkedZoneIds.size === 0 ? (
+                <p className="muted lead-geo-ind-hint">Nenhuma zona marcada — todas as cidades da UF.</p>
+              ) : (
+                <p className="muted lead-geo-ind-hint">
+                  {checkedZoneIds.size} zona{checkedZoneIds.size === 1 ? "" : "s"} — filtrando cidades.
+                </p>
+              )}
+              <ul className="lead-geo-list lead-geo-list-cities">
                 {filteredZones.map((z) => (
-                  <option key={z.id} value={String(z.id)}>
-                    {z.name} ({z.ibge_count})
-                  </option>
+                  <li key={z.id}>
+                    <label className="lead-geo-row">
+                      <input
+                        type="checkbox"
+                        disabled={disabled || zoneDisabled}
+                        checked={checkedZoneIds.has(z.id)}
+                        onChange={(e) => toggleZone(z.id, e.target.checked)}
+                      />
+                      <span className="lead-geo-label">
+                        {z.name}
+                        <span className="muted lead-geo-ibge-code"> · {z.ibge_count} municípios</span>
+                      </span>
+                    </label>
+                  </li>
                 ))}
-              </select>
+              </ul>
             </>
           )}
         </div>
