@@ -776,9 +776,16 @@ export function AdminNovosLeadsWizard() {
                       </td>
                       <td className="lead-gen-history-params">
                         <span className="lead-gen-history-line">
-                          <strong>{r.uf}</strong> · {geo.line}
+                          <strong>{r.uf}</strong> ·{" "}
+                          {geo.title ? (
+                            <span className="lead-gen-history-geo-hint" title={geo.title}>
+                              {geo.line}
+                            </span>
+                          ) : (
+                            geo.line
+                          )}
                         </span>
-                        <span className="lead-gen-history-sub muted" title={geo.title}>
+                        <span className="lead-gen-history-sub muted">
                           {segmentLabel(filters.segment, segmentOptions)}
                         </span>
                         <span className="lead-gen-history-sub muted">

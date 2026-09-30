@@ -3122,6 +3122,13 @@ table.data-table tbody tr.is-selected {
   display: block;
 }
 
+.lead-gen-history-geo-hint {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 0.15em;
+}
+
 .lead-gen-history-sub {
   display: block;
   font-size: 0.78rem;
