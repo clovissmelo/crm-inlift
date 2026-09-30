@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { loadCatalog } from "@/lib/catalog";
 import { get } from "@/lib/db";
 import { getClientDetail } from "@/lib/clients";
+import { contactLastCallMapToRecord, getLastCallAttemptsByContactId } from "@/lib/contact-last-call";
 import { listClientOpportunities } from "@/lib/opportunities";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ export default async function ClienteDetailPage({ params, searchParams }: Params
     { clientId }
   );
   const hasApproach = Boolean(hasApproachRow?.ok);
+  const contactLastCalls = contactLastCallMapToRecord(await getLastCallAttemptsByContactId(clientId));
   const followUpId = sp.follow_up ? Number(sp.follow_up) : undefined;
   const openMeeting = sp.agendar === "1";
 
@@ -52,6 +54,7 @@ export default async function ClienteDetailPage({ params, searchParams }: Params
     <ClientDetailView
       initialClient={client}
       initialContacts={detail.contacts as ClientContact[]}
+      contactLastCalls={contactLastCalls}
       linkedProducts={detail.products}
       bdr={detail.bdr}
       allProducts={products}

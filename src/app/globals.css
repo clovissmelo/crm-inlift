@@ -598,6 +598,184 @@ table.data-table th {
   margin-left: 0.5rem;
 }
 
+.contact-phone-input {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.contact-verification-icon--ok {
+  color: var(--success);
+  flex-shrink: 0;
+}
+
+.contact-verification-icon--bad {
+  color: #f87171;
+  flex-shrink: 0;
+}
+
+.contact-verification-icon--unknown {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.contact-verification-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.contact-verification-option {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.contact-verification-option:hover:not(:disabled) {
+  background: var(--nav-hover-bg);
+}
+
+.contact-verification-option--active {
+  border-color: rgba(0, 173, 238, 0.45);
+  background: rgba(0, 173, 238, 0.1);
+}
+
+.contact-verification-option--bad.contact-verification-option--active {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.contact-verification-option:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cadastro-modal-panel.dial-picker-panel {
+  width: min(480px, 94vw);
+  max-height: min(88vh, 720px);
+}
+
+.cadastro-modal-panel.dial-picker-panel .cadastro-modal-body {
+  padding-bottom: 1.1rem;
+}
+
+.dial-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: linear-gradient(145deg, rgba(0, 173, 238, 0.08), rgba(255, 255, 255, 0.02));
+}
+
+.dial-picker-head-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  background: rgba(0, 173, 238, 0.15);
+  color: var(--brand-blue, #00adee);
+  flex-shrink: 0;
+}
+
+.dial-picker-head-text {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.dial-picker-head-text strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.dial-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dial-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+
+.dial-picker-option:hover:not(:disabled) {
+  border-color: rgba(0, 173, 238, 0.4);
+  background: rgba(0, 173, 238, 0.06);
+}
+
+.dial-picker-option:active:not(:disabled) {
+  transform: scale(0.995);
+}
+
+.dial-picker-option:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.dial-picker-option--bad {
+  opacity: 0.72;
+  order: 1;
+}
+
+.dial-picker-option-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.dial-picker-number {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.dial-picker-meta {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.cadastro-modal-panel.contact-edit-panel {
+  width: min(520px, 94vw);
+}
+
+.contact-phone-input {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
 .badge-overdue {
   border-color: #f87171;
   color: #fecaca;
@@ -1737,6 +1915,13 @@ table.data-table th {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+}
+
+.client-contact-last-call {
+  flex-basis: 100%;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--muted);
 }
 
 .sp-date-picker {

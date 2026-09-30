@@ -1,20 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Phone, Mail, MessageCircle } from "lucide-react";
+import { VerificationStatusIcon } from "@/components/contact-verification-ui";
+import type { ContactVerification } from "@/lib/types";
 import { WhatsAppTemplateModal } from "@/components/whatsapp-template-modal";
 import { CadastroModal } from "@/components/cadastro-ui";
 import { useApi4comSession } from "@/components/api4com-call-provider";
 import { apiErrorText } from "@/lib/api-error-text";
 import { EmailApproachModal } from "@/components/email-approach-modal";
-import { telLink, formatPhoneDisplay } from "@/lib/format";
+import { telLink, formatPhoneDisplay, isMobileBr, phoneDigits } from "@/lib/format";
 
 export type ContactDialOption = {
   contactId?: number;
   contactName?: string | null;
   phone: string;
   label?: string;
+  verification_status?: ContactVerification;
 };
+
+function dialOptionSortRank(o: ContactDialOption): number {
+  const status = o.verification_status ?? "unverified";
+  if (status === "confirmed") return 0;
+  if (status === "invalid_number" || status === "wrong_contact") return 100;
+  const digits = phoneDigits(o.phone);
+  if (status === "unverified" && isMobileBr(digits)) return 10;
+  if (status === "unverified") return 20;
+  return 30;
+}
+
+export function sortContactDialOptions(options: ContactDialOption[]): ContactDialOption[] {
+  return [...options].sort((a, b) => {
+    const diff = dialOptionSortRank(a) - dialOptionSortRank(b);
+    if (diff !== 0) return diff;
+    return formatPhoneDisplay(a.phone).localeCompare(formatPhoneDisplay(b.phone), "pt-BR");
+  });
+}
 
 function buildDialOptions(input: {
   phone?: string | null;
@@ -83,7 +104,10 @@ export function ClientContactShortcuts({
   const hasEmail = Boolean(email?.trim());
   const btnClass = size === "sm" ? "btn btn-icon-sm" : "btn";
 
-  const options = buildDialOptions({ phone, whatsapp, contactId, contactName, dialOptions });
+  const options = useMemo(
+    () => sortContactDialOptions(buildDialOptions({ phone, whatsapp, contactId, contactName, dialOptions })),
+    [phone, whatsapp, contactId, contactName, dialOptions]
+  );
   const useApi4com = Boolean(api4com?.canDial && clientId && options.length);
 
   async function startCall(option: ContactDialOption, fromPicker: boolean) {
@@ -223,25 +247,44 @@ export function ClientContactShortcuts({
           </button>
         </div>
       </CadastroModal>
-      <CadastroModal open={pickerOpen} title="Escolher número" onClose={closePicker}>
-        {dialError ? <div className="alert alert-error">{dialError}</div> : null}
-        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-          {options.map((o, i) => (
-            <li key={`${o.phone}-${i}`} style={{ marginBottom: 8 }}>
-              <button
-                type="button"
-                className="btn"
-                style={{ width: "100%", justifyContent: "flex-start" }}
-                disabled={dialing}
-                onClick={() => void startCall(o, true)}
-              >
-                {formatPhoneDisplay(o.phone)}
-                {o.contactName ? ` · ${o.contactName}` : ""}
-                {o.label ? ` (${o.label})` : ""}
-              </button>
-            </li>
-          ))}
-        </ul>
+      <CadastroModal open={pickerOpen} title="Escolher número" onClose={closePicker} panelClassName="dial-picker-panel">
+        <div className="dial-picker-modal">
+          {dialError ? <div className="alert alert-error">{dialError}</div> : null}
+          <div className="dial-picker-head">
+            <div className="dial-picker-head-icon" aria-hidden>
+              <Phone size={22} />
+            </div>
+            <p className="dial-picker-head-text">
+              <strong>Discador</strong>
+              <br />
+              Escolha o número para ligar via API4COM. Verificados aparecem primeiro.
+            </p>
+          </div>
+          <ul className="dial-picker-list">
+            {options.map((o, i) => {
+              const status = o.verification_status ?? "unverified";
+              const isBad = status === "invalid_number" || status === "wrong_contact";
+              return (
+                <li key={`${o.contactId ?? "x"}-${o.phone}-${i}`}>
+                  <button
+                    type="button"
+                    className={`dial-picker-option${isBad ? " dial-picker-option--bad" : ""}`}
+                    disabled={dialing}
+                    onClick={() => void startCall(o, true)}
+                  >
+                    <VerificationStatusIcon status={status} size={22} />
+                    <span className="dial-picker-option-body">
+                      <span className="dial-picker-number">{formatPhoneDisplay(o.phone)}</span>
+                      <span className="dial-picker-meta">
+                        {[o.contactName, o.label].filter(Boolean).join(" · ") || "Contato"}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       </CadastroModal>
     </>
   );

@@ -15,6 +15,7 @@ import { externalWebHref, formatCnpj, instagramHref } from "@/lib/format";
 import { LeadQualificationPicker } from "@/components/lead-qualification-picker";
 import { parseLeadQualification, type LeadQualification } from "@/lib/lead-qualification";
 import { CONTACT_ORIGIN, formatContactOrigin } from "@/lib/contact-origin";
+import type { ContactLastCallAttempt } from "@/lib/contact-last-call";
 import { VERIFICATION_LABELS, type ContactVerification, type Product, type User } from "@/lib/types";
 
 export type ClientContact = {
@@ -130,10 +131,12 @@ export function ClientDetailView({
   openMeetingForm,
   opportunities,
   hasApproach = false,
-  canReconsult
+  canReconsult,
+  contactLastCalls = {}
 }: {
   initialClient: Client;
   initialContacts: ClientContact[];
+  contactLastCalls?: Record<number, ContactLastCallAttempt>;
   linkedProducts: Array<{ product_id: number; name: string }>;
   bdr: { id: number; name: string } | null;
   allProducts: Product[];
@@ -1092,6 +1095,7 @@ export function ClientDetailView({
           <ContactReadOnly
             key={contact.id}
             contact={contact}
+            lastCall={contactLastCalls[contact.id]}
             onEdit={() => openContactEdit(contact)}
             onSetPrimary={() => void markPrimaryPhone(contact.id)}
             settingPrimary={primarySavingId === contact.id}
@@ -1174,11 +1178,13 @@ export function ClientDetailView({
 
 function ContactReadOnly({
   contact,
+  lastCall,
   onEdit,
   onSetPrimary,
   settingPrimary
 }: {
   contact: ClientContact;
+  lastCall?: ContactLastCallAttempt;
   onEdit: () => void;
   onSetPrimary: () => void;
   settingPrimary?: boolean;
@@ -1208,6 +1214,11 @@ function ContactReadOnly({
           {hasText(contact.phone) ? (
             <span>
               <Phone size={14} aria-hidden /> {contact.phone}
+            </span>
+          ) : null}
+          {lastCall ? (
+            <span className="client-contact-last-call" title="Última tentativa de ligação">
+              {formatSpDateTime(lastCall.occurred_at)} — {lastCall.result_label}
             </span>
           ) : null}
           {hasText(contact.whatsapp) && contact.whatsapp !== contact.phone ? (

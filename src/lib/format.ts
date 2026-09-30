@@ -20,6 +20,21 @@ export function formatPhoneDisplay(value: string | null | undefined) {
   return value;
 }
 
+/** Máscara BR enquanto digita (até 11 dígitos). */
+export function formatPhoneAsYouType(value: string | null | undefined): string {
+  const d = (value ?? "").replace(/\D/g, "").slice(0, 11);
+  if (d.length === 0) return "";
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
+export function normalizePhoneForStorage(value: string | null | undefined): string | null {
+  const d = phoneDigits(value);
+  return d.length > 0 ? d : null;
+}
+
 export function phoneDigits(value: string | null | undefined) {
   if (!value) return "";
   return value.replace(/\D/g, "");

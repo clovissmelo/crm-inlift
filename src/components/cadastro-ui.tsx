@@ -59,7 +59,8 @@ export function CadastroModal({
   onClose,
   children,
   wide,
-  extraWide
+  extraWide,
+  panelClassName
 }: {
   open: boolean;
   title: string;
@@ -68,6 +69,8 @@ export function CadastroModal({
   wide?: boolean;
   /** Modal largo para editores (ex.: fluxo de ligação). */
   extraWide?: boolean;
+  /** Classes extras no painel (ex.: dial-picker-panel). */
+  panelClassName?: string;
 }) {
   if (!open) return null;
 
@@ -76,11 +79,12 @@ export function CadastroModal({
     : wide
       ? " cadastro-modal-panel-wide"
       : "";
+  const extraPanel = panelClassName ? ` ${panelClassName}` : "";
 
   return (
     <div className="cadastro-modal-root" role="presentation" onClick={onClose}>
       <div
-        className={`cadastro-modal-panel${panelClass}`}
+        className={`cadastro-modal-panel${panelClass}${extraPanel}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="cadastro-modal-title"
