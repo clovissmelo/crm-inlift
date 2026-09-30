@@ -60,6 +60,7 @@ export function AgendamentosView({
   const [editOpen, setEditOpen] = useState(false);
   const [editContacts, setEditContacts] = useState<ClientContact[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -115,6 +116,27 @@ export function AgendamentosView({
     setSelectedId(null);
     setDetail(null);
     setEditOpen(false);
+  }
+
+  async function cancelMeeting(scope: "self" | "all", reason: string) {
+    if (!selectedId) return;
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/meetings/${selectedId}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope, reason: reason || null })
+      });
+      const data = (await res.json()) as MeetingDetailPayload & { error?: string };
+      if (!res.ok) {
+        window.alert(data.error ?? "Não foi possível cancelar");
+        return;
+      }
+      setDetail(data);
+      void load();
+    } finally {
+      setCancelling(false);
+    }
   }
 
   async function openEdit() {
@@ -255,8 +277,10 @@ export function AgendamentosView({
         clientName={selectedItem?.client_name}
         onClose={closeDetail}
         onEdit={() => void openEdit()}
+        onCancel={cancelMeeting}
         onRetrySync={() => void retrySync()}
         syncing={syncing}
+        cancelling={cancelling}
       />
 
       {editOpen && selectedItem ? (

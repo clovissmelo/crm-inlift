@@ -239,7 +239,7 @@ export function ProductsAdmin({
           <div className="product-form-grid product-form-grid--lead-gen">
             <div className="field">
               <label className="label" htmlFor="product-lead-segment">
-                Segmento ANP (Novos leads)
+                Público
               </label>
               <select
                 id="product-lead-segment"
@@ -274,9 +274,6 @@ export function ProductsAdmin({
               </select>
             </div>
           </div>
-          <p className="muted" style={{ fontSize: "0.82rem", margin: "-0.35rem 0 0.75rem" }}>
-            Usado em Novos leads ao selecionar este produto (segmento ANP e pipeline de enriquecimento).
-          </p>
 
           <div className="product-form-grid">
             <div className="field">
@@ -293,14 +290,17 @@ export function ProductsAdmin({
                 <option value="inactive">Inativo</option>
               </select>
             </div>
-            <label className="product-form-check">
-              <input
-                type="checkbox"
-                checked={form.uses_proposal}
-                onChange={(e) => setForm((f) => ({ ...f, uses_proposal: e.target.checked }))}
-              />
-              <span>Utiliza proposta?</span>
-            </label>
+            <div className="field">
+              <span className="label">Utiliza proposta?</span>
+              <label className="product-form-check">
+                <input
+                  type="checkbox"
+                  checked={form.uses_proposal}
+                  onChange={(e) => setForm((f) => ({ ...f, uses_proposal: e.target.checked }))}
+                />
+                <span>Sim</span>
+              </label>
+            </div>
           </div>
 
           <ProductOwnerPicker

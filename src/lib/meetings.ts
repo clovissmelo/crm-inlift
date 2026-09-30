@@ -274,6 +274,45 @@ export async function updateMeeting(
   await syncMeetingToGoogle(meetingId);
 }
 
+export async function cancelMeeting(
+  meetingId: number,
+  userId: number,
+  input: { scope: "self" | "all"; reason?: string | null }
+) {
+  const current = await get<{ status: string }>("SELECT status FROM meetings WHERE id = @id", { id: meetingId });
+  if (!current) throw new Error("Reunião não encontrada");
+  if (current.status === "cancelled") throw new Error("Reunião já cancelada");
+
+  if (input.scope === "all") {
+    const reason = input.reason?.trim()
+      ? `Cancelado para todos: ${input.reason.trim()}`
+      : "Cancelado para todos";
+    await updateMeeting(meetingId, userId, { status: "cancelled", cancel_reason: reason });
+    return { scope: "all" as const };
+  }
+
+  const internal = await all<{ user_id: number }>(
+    "SELECT user_id FROM meeting_internal_participants WHERE meeting_id = @id",
+    { id: meetingId }
+  );
+  const ids = internal.map((r) => r.user_id);
+  if (!ids.includes(userId)) {
+    throw new Error("Você não está entre os participantes internos desta reunião");
+  }
+  const remaining = ids.filter((id) => id !== userId);
+  const external = await all<{ email: string; display_name: string | null; contact_id: number | null }>(
+    "SELECT email, display_name, contact_id FROM meeting_external_participants WHERE meeting_id = @id",
+    { id: meetingId }
+  );
+  await setParticipants(meetingId, remaining, external);
+  const reason = input.reason?.trim()
+    ? `Cancelado para mim: ${input.reason.trim()}`
+    : "Cancelado para mim";
+  await logStatus(meetingId, current.status, current.status, userId, reason);
+  await syncMeetingToGoogle(meetingId);
+  return { scope: "self" as const };
+}
+
 export async function getMeetingDetail(id: number) {
   const meeting = await get<Record<string, unknown>>("SELECT * FROM meetings WHERE id = @id", { id });
   if (!meeting) return null;

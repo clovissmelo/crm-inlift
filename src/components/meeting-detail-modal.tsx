@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { CadastroModal } from "@/components/cadastro-ui";
 import { formatSpDateTime } from "@/lib/datetime";
 import { MEETING_STATUS_LABELS, type MeetingStatus } from "@/lib/meeting-constants";
@@ -18,8 +19,10 @@ type Props = {
   clientName?: string;
   onClose: () => void;
   onEdit: () => void;
+  onCancel?: (scope: "self" | "all", reason: string) => Promise<void>;
   onRetrySync?: () => void;
   syncing?: boolean;
+  cancelling?: boolean;
 };
 
 function formatWhen(startsAt: string, durationMin: number): string {
@@ -39,16 +42,30 @@ export function MeetingDetailModal({
   clientName,
   onClose,
   onEdit,
+  onCancel,
   onRetrySync,
-  syncing
+  syncing,
+  cancelling
 }: Props) {
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+
   if (!open) return null;
 
   const m = detail?.meeting;
   const title = m ? String(m.title ?? "Reunião") : "";
-  const status = m ? (MEETING_STATUS_LABELS[m.status as MeetingStatus] ?? String(m.status)) : "";
+  const statusKey = m?.status as MeetingStatus | undefined;
+  const status = m ? (MEETING_STATUS_LABELS[statusKey!] ?? String(m.status)) : "";
+  const isCancelled = statusKey === "cancelled";
   const meetLink = m?.meet_link ? String(m.meet_link) : null;
   const notes = m?.notes ? String(m.notes) : null;
+
+  async function confirmCancel(scope: "self" | "all") {
+    if (!onCancel) return;
+    await onCancel(scope, cancelReason.trim());
+    setCancelOpen(false);
+    setCancelReason("");
+  }
 
   return (
     <CadastroModal open={open} title={loading ? "Carregando…" : title} onClose={onClose} wide>
@@ -153,10 +170,62 @@ export function MeetingDetailModal({
             </div>
           ) : null}
 
+          {cancelOpen ? (
+            <div className="meeting-cancel-panel">
+              <p className="meeting-cancel-panel-title">Como deseja cancelar?</p>
+              <p className="muted meeting-cancel-panel-hint">
+                <strong>Para mim</strong> remove sua participação; a reunião continua para os demais.{" "}
+                <strong>Para todos</strong> cancela o agendamento no CRM e no Google Calendar.
+              </p>
+              <label className="label" htmlFor="meeting-cancel-reason">
+                Motivo (opcional)
+              </label>
+              <input
+                id="meeting-cancel-reason"
+                className="input"
+                value={cancelReason}
+                disabled={cancelling}
+                placeholder="Ex.: conflito de agenda"
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+              <div className="meeting-cancel-panel-actions">
+                <button type="button" className="btn" disabled={cancelling} onClick={() => void confirmCancel("self")}>
+                  {cancelling ? "Cancelando…" : "Cancelar para mim"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  disabled={cancelling}
+                  onClick={() => void confirmCancel("all")}
+                >
+                  Cancelar para todos
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={cancelling}
+                  onClick={() => {
+                    setCancelOpen(false);
+                    setCancelReason("");
+                  }}
+                >
+                  Voltar
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="meeting-detail-actions">
-            <button type="button" className="btn btn-primary" onClick={onEdit}>
-              Editar agendamento
-            </button>
+            {!isCancelled && onCancel ? (
+              <button type="button" className="btn btn-danger-outline" disabled={cancelling} onClick={() => setCancelOpen(true)}>
+                Cancelar agenda
+              </button>
+            ) : null}
+            {!isCancelled ? (
+              <button type="button" className="btn btn-primary" onClick={onEdit}>
+                Editar agendamento
+              </button>
+            ) : null}
             <button type="button" className="btn" onClick={onClose}>
               Fechar
             </button>

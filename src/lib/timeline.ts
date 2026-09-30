@@ -320,11 +320,18 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
   );
 
   for (const l of meetingLogs) {
+    let title = `Reunião "${l.title}": ${MEETING_STATUS_LABELS[l.to_status as MeetingStatus] ?? l.to_status}`;
+    const reason = l.reason?.trim() ?? "";
+    if (reason.startsWith("Cancelado para mim")) {
+      title = `Reunião "${l.title}": cancelada para mim`;
+    } else if (reason.startsWith("Cancelado para todos") || l.to_status === "cancelled") {
+      title = `Reunião "${l.title}": cancelada para todos`;
+    }
     items.push({
       id: `meeting-log-${l.id}`,
       kind: "meeting_status",
-      title: `Reunião "${l.title}": ${l.to_status}`,
-      detail: l.reason,
+      title,
+      detail: reason || null,
       occurred_at: l.created_at,
       user_name: l.user_name,
       meet_link: l.meet_link
