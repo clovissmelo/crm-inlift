@@ -48,7 +48,15 @@ export function buildPartialRunLog(input: {
     lines.push("Não há mais cidades/postos elegíveis na área configurada para esta execução.");
   }
   if ((counts.errors ?? 0) > 0) {
-    lines.push("Verifique a aba Erros no detalhe da execução.");
+    const errN = counts.errors ?? 0;
+    if (created === 0 && errN >= processed && processed > 0) {
+      lines.push(
+        "Nenhum posto pôde ser processado: dados da fonte (ANP) ausentes ou ilegíveis nos itens enfileirados. " +
+          "Confira a aba Erros, amplie cidades/UF ou inicie uma nova execução."
+      );
+    } else {
+      lines.push("Verifique a aba Erros no detalhe da execução.");
+    }
   }
 
   return lines.join(" ");

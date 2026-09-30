@@ -100,8 +100,21 @@ async function syncRunProgressMetadata(
 }
 
 function parseStation(raw: unknown): AnpStation | null {
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    try {
+      raw = JSON.parse(trimmed) as unknown;
+    } catch {
+      return null;
+    }
+  }
   if (!raw || typeof raw !== "object") return null;
   return raw as AnpStation;
+}
+
+function parseStationFromItem(item: Record<string, unknown>): AnpStation | null {
+  return parseStation(item.station_json) ?? parseStation(item.anp_raw);
 }
 
 async function recomputeCounts(runId: number, runRow: { counts_json: LeadGenCounts; max_stations: number }) {
@@ -468,7 +481,7 @@ async function processOneItem(
   if (!item || String(item.status) !== "pending") return;
 
   await updateItem(itemId, { status: "processing" });
-  const station = parseStation(item.station_json);
+  const station = parseStationFromItem(item);
   const snapshot = runRow.flow_snapshot_json;
   const stepLog: StepRunResult[] = [];
   const cnpj = String(item.cnpj ?? "").startsWith("gplace:") ? "" : String(item.cnpj ?? "");

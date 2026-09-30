@@ -298,6 +298,28 @@ export async function countItemsByStatus(runId: number) {
   return map;
 }
 
+/** Recalcula contadores a partir dos itens (fonte de verdade após processamento). */
+export async function recomputeRunCountsFromItems(runId: number): Promise<LeadGenCounts> {
+  const run = await getLeadGenerationRun(runId);
+  const counts = { ...(run?.counts_json ?? emptyCounts()) };
+  const byStatus = await countItemsByStatus(runId);
+  counts.items_total = Object.values(byStatus).reduce((a, b) => a + b, 0);
+  counts.processed =
+    (byStatus.existing ?? 0) +
+    (byStatus.created ?? 0) +
+    (byStatus.ambiguous ?? 0) +
+    (byStatus.no_google_match ?? 0) +
+    (byStatus.error ?? 0) +
+    (byStatus.skipped_invalid_cnpj ?? 0);
+  counts.existing = byStatus.existing ?? 0;
+  counts.created = byStatus.created ?? 0;
+  counts.ambiguous = byStatus.ambiguous ?? 0;
+  counts.no_google_match = byStatus.no_google_match ?? 0;
+  counts.errors = byStatus.error ?? 0;
+  counts.skipped_invalid_cnpj = byStatus.skipped_invalid_cnpj ?? 0;
+  return counts;
+}
+
 export async function fetchPendingItemIds(runId: number, limit: number) {
   return all<{ id: number }>(
     `

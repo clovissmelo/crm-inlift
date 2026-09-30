@@ -1,7 +1,7 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { drainLeadGenerationTicks } from "@/lib/lead-generation/drain-ticks";
-import { getLeadGenerationRun } from "@/lib/lead-generation/runs-repo";
+import { getLeadGenerationRun, recomputeRunCountsFromItems } from "@/lib/lead-generation/runs-repo";
 
 export const maxDuration = 60;
 
@@ -27,6 +27,9 @@ export async function POST(_request: Request, { params }: Params) {
     await drainLeadGenerationTicks({ runId: id, maxTicks: 6, maxMs: 50_000 });
   }
 
-  const run = await getLeadGenerationRun(id);
+  let run = await getLeadGenerationRun(id);
+  if (run && ["completed", "partial", "failed", "cancelled"].includes(run.status)) {
+    run = { ...run, counts_json: await recomputeRunCountsFromItems(id) };
+  }
   return Response.json({ run });
 }

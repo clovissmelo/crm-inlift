@@ -1,7 +1,12 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { drainLeadGenerationTicks } from "@/lib/lead-generation/drain-ticks";
-import { deleteLeadGenerationRun, getLeadGenerationRun, listRunItems } from "@/lib/lead-generation/runs-repo";
+import {
+  deleteLeadGenerationRun,
+  getLeadGenerationRun,
+  listRunItems,
+  recomputeRunCountsFromItems
+} from "@/lib/lead-generation/runs-repo";
 
 export const maxDuration = 60;
 
@@ -21,6 +26,10 @@ export async function GET(_request: Request, { params }: Params) {
   if (["queued", "running"].includes(run.status)) {
     await drainLeadGenerationTicks({ runId: id, maxTicks: 5, maxMs: 22_000 });
     run = (await getLeadGenerationRun(id))!;
+  }
+
+  if (["completed", "partial", "failed", "cancelled"].includes(run.status)) {
+    run = { ...run, counts_json: await recomputeRunCountsFromItems(id) };
   }
 
   const tab = new URL(_request.url).searchParams.get("tab");

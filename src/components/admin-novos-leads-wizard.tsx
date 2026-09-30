@@ -161,10 +161,15 @@ export function AdminNovosLeadsWizard() {
   );
 
   const shownRun = useMemo(() => {
+    if (activeRunId != null) {
+      if (activeRun?.id === activeRunId) return activeRun;
+      const fromList = runs.find((r) => r.id === activeRunId);
+      if (fromList) return activeRun?.id === fromList.id ? { ...fromList, ...activeRun } : fromList;
+    }
     if (activeRun && listActiveRun && activeRun.id === listActiveRun.id) return activeRun;
     if (activeRun && !listActiveRun) return activeRun;
     return listActiveRun;
-  }, [activeRun, listActiveRun]);
+  }, [activeRunId, runs, activeRun, listActiveRun]);
 
   const shownRunActive = shownRun != null && ["queued", "running", "paused"].includes(shownRun.status);
 
@@ -355,10 +360,9 @@ export function AdminNovosLeadsWizard() {
   }, [runIdToPoll, listActiveRun?.status, tickActiveRun]);
 
   useEffect(() => {
-    if (activeRunId && ["completed", "partial", "failed", "cancelled"].includes(activeRun?.status ?? "")) {
-      void fetchRunDetail(activeRunId, resultTab);
-    }
-  }, [activeRunId, activeRun?.status, resultTab, fetchRunDetail]);
+    if (activeRunId == null) return;
+    void fetchRunDetail(activeRunId, resultTab);
+  }, [activeRunId, resultTab, fetchRunDetail]);
 
   async function startRun() {
     if (!uf || uf.length !== 2) {
@@ -647,7 +651,7 @@ export function AdminNovosLeadsWizard() {
       {shownRun ? (
         <div className="panel lead-gen-active-panel" style={{ marginTop: "1rem" }}>
           <div className="lead-gen-active-panel-head">
-            <h3 className="panel-title">Execução em andamento</h3>
+            <h3 className="panel-title">{shownRunActive ? "Execução em andamento" : "Detalhe da execução"}</h3>
             {shownRunActive ? (
               <button
                 className="btn lead-gen-cancel-exec-btn"
