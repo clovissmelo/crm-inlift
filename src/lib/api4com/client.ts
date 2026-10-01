@@ -36,7 +36,9 @@ export async function api4comStartCall(
 
   const data = (await res.json().catch(() => ({}))) as Api4comStartCallResponse & Record<string, unknown>;
   if (!res.ok) {
-    throw new Error(humanizeApi4comDialError(apiErrorText(data, `API4COM respondeu ${res.status}`)));
+    const raw = apiErrorText(data, `API4COM respondeu ${res.status}`);
+    const friendly = humanizeApi4comDialError(raw);
+    throw new Error(friendly === raw ? friendly : `${friendly} Detalhe API4COM: ${raw}`);
   }
   if (!data.id) {
     throw new Error(data.message || "API4COM não retornou o ID da chamada.");

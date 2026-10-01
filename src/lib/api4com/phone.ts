@@ -16,3 +16,9 @@ export function normalizeApi4comExtension(raw: string): string | null {
   if (!/^[0-9A-Za-z_-]{2,12}$/.test(ext)) return null;
   return ext;
 }
+
+/** Dígitos normalizados (ex.: 5511…) → E.164 para POST /calls. */
+export function toApi4comCalledE164(normalizedDigits: string): string {
+  const d = normalizedDigits.replace(/\D/g, "");
+  return d.startsWith("+") ? d : `+${d}`;
+}

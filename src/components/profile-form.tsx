@@ -174,7 +174,7 @@ export function ProfileForm({ user }: { user: User }) {
           {api4comTokenPolicy === "per_bdr" ? (
             <div style={{ marginBottom: "1rem" }}>
               <button type="button" className="btn" disabled={loading || setupChecking} onClick={() => void runSetupCheck()}>
-                {setupChecking ? "Validando…" : "Validar token e ramal na API4COM"}
+                {setupChecking ? "Validando…" : "Validar Integração"}
               </button>
               {setupProbe?.detail ? <p className="muted" style={{ marginTop: 8, fontSize: "0.85rem" }}>{setupProbe.detail}</p> : null}
             </div>
@@ -182,11 +182,7 @@ export function ProfileForm({ user }: { user: User }) {
         </>
       ) : null}
 
-      {!changingPassword ? (
-        <button type="button" className="btn" style={{ marginBottom: "1rem" }} onClick={() => setChangingPassword(true)}>
-          Alterar senha
-        </button>
-      ) : (
+      {changingPassword ? (
         <div className="profile-password-block">
           <div className="field">
             <label className="label">Senha atual</label>
@@ -208,15 +204,23 @@ export function ProfileForm({ user }: { user: User }) {
               autoComplete="new-password"
             />
           </div>
-          <button type="button" className="btn" style={{ marginBottom: "1rem" }} onClick={closePasswordSection}>
-            Cancelar alteração de senha
-          </button>
         </div>
-      )}
+      ) : null}
 
-      <button className="btn btn-primary" type="submit" disabled={loading}>
-        Salvar
-      </button>
+      <div className="profile-form-actions">
+        {!changingPassword ? (
+          <button type="button" className="btn profile-form-action-btn" onClick={() => setChangingPassword(true)}>
+            Alterar senha
+          </button>
+        ) : (
+          <button type="button" className="btn profile-form-action-btn" onClick={closePasswordSection}>
+            Cancelar
+          </button>
+        )}
+        <button className="btn btn-primary profile-form-action-btn" type="submit" disabled={loading}>
+          Salvar
+        </button>
+      </div>
     </form>
   );
 }

@@ -998,6 +998,18 @@ table.data-table th {
   flex-shrink: 0;
 }
 
+.profile-form-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.profile-form-action-btn {
+  width: 100%;
+  justify-content: center;
+}
+
 .api4com-bdr-panel {
   margin-top: 0.75rem;
 }

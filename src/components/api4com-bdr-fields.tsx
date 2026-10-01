@@ -103,7 +103,11 @@ export function Api4comBdrFields({
       >
         <button
           type="button"
-          className={hasExtension ? "btn btn-primary api4com-bdr-action-btn" : "btn api4com-bdr-action-btn"}
+          className={
+            hasExtension
+              ? "btn api4com-bdr-action-btn api4com-bdr-btn--token-ok"
+              : "btn api4com-bdr-action-btn"
+          }
           onClick={() => setExtensionModalOpen(true)}
         >
           {hasExtension ? `Ramal ${extensionTrimmed}` : "Configurar ramal"}

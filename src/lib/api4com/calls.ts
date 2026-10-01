@@ -3,7 +3,8 @@ import { api4comStartCall } from "@/lib/api4com/client";
 import { getApi4comConfig } from "@/lib/api4com/config";
 import { resolveApi4comApiTokenForUser } from "@/lib/api4com/user-token";
 import { API4COM_NO_EXTENSION_MESSAGE } from "@/lib/api4com/dial-identity-shared";
-import { normalizeApi4comCalledNumber, normalizeApi4comExtension } from "@/lib/api4com/phone";
+import { assertApi4comExtensionLinkedToToken } from "@/lib/api4com/extension-account";
+import { normalizeApi4comCalledNumber, normalizeApi4comExtension, toApi4comCalledE164 } from "@/lib/api4com/phone";
 import { normalizeCallScriptLog, type CallScriptLogEntry } from "@/lib/call-script-log";
 
 /** initiating/ringing sem webhook há mais que isso → falha automática */
@@ -269,11 +270,15 @@ export async function initiateApi4comCall(input: {
     );
   }
 
+  await assertApi4comExtensionLinkedToToken(apiToken, extension);
+
+  const calledForApi = toApi4comCalledE164(called);
+
   try {
     const apiRes = await api4comStartCall(
       {
         caller: extension,
-        called,
+        called: calledForApi,
         extension,
         metadata
       },

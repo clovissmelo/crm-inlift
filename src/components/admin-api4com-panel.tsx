@@ -227,6 +227,12 @@ export function AdminApi4comPanel() {
               </strong>
             </p>
             {!globalDialMode ? (
+              <p className="muted" style={{ fontSize: "0.8125rem", marginTop: 0 }}>
+                As <strong>ligações</strong> usam o token de cada BDR em Meu perfil. O token abaixo é só para{" "}
+                <strong>webhook</strong> (status da chamada no CRM) — não é obrigatório para discar.
+              </p>
+            ) : null}
+            {!globalDialMode ? (
               <div className="field">
                 <label className="label" htmlFor="api4com-integration-token">
                   Token API (integração / webhook)
