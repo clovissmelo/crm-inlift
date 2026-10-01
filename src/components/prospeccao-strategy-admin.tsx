@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import type { CallStrategySettings, ResultRuleRow } from "@/lib/call-strategy/settings";
+import type { ProspeccaoPriorityTypeRow } from "@/lib/call-strategy/priorities-config";
 
 function ReEvalPreviewButton() {
   const [preview, setPreview] = useState<string | null>(null);
@@ -29,8 +31,6 @@ function ReEvalPreviewButton() {
     </div>
   );
 }
-import type { CallStrategySettings, ResultRuleRow } from "@/lib/call-strategy/settings";
-import type { ProspeccaoPriorityTypeRow } from "@/lib/call-strategy/priorities-config";
 
 const BUCKET_LABELS: Record<string, string> = {
   no_answer: "Não atendeu / ocupado",

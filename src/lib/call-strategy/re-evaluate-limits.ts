@@ -43,7 +43,7 @@ export async function previewReEvaluateDialLimits(): Promise<ReEvalPreview> {
   );
 
   let wouldExhaust = 0;
-  let wouldReview = 0;
+  const wouldReview = 0;
   const samples: ReEvalPreview["samples"] = [];
 
   for (const row of rows) {
