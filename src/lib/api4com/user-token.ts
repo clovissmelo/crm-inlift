@@ -26,18 +26,16 @@ export async function applyUserApi4comApiToken(
   await run("UPDATE users SET api4com_api_token = @token WHERE id = @id", { token: value, id: userId });
 }
 
-/** Token da BDR; se vazio, usa o token global da integração. */
+/** Token da BDR; no modo global usa só o token do Admin (ignora token antigo no usuário). */
 export async function resolveApi4comApiTokenForUser(userId: number): Promise<string | null> {
+  const policy = await getApi4comTokenPolicy();
+  if (policy === "global") {
+    const cfg = await getApi4comConfig();
+    return cfg.apiToken?.trim() || null;
+  }
   const row = await get<{ api4com_api_token: string | null }>(
     "SELECT api4com_api_token FROM users WHERE id = @id",
     { id: userId }
   );
-  const personal = row?.api4com_api_token?.trim();
-  const policy = await getApi4comTokenPolicy();
-  if (policy === "per_bdr") {
-    return personal || null;
-  }
-  if (personal) return personal;
-  const cfg = await getApi4comConfig();
-  return cfg.apiToken;
+  return row?.api4com_api_token?.trim() || null;
 }

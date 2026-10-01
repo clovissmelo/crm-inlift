@@ -31,9 +31,10 @@ export function humanizeApi4comDialError(message: string): string {
   const m = message.toLowerCase();
   if (m.includes("user not registered")) {
     return (
-      "A API4COM não reconheceu o ramal com o token atual. " +
-      "O token (perfil ou Admin → Variáveis) precisa ser da mesma conta em que o ramal existe (Integrações → Ramal, ex.: 1000). " +
-      "Confira se o ramal está ativo e com usuário/e-mail cadastrados no painel API4COM."
+      "A API4COM não reconheceu o ramal com o token usado na ligação. " +
+      "Token e ramal precisam ser da mesma conta API4COM: no painel app.api4com.com, em Usuários, confira se o ramal (ex.: 1000) existe, está ativo e vinculado a um usuário. " +
+      "Gere um token novo em Tokens de acesso na mesma conta e cadastre em Meu perfil (modo por BDR) ou em Admin → API4COM (modo global). " +
+      "Se o ramal mudou de número, atualize também em Meu perfil → Configurar ramal."
     );
   }
   if (m.includes("invalid extension") || m.includes("extension")) {
