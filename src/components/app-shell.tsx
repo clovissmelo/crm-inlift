@@ -54,7 +54,7 @@ function navGestaoItems(admin: boolean): NavItem[] {
     items.push({ href: "/admin/etapas-funil", label: "Etapas do funil", icon: GitBranch });
   }
   items.push(
-    { href: "/empresas", label: "Empresas", icon: Building2 },
+    { href: "/empresas", label: "Nossas empresas", icon: Building2 },
     { href: "/produtos", label: "Produtos", icon: Package }
   );
   if (admin) {

@@ -112,7 +112,7 @@ export function CompaniesAdmin({ users, canDelete = false }: { users: User[]; ca
 
   return (
     <div>
-      <CadastroPageHeader title="Empresas" onNew={openCreate} newLabel="Nova empresa" />
+      <CadastroPageHeader title="Nossas empresas" onNew={openCreate} newLabel="Nova empresa" />
 
       {error && !modalOpen ? <div className="alert alert-error">{error}</div> : null}
 

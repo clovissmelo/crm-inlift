@@ -70,7 +70,7 @@ export function pageCrumbSegments(pathname: string): string[] {
     return segments;
   }
   if (pathname.startsWith("/empresas")) {
-    segments.push("empresas");
+    segments.push("nossas empresas");
     return segments;
   }
   if (pathname.startsWith("/produtos")) {

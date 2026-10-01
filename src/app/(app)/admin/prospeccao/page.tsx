@@ -5,7 +5,9 @@ export default function AdminProspeccaoPage() {
   return (
     <div>
       <h1 className="page-title">Prospecção</h1>
-      <PageIntro>Prioridades operacionais e estratégia de tentativas por telefone.</PageIntro>
+      <PageIntro>
+        Regras de atendimento pós-ligação, limite de tentativas sem contato e ordem da fila de prospecção.
+      </PageIntro>
       <ProspeccaoStrategyAdmin />
     </div>
   );
