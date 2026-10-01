@@ -38,6 +38,8 @@ export type LeadGenCounts = {
   skipped_invalid_cnpj: number;
   cities_loaded: number;
   cities_total: number;
+  /** Última cidade consultada na fase ANP (feed ao vivo). */
+  last_anp_city?: string;
   distributor_loaded?: number;
   /** Quantas vezes a execução ampliou cidades (região → UF). */
   geo_expansion_level?: number;

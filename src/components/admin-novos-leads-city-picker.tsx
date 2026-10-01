@@ -103,14 +103,27 @@ export function AdminNovosLeadsCityPicker({
   onSelectionChangeRef.current = onSelectionChange;
   onAllCitiesChangeRef.current = onAllCitiesChange;
 
-  const emitSelection = useCallback(
-    (ibge: Set<number>, geoData: GeoResponse | null) => {
-      if (!geoData) {
-        onSelectionChange({ municipalities: [], commercial_zone_ids: [] });
-        return;
+  const cityMatchesZones = useCallback((c: GeoMunicipality, zoneIds: Set<number>) => {
+    if (zoneIds.size === 0) return true;
+    if (c.immediate_region_id != null && zoneIds.has(c.immediate_region_id)) return true;
+    return c.zone_ids.some((id) => zoneIds.has(id));
+  }, []);
+
+  const buildSelectionPayload = useCallback(
+    (ibge: Set<number>, zoneIds: Set<number>, geoData: GeoResponse | null): CitySelectionPayload => {
+      if (!geoData) return { municipalities: [], commercial_zone_ids: [] };
+
+      const codes = new Set<number>();
+      if (ibge.size > 0) {
+        for (const code of ibge) codes.add(code);
+      } else if (zoneIds.size > 0) {
+        for (const city of geoData.municipalities) {
+          if (cityMatchesZones(city, zoneIds)) codes.add(city.ibge_code);
+        }
       }
+
       const municipalities: CitySelectionPayload["municipalities"] = [];
-      for (const code of ibge) {
+      for (const code of codes) {
         const city = geoData.municipalities.find((c) => c.ibge_code === code);
         if (!city) continue;
         const regionName =
@@ -120,12 +133,23 @@ export function AdminNovosLeadsCityPicker({
           name: city.name,
           ibge_immediate_region_id: city.immediate_region_id,
           ibge_immediate_region_name: regionName,
-          commercial_zone_id: null
+          commercial_zone_id: city.immediate_region_id
         });
       }
-      onSelectionChange({ municipalities, commercial_zone_ids: [] });
+
+      const commercial_zone_ids =
+        ibge.size === 0 && zoneIds.size > 0 ? [...zoneIds].sort((a, b) => a - b) : [];
+
+      return { municipalities, commercial_zone_ids };
     },
-    [onSelectionChange]
+    [cityMatchesZones]
+  );
+
+  const emitSelection = useCallback(
+    (ibge: Set<number>, geoData: GeoResponse | null, zoneIds: Set<number>) => {
+      onSelectionChange(buildSelectionPayload(ibge, zoneIds, geoData));
+    },
+    [onSelectionChange, buildSelectionPayload]
   );
 
   useEffect(() => {
@@ -170,12 +194,6 @@ export function AdminNovosLeadsCityPicker({
     return list.filter((z) => z.name.toLowerCase().includes(q));
   }, [geo?.zones, zoneFilter]);
 
-  const cityMatchesZones = useCallback((c: GeoMunicipality, zoneIds: Set<number>) => {
-    if (zoneIds.size === 0) return true;
-    if (c.immediate_region_id != null && zoneIds.has(c.immediate_region_id)) return true;
-    return c.zone_ids.some((id) => zoneIds.has(id));
-  }, []);
-
   const citiesInScope = useMemo(() => {
     const all = geo?.municipalities ?? [];
     if (checkedZoneIds.size === 0) return all;
@@ -195,10 +213,15 @@ export function AdminNovosLeadsCityPicker({
         })
       );
       if (next.size === prev.size && [...next].every((c) => prev.has(c))) return prev;
-      emitSelection(next, geo);
+      emitSelection(next, geo, checkedZoneIds);
       return next;
     });
   }, [checkedZoneIds, geo, emitSelection, cityMatchesZones]);
+
+  useEffect(() => {
+    if (!geo || checkedIbge.size > 0) return;
+    emitSelection(checkedIbge, geo, checkedZoneIds);
+  }, [checkedZoneIds, geo, checkedIbge, emitSelection]);
 
   const visibleCodes = useMemo(
     () => filteredCities.map((c) => c.ibge_code).filter((c) => c > 0),
@@ -241,7 +264,7 @@ export function AdminNovosLeadsCityPicker({
     if (on) nextIbge.add(m.ibge_code);
     else nextIbge.delete(m.ibge_code);
     setCheckedIbge(nextIbge);
-    emitSelection(nextIbge, geo);
+    emitSelection(nextIbge, geo, checkedZoneIds);
   };
 
   const toggleZone = (zoneId: number, on: boolean) => {
@@ -356,7 +379,10 @@ export function AdminNovosLeadsCityPicker({
                 <p className="muted lead-geo-ind-hint">Nenhuma zona marcada — todas as cidades da UF.</p>
               ) : (
                 <p className="muted lead-geo-ind-hint">
-                  {checkedZoneIds.size} zona{checkedZoneIds.size === 1 ? "" : "s"} — filtrando cidades.
+                  {checkedZoneIds.size} zona{checkedZoneIds.size === 1 ? "" : "s"} —{" "}
+                  {checkedIbge.size === 0
+                    ? "todos os municípios dessas zonas entram na geração."
+                    : "filtrando cidades."}
                 </p>
               )}
               <ul className="lead-geo-list lead-geo-list-cities">

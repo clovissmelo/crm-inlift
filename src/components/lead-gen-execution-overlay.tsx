@@ -1,0 +1,173 @@
+"use client";
+
+import "./lead-gen-execution.css";
+import { X } from "lucide-react";
+import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
+
+export type LeadGenActivityLine = {
+  id: number;
+  label: string;
+  detail: string | null;
+  status: string;
+  at: string;
+};
+
+type RunLike = {
+  id: number;
+  status: string;
+  phase: string;
+  uf: string;
+  max_stations: number;
+  progress_pct: number;
+  counts_json: Record<string, number>;
+  error_message: string | null;
+  simulation: boolean;
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  queued: "Na fila",
+  running: "Em execução",
+  paused: "Pausada",
+  completed: "Concluída",
+  partial: "Parcial",
+  failed: "Falhou",
+  cancelled: "Cancelada"
+};
+
+const PHASE_LABEL: Record<string, string> = {
+  anp_load: "Carregando fonte ANP",
+  processing: "Enriquecimento",
+  finalizing: "Finalizando",
+  done: "Concluído"
+};
+
+function ProgressBar({ run }: { run: RunLike }) {
+  const pct = computeRunProgressPct(run);
+  const detail = runProgressDetail(run);
+  return (
+    <div className="lead-gen-progress lead-gen-progress--overlay">
+      <div className="lead-gen-progress-head">
+        <span className="lead-gen-progress-pct">{pct}%</span>
+        <span className="lead-gen-progress-detail muted">{detail}</span>
+      </div>
+      <div className="lead-gen-progress-track" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+        <div className="lead-gen-progress-fill" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function activityTime(iso: string): string {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+type Props = {
+  open: boolean;
+  run: RunLike;
+  phaseLine: string | null;
+  activity: LeadGenActivityLine[];
+  cancelling: boolean;
+  onClose: () => void;
+  onCancel: () => void;
+  onResume?: () => void;
+};
+
+export function LeadGenExecutionOverlay({
+  open,
+  run,
+  phaseLine,
+  activity,
+  cancelling,
+  onClose,
+  onCancel,
+  onResume
+}: Props) {
+  if (!open) return null;
+
+  const active = ["queued", "running", "paused"].includes(run.status);
+  const counts = run.counts_json ?? {};
+
+  return (
+    <div className="lead-gen-overlay" role="dialog" aria-modal="true" aria-labelledby="lead-gen-overlay-title">
+      <div className="lead-gen-overlay-backdrop" aria-hidden="true" onClick={onClose} />
+      <div className="lead-gen-overlay-panel">
+        <header className="lead-gen-overlay-head">
+          <div>
+            <h2 id="lead-gen-overlay-title">Geração de leads</h2>
+            <p className="muted lead-gen-overlay-sub">
+              {run.uf} · meta {run.max_stations} novo{run.max_stations === 1 ? "" : "s"} ·{" "}
+              {STATUS_LABEL[run.status] ?? run.status}
+              {active ? ` · ${PHASE_LABEL[run.phase] ?? run.phase}` : null}
+              {run.simulation ? " · sem Google" : null}
+            </p>
+          </div>
+          <button type="button" className="btn btn-icon-sm lead-gen-overlay-close" aria-label="Fechar (continua em segundo plano)" onClick={onClose}>
+            <X size={20} />
+          </button>
+        </header>
+
+        <p className="lead-gen-overlay-bg-note" role="note">
+          Ao fechar, a execução <strong>não é interrompida</strong> — ela continua em segundo plano enquanto esta página
+          estiver aberta.
+        </p>
+
+        {active ? <ProgressBar run={run} /> : null}
+
+        {run.error_message ? <p className="alert alert-error">{run.error_message}</p> : null}
+
+        <ul className="lead-gen-overlay-stats muted">
+          <li>ANP: {counts.anp_found ?? 0}</li>
+          <li>Itens: {counts.items_total ?? 0}</li>
+          <li>Novos: {counts.created ?? 0}</li>
+          <li>Já no CRM: {counts.existing ?? 0}</li>
+          <li>Erros: {counts.errors ?? 0}</li>
+        </ul>
+
+        <div className="lead-gen-overlay-feed">
+          <h3 className="lead-gen-overlay-feed-title">Atividade recente</h3>
+          {phaseLine ? <p className="lead-gen-overlay-phase-line">{phaseLine}</p> : null}
+          {activity.length === 0 ? (
+            <p className="muted">Aguardando primeiros resultados…</p>
+          ) : (
+            <ul className="lead-gen-overlay-feed-list">
+              {activity.map((line) => (
+                <li key={line.id} className={`lead-gen-feed-item lead-gen-feed-item--${line.status}`}>
+                  <span className="lead-gen-feed-time">{activityTime(line.at)}</span>
+                  <span className="lead-gen-feed-label">{line.label}</span>
+                  {line.detail ? <span className="lead-gen-feed-detail muted">{line.detail}</span> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {active ? (
+          <footer className="lead-gen-overlay-actions">
+            {run.status === "paused" && onResume ? (
+              <button type="button" className="btn btn-primary" onClick={onResume}>
+                Retomar
+              </button>
+            ) : null}
+            <button type="button" className="btn lead-gen-cancel-exec-btn" disabled={cancelling} onClick={onCancel}>
+              {cancelling ? "Cancelando…" : "Cancelar execução"}
+            </button>
+            <button type="button" className="btn" onClick={onClose}>
+              Fechar e continuar em segundo plano
+            </button>
+          </footer>
+        ) : (
+          <footer className="lead-gen-overlay-actions">
+            <button type="button" className="btn btn-primary" onClick={onClose}>
+              Fechar
+            </button>
+          </footer>
+        )}
+      </div>
+    </div>
+  );
+}

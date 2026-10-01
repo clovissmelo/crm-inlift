@@ -83,13 +83,32 @@ export async function POST(request: Request) {
   const initialSource = flowSnapshot.initial_source;
   const ibge = await getUfGeoFromIbge(uf);
 
-  const selected: LeadGenMunicipalityRef[] = parsed.data.municipalities.map((m) => ({
+  let selected: LeadGenMunicipalityRef[] = parsed.data.municipalities.map((m) => ({
     ibge_code: m.ibge_code,
     name: m.name,
     commercial_zone_id: m.commercial_zone_id ?? null,
     ibge_immediate_region_id: m.ibge_immediate_region_id ?? null,
     ibge_immediate_region_name: m.ibge_immediate_region_name ?? null
   }));
+
+  if (
+    !parsed.data.all_cities_in_uf &&
+    selected.length === 0 &&
+    parsed.data.commercial_zone_ids.length > 0
+  ) {
+    const zoneSet = new Set(parsed.data.commercial_zone_ids);
+    for (const m of ibge.municipalities) {
+      if (m.immediate_region_id != null && zoneSet.has(m.immediate_region_id)) {
+        selected.push({
+          ibge_code: m.ibge_code,
+          name: m.name,
+          commercial_zone_id: m.immediate_region_id,
+          ibge_immediate_region_id: m.immediate_region_id,
+          ibge_immediate_region_name: m.immediate_region_name
+        });
+      }
+    }
+  }
 
   if (!parsed.data.all_cities_in_uf && selected.length === 0) {
     return Response.json({ error: "Selecione uma ou mais cidades, zonas comerciais ou marque todas da UF." }, { status: 400 });

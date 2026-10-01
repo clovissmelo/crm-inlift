@@ -1,5 +1,6 @@
 "use client";
 
+import "./lead-gen-execution.css";
 import Link from "next/link";
 import { Trash2 } from "lucide-react";
 import {
@@ -8,6 +9,10 @@ import {
   type UfOption
 } from "@/components/admin-novos-leads-city-picker";
 import { LeadGenFlowField } from "@/components/lead-gen-flow-field";
+import {
+  LeadGenExecutionOverlay,
+  type LeadGenActivityLine
+} from "@/components/lead-gen-execution-overlay";
 import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
 import { formatRunResultsSummary } from "@/lib/lead-generation/run-outcome";
 import type { LeadGenCounts } from "@/lib/lead-generation/types";
@@ -151,6 +156,11 @@ export function AdminNovosLeadsWizard() {
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [leadsRequested, setLeadsRequested] = useState(1);
+  const [execOverlayOpen, setExecOverlayOpen] = useState(false);
+  const [backgroundRunNotice, setBackgroundRunNotice] = useState(false);
+  const [activityFeed, setActivityFeed] = useState<LeadGenActivityLine[]>([]);
+  const [phaseLine, setPhaseLine] = useState<string | null>(null);
+
   const [flowPreview, setFlowPreview] = useState<{
     name: string;
     initial_source: string;
@@ -301,14 +311,34 @@ export function AdminNovosLeadsWizard() {
   );
 
   const tickActiveRun = useCallback(
-    async (id: number) => {
-      const res = await fetch(`/api/admin/lead-generation/runs/${id}/tick`, { method: "POST" });
+    async (id: number, withFeed = false) => {
+      const q = withFeed ? "?feed=1" : "";
+      const res = await fetch(`/api/admin/lead-generation/runs/${id}/tick${q}`, { method: "POST" });
       if (!res.ok) return;
-      const data = (await res.json()) as { run: RunDetail };
+      const data = (await res.json()) as {
+        run: RunDetail;
+        activity?: LeadGenActivityLine[];
+        phase_line?: string | null;
+      };
       applyRunRow(data.run);
+      if (withFeed) {
+        if (data.activity) setActivityFeed(data.activity);
+        setPhaseLine(data.phase_line ?? null);
+      }
     },
     [applyRunRow]
   );
+
+  function closeExecOverlay() {
+    setExecOverlayOpen(false);
+    if (shownRunActive) setBackgroundRunNotice(true);
+  }
+
+  function openExecOverlay() {
+    setExecOverlayOpen(true);
+    setBackgroundRunNotice(false);
+    if (shownRun?.id) void tickActiveRun(shownRun.id, true);
+  }
 
   useEffect(() => {
     if (listActiveRun && activeRunId !== listActiveRun.id) {
@@ -317,6 +347,18 @@ export function AdminNovosLeadsWizard() {
   }, [listActiveRun, activeRunId]);
 
   const tickInFlightRef = useRef(false);
+  const prevRunStatusRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!shownRun) return;
+    const terminal = ["completed", "partial", "failed", "cancelled"].includes(shownRun.status);
+    const wasActive =
+      prevRunStatusRef.current != null && RUN_POLL_STATUSES.has(prevRunStatusRef.current);
+    if (terminal && wasActive && !execOverlayOpen) {
+      setBackgroundRunNotice(true);
+    }
+    prevRunStatusRef.current = shownRun.status;
+  }, [shownRun, shownRun?.status, execOverlayOpen]);
 
   const runIdToPoll = useMemo(() => {
     if (listActiveRun && RUN_POLL_STATUSES.has(listActiveRun.status)) return listActiveRun.id;
@@ -335,20 +377,20 @@ export function AdminNovosLeadsWizard() {
     if (!onNovosLeadsPage || runIdToPoll == null) return;
 
     let cancelled = false;
+    const withFeed = execOverlayOpen || backgroundRunNotice;
 
     async function tickOnce() {
       if (cancelled || tickInFlightRef.current || document.visibilityState === "hidden") return;
       tickInFlightRef.current = true;
       try {
-        await tickActiveRun(runIdToPoll!);
+        await tickActiveRun(runIdToPoll!, withFeed);
       } finally {
         tickInFlightRef.current = false;
       }
     }
 
     void tickOnce();
-    const pollMs =
-      listActiveRun?.status === "queued" || listActiveRun?.status === "running" ? 4000 : 5000;
+    const pollMs = execOverlayOpen ? 2500 : backgroundRunNotice ? 4500 : 4000;
     const t = window.setInterval(() => void tickOnce(), pollMs);
 
     function onVisibility() {
@@ -361,7 +403,7 @@ export function AdminNovosLeadsWizard() {
       window.clearInterval(t);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [onNovosLeadsPage, runIdToPoll, listActiveRun?.status, tickActiveRun]);
+  }, [onNovosLeadsPage, runIdToPoll, execOverlayOpen, backgroundRunNotice, tickActiveRun]);
 
   const selectedRunStatus = useMemo(() => {
     if (activeRunId == null) return null;
@@ -387,7 +429,7 @@ export function AdminNovosLeadsWizard() {
       return;
     }
     if (!allCities && !hasGeoSelection) {
-      setError("Selecione cidades ou marque todas da UF.");
+      setError("Selecione cidades, marque zonas (IBGE) ou marque todas da UF.");
       return;
     }
     if (productId !== "" && citySelection.municipalities.length > 0) {
@@ -445,6 +487,11 @@ export function AdminNovosLeadsWizard() {
     }
     if (data.id) {
       setActiveRunId(data.id);
+      setActivityFeed([]);
+      setPhaseLine(null);
+      setExecOverlayOpen(true);
+      setBackgroundRunNotice(false);
+      void tickActiveRun(data.id, true);
       void loadMeta();
     }
   }
@@ -501,9 +548,53 @@ export function AdminNovosLeadsWizard() {
 
   const counts = shownRun?.counts_json ?? {};
 
+  const showBackgroundBanner =
+    shownRun != null && !execOverlayOpen && (backgroundRunNotice || shownRunActive);
+
   return (
     <div>
       {error ? <div className="alert alert-error">{error}</div> : null}
+
+      {showBackgroundBanner && shownRun ? (
+        <div className="lead-gen-bg-banner" role="status">
+          <div>
+            {shownRunActive ? (
+              <>
+                Geração em andamento em <strong>segundo plano</strong> ({computeRunProgressPct(shownRun)}% —{" "}
+                {runProgressDetail(shownRun)}).
+              </>
+            ) : (
+              <>
+                Geração finalizada ({RUN_STATUS_LABEL[shownRun.status] ?? shownRun.status}).{" "}
+                {formatRunResults(counts)}
+              </>
+            )}
+          </div>
+          <div className="lead-gen-bg-banner-actions">
+            <button type="button" className="btn btn-sm btn-primary" onClick={openExecOverlay}>
+              {shownRunActive ? "Ver progresso" : "Ver detalhes"}
+            </button>
+            {!shownRunActive ? (
+              <button type="button" className="btn btn-sm" onClick={() => setBackgroundRunNotice(false)}>
+                Dispensar
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {shownRun && execOverlayOpen ? (
+        <LeadGenExecutionOverlay
+          open
+          run={shownRun}
+          phaseLine={phaseLine}
+          activity={activityFeed}
+          cancelling={cancelling}
+          onClose={closeExecOverlay}
+          onCancel={() => void cancelRun(shownRun.id)}
+          onResume={shownRun.status === "paused" ? () => void resumeRun(shownRun.id) : undefined}
+        />
+      ) : null}
 
       <div className="panel">
         <h3 className="panel-title">Parâmetros</h3>

@@ -114,7 +114,38 @@ function parseStation(raw: unknown): AnpStation | null {
 }
 
 function parseStationFromItem(item: Record<string, unknown>): AnpStation | null {
-  return parseStation(item.station_json) ?? parseStation(item.anp_raw);
+  const fromJson = parseStation(item.station_json) ?? parseStation(item.anp_raw);
+  if (fromJson) return fromJson;
+  const cnpjDigits = String(item.cnpj ?? "").replace(/\D/g, "");
+  if (!isValidCnpjDigits(cnpjDigits)) return null;
+  const raw = item.anp_raw ?? item.station_json;
+  if (raw && typeof raw === "object") {
+    const o = raw as Record<string, unknown>;
+    if (o.razao_social || o.cidade || o.endereco) {
+      return {
+        cnpj: cnpjDigits,
+        razao_social: String(o.razao_social ?? ""),
+        nome_fantasia: String(o.nome_fantasia ?? ""),
+        bandeira: String(o.bandeira ?? ""),
+        bandeira_branca: Boolean(o.bandeira_branca),
+        endereco: String(o.endereco ?? o.logradouro ?? ""),
+        logradouro: String(o.logradouro ?? ""),
+        numero: String(o.numero ?? ""),
+        bairro: String(o.bairro ?? ""),
+        cidade: String(o.cidade ?? ""),
+        uf: String(o.uf ?? ""),
+        cep: String(o.cep ?? ""),
+        autorizacao_anp: String(o.autorizacao_anp ?? o.autorizacao ?? ""),
+        situacao_anp: String(o.situacao_anp ?? ""),
+        distribuidora: String(o.distribuidora ?? ""),
+        produtos_anp: String(o.produtos_anp ?? ""),
+        latitude: String(o.latitude ?? ""),
+        longitude: String(o.longitude ?? ""),
+        anp_segment: "retail"
+      };
+    }
+  }
+  return null;
 }
 
 async function recomputeCounts(runId: number, runRow: { counts_json: LeadGenCounts; max_stations: number }) {
@@ -372,6 +403,7 @@ async function tickAnpLoad(runId: number) {
   const end = Math.min(idx + ANP_CITIES_PER_TICK, pairs.length);
   for (; idx < end; idx++) {
     const pair = pairs[idx]!;
+    counts.last_anp_city = pair.official;
     let rawRows: Record<string, unknown>[];
     try {
       rawRows = await fetchAnpMunicipality(pair.api, runRow.uf);

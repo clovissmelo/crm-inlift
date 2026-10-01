@@ -244,6 +244,21 @@ export async function listRunItems(runId: number, status?: string) {
   return all<Record<string, unknown>>(q, status ? { runId, status } : { runId });
 }
 
+/** Itens já processados, mais recentes primeiro (feed leve para polling). */
+export async function listRunActivityFeed(runId: number, limit = 40) {
+  const cap = Math.min(80, Math.max(1, limit));
+  return all<Record<string, unknown>>(
+    `
+      SELECT id, cnpj, status, error_message, station_json, anp_raw, created_at, updated_at
+      FROM lead_generation_items
+      WHERE run_id = @runId AND status NOT IN ('pending', 'processing')
+      ORDER BY updated_at DESC, id DESC
+      LIMIT @limit
+    `,
+    { runId, limit: cap }
+  );
+}
+
 export async function insertRunItemsSafe(
   runId: number,
   stations: Array<{
