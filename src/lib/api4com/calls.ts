@@ -5,6 +5,73 @@ import { resolveApi4comApiTokenForUser } from "@/lib/api4com/user-token";
 import { normalizeApi4comCalledNumber, normalizeApi4comExtension } from "@/lib/api4com/phone";
 import { normalizeCallScriptLog, type CallScriptLogEntry } from "@/lib/call-script-log";
 
+/** initiating/ringing sem webhook há mais que isso → falha automática */
+export const API4COM_STALE_RINGING_MS = 20 * 60 * 1000;
+/** in_progress sem atualização há mais que isso → falha automática */
+export const API4COM_STALE_IN_PROGRESS_MS = 3 * 60 * 60 * 1000;
+
+export const API4COM_STALE_FAIL_MESSAGE =
+  "Encerrada automaticamente — ligação expirou no CRM (telefonia ou tela não finalizou).";
+
+function staleRingingCutoffIso() {
+  return new Date(Date.now() - API4COM_STALE_RINGING_MS).toISOString();
+}
+
+function staleInProgressCutoffIso() {
+  return new Date(Date.now() - API4COM_STALE_IN_PROGRESS_MS).toISOString();
+}
+
+function activeCallTimeParams() {
+  return {
+    ringingSince: staleRingingCutoffIso(),
+    inProgressSince: staleInProgressCutoffIso()
+  };
+}
+
+/** Marca ligações presas em initiating/ringing/in_progress como failed (evita bloqueio permanente). */
+export async function expireStaleApi4comCalls(scope?: {
+  userId?: number;
+  clientId?: number;
+}): Promise<void> {
+  const ringingBefore = staleRingingCutoffIso();
+  const inProgressBefore = staleInProgressCutoffIso();
+  const now = nowIso();
+
+  let scopeClause = "";
+  if (scope?.userId != null && scope?.clientId != null) {
+    scopeClause = "AND (user_id = @userId OR client_id = @clientId)";
+  } else if (scope?.userId != null) {
+    scopeClause = "AND user_id = @userId";
+  } else if (scope?.clientId != null) {
+    scopeClause = "AND client_id = @clientId";
+  }
+
+  await run(
+    `
+      UPDATE api4com_calls
+      SET status = 'failed',
+          error_message = @message,
+          result_pending = false,
+          ended_at = COALESCE(ended_at, @now),
+          updated_at = @now
+      WHERE status IN ('initiating', 'ringing', 'in_progress')
+        AND (
+          (status IN ('initiating', 'ringing') AND updated_at < @ringingBefore)
+          OR (status = 'in_progress' AND updated_at < @inProgressBefore)
+        )
+        ${scopeClause}
+    `,
+    {
+      message: API4COM_STALE_FAIL_MESSAGE,
+      now,
+      ringingBefore,
+      inProgressBefore,
+      userId: scope?.userId ?? null,
+      clientId: scope?.clientId ?? null
+    }
+  );
+}
+
 export type Api4comCallRow = {
   id: number;
   api4com_call_id: string | null;
@@ -86,6 +153,7 @@ export async function getUserExtension(userId: number) {
 
 export async function findRecentDuplicateCall(userId: number, clientId: number | null, phone: string, withinMs = 25_000) {
   const since = new Date(Date.now() - withinMs).toISOString();
+  const { ringingSince, inProgressSince } = activeCallTimeParams();
   return get<{ id: number }>(
     `
       SELECT id FROM api4com_calls
@@ -94,9 +162,13 @@ export async function findRecentDuplicateCall(userId: number, clientId: number |
         AND client_id IS NOT DISTINCT FROM @clientId
         AND status IN ('initiating', 'ringing', 'in_progress')
         AND created_at >= @since
+        AND (
+          (status = 'in_progress' AND updated_at >= @inProgressSince)
+          OR (status IN ('initiating', 'ringing') AND updated_at >= @ringingSince)
+        )
       ORDER BY id DESC LIMIT 1
     `,
-    { userId, clientId, phone, since }
+    { userId, clientId, phone, since, ringingSince, inProgressSince }
   );
 }
 
@@ -116,18 +188,28 @@ export async function initiateApi4comCall(input: {
   const called = normalizeApi4comCalledNumber(input.phone);
   if (!called) throw new Error("Número de telefone inválido para discagem.");
 
+  await expireStaleApi4comCalls({
+    userId: input.userId,
+    clientId: input.clientId ?? undefined
+  });
+
   const dup = await findRecentDuplicateCall(input.userId, input.clientId ?? null, called);
   if (dup) throw new Error("Já existe uma chamada em andamento para este número. Aguarde alguns segundos.");
 
   if (input.clientId) {
+    const { ringingSince, inProgressSince } = activeCallTimeParams();
     const clientBusy = await get<{ id: number }>(
       `
         SELECT id FROM api4com_calls
         WHERE client_id = @clientId
           AND status IN ('initiating', 'ringing', 'in_progress')
+          AND (
+            (status = 'in_progress' AND updated_at >= @inProgressSince)
+            OR (status IN ('initiating', 'ringing') AND updated_at >= @ringingSince)
+          )
         ORDER BY id DESC LIMIT 1
       `,
-      { clientId: input.clientId }
+      { clientId: input.clientId, ringingSince, inProgressSince }
     );
     if (clientBusy) {
       throw new Error("Já existe uma ligação em andamento para este cliente. Aguarde o encerramento.");
@@ -251,6 +333,7 @@ export async function getCallDetailForUser(id: number, userId: number) {
 }
 
 export async function listActiveCallsForUser(userId: number) {
+  await expireStaleApi4comCalls({ userId });
   return all<
     Api4comCallRow & {
       client_name: string | null;
@@ -270,16 +353,13 @@ export async function listActiveCallsForUser(userId: number) {
       WHERE c.user_id = @userId
         AND c.ended_at IS NULL
         AND (
-          c.status = 'in_progress'
-          OR (
-            c.status IN ('initiating', 'ringing')
-            AND c.created_at > now() - interval '20 minutes'
-          )
+          (c.status = 'in_progress' AND c.updated_at >= @inProgressSince)
+          OR (c.status IN ('initiating', 'ringing') AND c.updated_at >= @ringingSince)
         )
       ORDER BY c.id DESC
       LIMIT 1
     `,
-    { userId }
+    { userId, ...activeCallTimeParams() }
   );
 }
 
