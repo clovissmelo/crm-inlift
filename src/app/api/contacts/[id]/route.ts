@@ -1,6 +1,8 @@
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { get, nowIso, run } from "@/lib/db";
 import { contactSchema } from "@/lib/validators";
+import { syncClientPhonesFromContacts } from "@/lib/call-strategy/client-phones";
+import { tryReenterProspeccaoAfterNewPhone } from "@/lib/call-strategy/queue-eval";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -64,6 +66,8 @@ export async function PATCH(request: Request, { params }: Params) {
     );
   }
 
+  await syncClientPhonesFromContacts(existing.client_id);
+  await tryReenterProspeccaoAfterNewPhone(existing.client_id);
   return Response.json({ ok: true });
 }
 

@@ -2,6 +2,8 @@ import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { CONTACT_ORIGIN } from "@/lib/contact-origin";
 import { all, nowIso, run } from "@/lib/db";
 import { contactSchema } from "@/lib/validators";
+import { syncClientPhonesFromContacts } from "@/lib/call-strategy/client-phones";
+import { tryReenterProspeccaoAfterNewPhone } from "@/lib/call-strategy/queue-eval";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -51,5 +53,7 @@ export async function POST(request: Request, { params }: Params) {
       updatedAt: nowIso()
     }
   );
+  await syncClientPhonesFromContacts(clientId);
+  await tryReenterProspeccaoAfterNewPhone(clientId);
   return Response.json({ id: result.lastInsertRowid }, { status: 201 });
 }

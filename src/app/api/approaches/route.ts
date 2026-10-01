@@ -10,6 +10,8 @@ import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { get, nowIso, run } from "@/lib/db";
 import { completeFollowUp } from "@/lib/follow-ups";
 import { approachCreateSchema } from "@/lib/validators";
+import { recordDialAttemptFromApproach } from "@/lib/call-strategy/record-attempt";
+import { exitProspeccaoCommercial } from "@/lib/call-strategy/queue-eval";
 
 export async function POST(request: Request) {
   const user = await requireApiUser();
@@ -160,19 +162,32 @@ export async function POST(request: Request) {
     ) {
       await run(
         `
-          UPDATE clients SET
-            lead_qualification = @qual,
-            in_prospeccao_queue = @inQueue,
-            updated_at = @now
+          UPDATE clients SET lead_qualification = @qual, updated_at = @now
           WHERE id = @clientId
         `,
         {
           qual: resultType.lead_qualification,
-          inQueue: resultType.lead_qualification === "cold" ? false : true,
           clientId: data.client_id,
           now: nowIso()
         }
       );
+    }
+
+    if (registrationStatus === "final") {
+      await recordDialAttemptFromApproach({
+        approachId,
+        clientId: data.client_id,
+        userId: user.id,
+        contactId: data.contact_id,
+        productId: data.product_id,
+        api4comCallRowId: data.api4com_call_row_id,
+        resultTypeId: data.result_type_id,
+        contactOutcomeTypeId: data.contact_outcome_type_id
+      });
+
+      if (data.next_action.type === "close") {
+        await exitProspeccaoCommercial(data.client_id, "commercial_close");
+      }
     }
 
     if (effectiveRules.mark_phone_verified) {

@@ -11,6 +11,11 @@ export type ResultRegistrationAssociationRow = {
   ask_decision_maker: boolean | null;
   mark_phone_verified: boolean | null;
   allowed_next_actions: unknown | null;
+  dial_counts_for_exhaustion: boolean;
+  dial_occurrence_kind: string | null;
+  dial_occurrence_limit: number | null;
+  dial_min_interval_minutes: number | null;
+  dial_limit_action: string | null;
   status: string;
 };
 
@@ -35,6 +40,11 @@ const SELECT_VIEW = `
     a.ask_decision_maker,
     a.mark_phone_verified,
     a.allowed_next_actions,
+    a.dial_counts_for_exhaustion,
+    a.dial_occurrence_kind,
+    a.dial_occurrence_limit,
+    a.dial_min_interval_minutes,
+    a.dial_limit_action,
     a.status,
     t.slug AS technical_slug,
     t.display_name AS technical_display_name,
@@ -71,7 +81,9 @@ export async function getActiveAssociationForPair(
     `
       SELECT id, call_technical_result_type_id, commercial_result_type_id, pipeline_stage_id,
         collect_notes, require_schedule_return, require_final_registration, ask_decision_maker,
-        mark_phone_verified, allowed_next_actions, status
+        mark_phone_verified, allowed_next_actions,
+        dial_counts_for_exhaustion, dial_occurrence_kind, dial_occurrence_limit,
+        dial_min_interval_minutes, dial_limit_action, status
       FROM result_registration_associations
       WHERE call_technical_result_type_id = @technicalId
         AND commercial_result_type_id = @commercialId
@@ -122,6 +134,11 @@ export type UpsertAssociationInput = {
   ask_decision_maker?: boolean | null;
   mark_phone_verified?: boolean | null;
   allowed_next_actions?: unknown | null;
+  dial_counts_for_exhaustion?: boolean;
+  dial_occurrence_kind?: string | null;
+  dial_occurrence_limit?: number | null;
+  dial_min_interval_minutes?: number | null;
+  dial_limit_action?: "exhaust_phone" | "flag_review" | null;
   status?: "active" | "inactive";
 };
 
@@ -142,11 +159,16 @@ export async function createResultRegistrationAssociation(input: UpsertAssociati
       INSERT INTO result_registration_associations (
         call_technical_result_type_id, commercial_result_type_id, pipeline_stage_id,
         collect_notes, require_schedule_return, require_final_registration,
-        ask_decision_maker, mark_phone_verified, allowed_next_actions, status, created_at, updated_at
+        ask_decision_maker, mark_phone_verified, allowed_next_actions,
+        dial_counts_for_exhaustion, dial_occurrence_kind, dial_occurrence_limit,
+        dial_min_interval_minutes, dial_limit_action,
+        status, created_at, updated_at
       ) VALUES (
         @technicalId, @commercialId, @stageId,
         @collectNotes, @requireScheduleReturn, @requireFinalRegistration,
-        @askDecisionMaker, @markPhoneVerified, @allowedNextActions::jsonb, @status, @now, @now
+        @askDecisionMaker, @markPhoneVerified, @allowedNextActions::jsonb,
+        @dialCounts, @dialKind, @dialLimit, @dialInterval, @dialAction,
+        @status, @now, @now
       )
     `,
     {
@@ -160,6 +182,11 @@ export async function createResultRegistrationAssociation(input: UpsertAssociati
       markPhoneVerified: input.mark_phone_verified ?? null,
       allowedNextActions:
         input.allowed_next_actions != null ? JSON.stringify(input.allowed_next_actions) : null,
+      dialCounts: input.dial_counts_for_exhaustion ?? false,
+      dialKind: input.dial_occurrence_kind ?? null,
+      dialLimit: input.dial_occurrence_limit ?? null,
+      dialInterval: input.dial_min_interval_minutes ?? null,
+      dialAction: input.dial_limit_action ?? null,
       status: input.status ?? "active",
       now
     }
@@ -211,6 +238,11 @@ export async function updateResultRegistrationAssociation(
         ask_decision_maker = @askDecisionMaker,
         mark_phone_verified = @markPhoneVerified,
         allowed_next_actions = @allowedNextActions::jsonb,
+        dial_counts_for_exhaustion = COALESCE(@dialCounts, dial_counts_for_exhaustion),
+        dial_occurrence_kind = @dialKind,
+        dial_occurrence_limit = @dialLimit,
+        dial_min_interval_minutes = @dialInterval,
+        dial_limit_action = @dialAction,
         status = COALESCE(@status, status),
         updated_at = @now
       WHERE id = @id
@@ -241,6 +273,16 @@ export async function updateResultRegistrationAssociation(
           : existing.allowed_next_actions != null
             ? JSON.stringify(existing.allowed_next_actions)
             : null,
+      dialCounts: input.dial_counts_for_exhaustion ?? null,
+      dialKind: input.dial_occurrence_kind !== undefined ? input.dial_occurrence_kind : existing.dial_occurrence_kind,
+      dialLimit:
+        input.dial_occurrence_limit !== undefined ? input.dial_occurrence_limit : existing.dial_occurrence_limit,
+      dialInterval:
+        input.dial_min_interval_minutes !== undefined
+          ? input.dial_min_interval_minutes
+          : existing.dial_min_interval_minutes,
+      dialAction:
+        input.dial_limit_action !== undefined ? input.dial_limit_action : existing.dial_limit_action,
       status: input.status ?? null,
       now
     }

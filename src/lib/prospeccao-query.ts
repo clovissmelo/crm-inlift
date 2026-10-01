@@ -31,6 +31,7 @@ type RawRow = {
   queue_priority: number;
   queue_label: string | null;
   next_follow_up_at: string | null;
+  prospeccao_phone_summary: string | null;
 };
 
 function classifyPhones(phonesRaw: string | null, whatsappsRaw: string | null) {
@@ -136,6 +137,7 @@ function buildFilters(filters: ClientFilters, todayStart: string, todayEnd: stri
 export type ProspeccaoListItem = ClientListItem & {
   queue_priority: number;
   queue_label: string | null;
+  prospeccao_phone_summary: string | null;
   primary_phone: string | null;
   primary_whatsapp: string | null;
   primary_email: string | null;
@@ -216,19 +218,15 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
           WHEN EXISTS (SELECT 1 FROM approaches a2 WHERE a2.client_id = clients.id) THEN 'Acompanhamento'
           ELSE 'Primeiro contato'
         END AS queue_label,
-        pending_fu.scheduled_at AS next_follow_up_at
+        pending_fu.scheduled_at AS next_follow_up_at,
+        clients.prospeccao_phone_summary
       FROM clients
       LEFT JOIN users bdr ON bdr.id = clients.bdr_user_id
       LEFT JOIN contacts ON contacts.client_id = clients.id
       LEFT JOIN client_products cp ON cp.client_id = clients.id
       LEFT JOIN pending_fu ON pending_fu.client_id = clients.id
       WHERE ${where}
-        AND NOT EXISTS (
-          SELECT 1 FROM opportunities o
-          JOIN client_products cp2 ON cp2.client_id = clients.id AND cp2.product_id = o.product_id
-          WHERE o.client_id = clients.id AND o.engagement_status = 'closed'
-        )
-      GROUP BY clients.id, bdr.name, pending_fu.fu_priority, pending_fu.scheduled_at
+      GROUP BY clients.id, bdr.name, pending_fu.fu_priority, pending_fu.scheduled_at, clients.prospeccao_phone_summary
       ORDER BY queue_priority ASC, pending_fu.scheduled_at ASC NULLS LAST,
         COALESCE(clients.trade_name, clients.legal_name, clients.id::text)
       LIMIT ${limit} OFFSET ${offset}
@@ -256,6 +254,7 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
       has_approach: row.has_approach,
       queue_priority: row.queue_priority,
       queue_label: row.queue_label,
+      prospeccao_phone_summary: row.prospeccao_phone_summary,
       primary_phone: row.primary_phone,
       primary_whatsapp: row.primary_whatsapp,
       primary_email: row.primary_email,
@@ -271,11 +270,6 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
       SELECT COUNT(DISTINCT clients.id)::text AS count
       FROM clients
       WHERE ${where}
-        AND NOT EXISTS (
-          SELECT 1 FROM opportunities o
-          JOIN client_products cp2 ON cp2.client_id = clients.id AND cp2.product_id = o.product_id
-          WHERE o.client_id = clients.id AND o.engagement_status = 'closed'
-        )
     `,
     params
   );

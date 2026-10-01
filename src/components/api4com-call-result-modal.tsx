@@ -67,12 +67,32 @@ type ResultType = {
 
 type ClosureReason = { id: number; name: string; kind: "pause" | "close" };
 
+type StrategyPhone = {
+  client_phone_id: number;
+  phone: string;
+  phone_display: string;
+  origin: string;
+  position: number;
+  total: number;
+  status: string;
+  attempt_label: string;
+  next_eligible_at: string | null;
+  last_attempt_at: string | null;
+  last_bucket: string | null;
+  eligible_now: boolean;
+  primary_contact_id: number | null;
+  counter_line: string | null;
+  counter_lines: string[];
+  needs_review: boolean;
+};
+
 type DialOption = {
   contact_id: number;
   contact_name: string | null;
   phone: string;
   phone_display: string;
   kind: "phone" | "whatsapp";
+  strategy?: StrategyPhone;
 };
 
 type DialContext = {
@@ -88,6 +108,14 @@ type DialContext = {
     duration_seconds: number | null;
   }>;
   client_product_ids: number[];
+  call_strategy?: {
+    phones: StrategyPhone[];
+    suggested: StrategyPhone | null;
+    waiting_next_at: string | null;
+    lead_status: string;
+    phone_summary: string;
+  } | null;
+  current_phone?: StrategyPhone | null;
 };
 
 function spInputToIso(date: string, time: string) {
@@ -188,7 +216,7 @@ export function Api4comCallResultForm({
     setContactLocked(suggestions.lockContact);
     setResultLockedByIntegration(suggestions.lockCommercial);
 
-    setStep(ctxData.remaining.length > 0 ? "next_dial" : "result");
+    setStep("result");
   }
 
   const loadContext = useCallback(async () => {
@@ -381,7 +409,22 @@ export function Api4comCallResultForm({
   useEffect(() => {
     setSpokeWithDecisionMaker(null);
   }, [resultTypeId]);
-  const nextDial = ctx?.remaining[0] ?? null;
+  const nextDial = useMemo(() => {
+    const s = ctx?.call_strategy?.suggested;
+    if (s) {
+      return {
+        contact_id: s.primary_contact_id ?? ctx?.call?.contact_id ?? 0,
+        contact_name: null as string | null,
+        phone: s.phone,
+        phone_display: s.phone_display,
+        kind: "phone" as const,
+        strategy: s
+      };
+    }
+    return ctx?.remaining[0] ?? null;
+  }, [ctx]);
+
+  const currentPhone = ctx?.current_phone ?? null;
 
   async function dismissPending() {
     if (!callId) return;
@@ -587,6 +630,20 @@ export function Api4comCallResultForm({
       onClose();
       return;
     }
+    const noContactResult = selectedResult?.slug === "sem_contato";
+    if (noContactResult && call.client_id) {
+      const ctxRes = await fetch(`/api/api4com/calls/${call.id}/dial-context`);
+      if (ctxRes.ok) {
+        const fresh = (await ctxRes.json()) as DialContext;
+        if (fresh.call) {
+          setCtx(fresh);
+          if (fresh.call_strategy?.suggested) {
+            setStep("next_dial");
+            return;
+          }
+        }
+      }
+    }
     onClose();
     onCompleted();
   }
@@ -626,6 +683,59 @@ export function Api4comCallResultForm({
               </a>
             </p>
           ) : null}
+          {currentPhone ? (
+            <div className="panel" style={{ padding: 10, marginTop: 10, fontSize: "0.8125rem" }}>
+              <div>
+                <strong>Telefone {currentPhone.position} de {currentPhone.total}</strong> · Origem: {currentPhone.origin}
+              </div>
+              <div>{currentPhone.counter_line ?? currentPhone.attempt_label}</div>
+              {currentPhone.counter_lines && currentPhone.counter_lines.length > 1 ? (
+                <div className="muted" style={{ fontSize: "0.75rem" }}>
+                  {currentPhone.counter_lines.join(" · ")}
+                </div>
+              ) : null}
+              {currentPhone.needs_review ? (
+                <div className="muted" style={{ fontSize: "0.75rem" }}>
+                  Sinalizado para revisão
+                </div>
+              ) : null}
+              <div className="muted">
+                Estado:{" "}
+                {currentPhone.status === "waiting"
+                  ? "Aguardando próxima tentativa"
+                  : currentPhone.status === "exhausted"
+                    ? "Esgotado"
+                    : "Disponível"}
+                {currentPhone.next_eligible_at ? ` · Próxima: ${formatSpDateTime(currentPhone.next_eligible_at)}` : ""}
+              </div>
+              {currentPhone.last_attempt_at ? (
+                <div className="muted">
+                  Última tentativa: {formatSpDateTime(currentPhone.last_attempt_at)}
+                  {currentPhone.last_bucket ? ` (${currentPhone.last_bucket})` : ""}
+                </div>
+              ) : null}
+              {ctx?.call_strategy?.phones && ctx.call_strategy.phones.length > 1 ? (
+                <details style={{ marginTop: 6 }}>
+                  <summary>Outros números do lead</summary>
+                  <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                    {ctx.call_strategy.phones.map((p) => (
+                      <li key={p.client_phone_id} className={p.eligible_now ? "" : "muted"}>
+                        {formatPhoneDisplay(p.phone_display)} · {p.position}/{p.total} · {p.origin}
+                        {!p.eligible_now && p.next_eligible_at
+                          ? ` · elegível ${formatSpDateTime(p.next_eligible_at)}`
+                          : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </div>
+          ) : null}
+          {ctx?.call_strategy?.lead_status === "aguardando_intervalo" && ctx.call_strategy.waiting_next_at ? (
+            <p className="muted" style={{ marginTop: 8, fontSize: "0.8125rem" }}>
+              Aguardando próxima tentativa — elegível a partir de {formatSpDateTime(ctx.call_strategy.waiting_next_at)}.
+            </p>
+          ) : null}
         </div>
       ) : null}
       {error ? <div className="alert alert-error">{error}</div> : null}
@@ -634,15 +744,22 @@ export function Api4comCallResultForm({
       {step === "next_dial" && nextDial ? (
         <div>
           <p style={{ marginTop: 0 }}>
-            Há outro número disponível para este lead. Você pode ligar agora, pular (fica registrado) ou ir direto ao resultado
-            comercial.
+            Próximo número sugerido para este lead (a ligação não é disparada automaticamente). Você pode ligar, pular ou
+            fechar.
           </p>
           <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
-            <strong>{nextDial.contact_name ?? "Contato"}</strong>
+            <strong>{nextDial.contact_name ?? "Próximo telefone"}</strong>
             <div>{formatPhoneDisplay(nextDial.phone_display || nextDial.phone)}</div>
-            <div className="muted" style={{ fontSize: "0.75rem" }}>
-              {nextDial.kind === "whatsapp" ? "WhatsApp / alternativo" : "Telefone"}
-            </div>
+            {nextDial.strategy ? (
+              <div className="muted" style={{ fontSize: "0.75rem" }}>
+                Telefone {nextDial.strategy.position} de {nextDial.strategy.total} · Origem: {nextDial.strategy.origin} ·{" "}
+                {nextDial.strategy.attempt_label}
+              </div>
+            ) : (
+              <div className="muted" style={{ fontSize: "0.75rem" }}>
+                {nextDial.kind === "whatsapp" ? "WhatsApp / alternativo" : "Telefone"}
+              </div>
+            )}
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
             <button type="button" className="btn" disabled={dialLoading} onClick={onClose}>
@@ -743,9 +860,9 @@ export function Api4comCallResultForm({
             </p>
           )}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12, flexWrap: "wrap" }}>
-            {ctx && ctx.remaining.length > 0 ? (
+            {ctx && (ctx.call_strategy?.suggested || ctx.remaining.length > 0) ? (
               <button type="button" className="btn" onClick={() => setStep("next_dial")}>
-                Voltar: outros números
+                Outros números
               </button>
             ) : null}
             <button type="button" className="btn" onClick={onClose}>

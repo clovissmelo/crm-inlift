@@ -6,6 +6,7 @@ import {
 } from "@/lib/api4com/dial-queue";
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { all } from "@/lib/db";
+import { buildClientDialStrategySummary } from "@/lib/call-strategy/eligible-phones";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -70,12 +71,28 @@ export async function GET(_request: Request, { params }: Params) {
     }
   }
 
+  let call_strategy: Awaited<ReturnType<typeof buildClientDialStrategySummary>> | null = null;
+  if (clientId) {
+    call_strategy = await buildClientDialStrategySummary({
+      clientId,
+      currentPhoneDialed: call.phone_dialed
+    });
+  }
+
+  const current_phone =
+    call_strategy?.phones.find(
+      (p) => p.phone === call.phone_dialed || p.phone_display === call.phone_dialed
+    ) ?? null;
+
   return Response.json({
     call,
     session_root_id: sessionRootId,
     remaining,
     skipped,
     session_calls: sessionCalls,
-    client_product_ids: clientProductIds
+    client_product_ids: clientProductIds,
+    call_strategy,
+    current_phone,
+    current_counter_line: call_strategy?.current_counter_line ?? current_phone?.counter_line ?? null
   });
 }

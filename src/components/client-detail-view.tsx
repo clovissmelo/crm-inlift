@@ -9,6 +9,7 @@ import { CadastroModal, requestCadastroDelete } from "@/components/cadastro-ui";
 import { ClientContactShortcuts, type ContactDialOption } from "@/components/client-contact-shortcuts";
 import { MeetingFormModal } from "@/components/meeting-form-modal";
 import { ClientTimeline } from "@/components/client-timeline";
+import { ClientDialPhonesPanel } from "@/components/client-dial-phones-panel";
 import { ClientReconsultModal } from "@/components/client-reconsult-modal";
 import { formatSpDateTime } from "@/lib/datetime";
 import { externalWebHref, formatCnpj, instagramHref } from "@/lib/format";
@@ -1167,6 +1168,8 @@ export function ClientDetailView({
           </form>
         ) : null}
       </div>
+
+      <ClientDialPhonesPanel clientId={initialClient.id} />
 
       <div className="panel">
         <h3 style={{ marginTop: 0 }}>Histórico</h3>

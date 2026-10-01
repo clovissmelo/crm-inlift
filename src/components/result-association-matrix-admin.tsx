@@ -13,6 +13,14 @@ import {
   mergeRegistrationRules,
   type EffectiveRegistrationRules
 } from "@/lib/classifications/registration-rules";
+import { formatOccurrenceSummary } from "@/lib/call-strategy/occurrence-policy-shared";
+
+type OccurrenceKindOption =
+  | "no_answer"
+  | "invalid"
+  | "wrong_number"
+  | "technical_fail"
+  | "conversation_success";
 
 type AssociationRow = {
   id: number;
@@ -25,6 +33,11 @@ type AssociationRow = {
   ask_decision_maker: boolean | null;
   mark_phone_verified: boolean | null;
   allowed_next_actions: unknown | null;
+  dial_counts_for_exhaustion: boolean;
+  dial_occurrence_kind: string | null;
+  dial_occurrence_limit: number | null;
+  dial_min_interval_minutes: number | null;
+  dial_limit_action: string | null;
   status: string;
   technical_slug: string;
   technical_display_name: string;
@@ -67,6 +80,11 @@ type FormState = {
   ask_decision_maker: boolean | null;
   mark_phone_verified: boolean | null;
   allowed_next_actions: ApproachNextActionKey[];
+  dial_counts_for_exhaustion: boolean;
+  dial_occurrence_kind: OccurrenceKindOption | "";
+  dial_occurrence_limit: string;
+  dial_min_interval_minutes: string;
+  dial_limit_action: "exhaust_phone" | "flag_review" | "";
   status: "active" | "inactive";
 };
 
@@ -85,6 +103,11 @@ const EMPTY_FORM: FormState = {
   ask_decision_maker: null,
   mark_phone_verified: null,
   allowed_next_actions: ["none"],
+  dial_counts_for_exhaustion: false,
+  dial_occurrence_kind: "",
+  dial_occurrence_limit: "",
+  dial_min_interval_minutes: "",
+  dial_limit_action: "exhaust_phone",
   status: "active"
 };
 
@@ -195,6 +218,12 @@ export function ResultAssociationMatrixAdmin() {
       ask_decision_maker: row.ask_decision_maker,
       mark_phone_verified: row.mark_phone_verified,
       allowed_next_actions: allowed.length > 0 ? allowed : (["none"] as ApproachNextActionKey[]),
+      dial_counts_for_exhaustion: row.dial_counts_for_exhaustion,
+      dial_occurrence_kind: (row.dial_occurrence_kind as OccurrenceKindOption) ?? "",
+      dial_occurrence_limit: row.dial_occurrence_limit != null ? String(row.dial_occurrence_limit) : "",
+      dial_min_interval_minutes:
+        row.dial_min_interval_minutes != null ? String(row.dial_min_interval_minutes) : "",
+      dial_limit_action: (row.dial_limit_action as FormState["dial_limit_action"]) || "exhaust_phone",
       status: row.status as "active" | "inactive"
     });
     setError(null);
@@ -275,6 +304,13 @@ export function ResultAssociationMatrixAdmin() {
       ask_decision_maker: form.customize_rules ? form.ask_decision_maker : null,
       mark_phone_verified: form.customize_rules ? form.mark_phone_verified : null,
       allowed_next_actions: form.customize_rules ? form.allowed_next_actions : null,
+      dial_counts_for_exhaustion: form.dial_counts_for_exhaustion,
+      dial_occurrence_kind: form.dial_occurrence_kind || null,
+      dial_occurrence_limit: form.dial_occurrence_limit ? Number(form.dial_occurrence_limit) : null,
+      dial_min_interval_minutes: form.dial_min_interval_minutes
+        ? Number(form.dial_min_interval_minutes)
+        : null,
+      dial_limit_action: form.dial_counts_for_exhaustion ? form.dial_limit_action || "exhaust_phone" : null,
       status: form.status
     };
 
@@ -326,6 +362,9 @@ export function ResultAssociationMatrixAdmin() {
           ) : (
             "—"
           )}
+        </td>
+        <td className="muted" style={{ fontSize: "0.8125rem", maxWidth: 200 }}>
+          {formatOccurrenceSummary(row)}
         </td>
         <td>
           <span className={clsx("result-assoc-status", row.status === "active" && "result-assoc-status--active")}>
@@ -397,6 +436,7 @@ export function ResultAssociationMatrixAdmin() {
               <th>Resultado comercial</th>
               <th>Etapa de destino do funil</th>
               <th>Informações exigidas</th>
+              <th>Tentativas e esgotamento</th>
               <th>Status</th>
               <th style={{ width: 140 }}>Ações</th>
             </tr>
@@ -405,7 +445,7 @@ export function ResultAssociationMatrixAdmin() {
             {grouped.answered.length > 0 ? (
               <>
                 <tr className="result-assoc-group-row">
-                  <td colSpan={7}>Atendeu</td>
+                  <td colSpan={8}>Atendeu</td>
                 </tr>
                 {grouped.answered.map(renderDataRow)}
               </>
@@ -413,14 +453,14 @@ export function ResultAssociationMatrixAdmin() {
             {grouped.notAnswered.length > 0 ? (
               <>
                 <tr className="result-assoc-group-row">
-                  <td colSpan={7}>Não atendeu</td>
+                  <td colSpan={8}>Não atendeu</td>
                 </tr>
                 {grouped.notAnswered.map(renderDataRow)}
               </>
             ) : null}
             {grouped.answered.length === 0 && grouped.notAnswered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="muted">
+                <td colSpan={8} className="muted">
                   Nenhuma associação encontrada.
                 </td>
               </tr>
@@ -620,6 +660,106 @@ export function ResultAssociationMatrixAdmin() {
               </div>
             </div>
           ) : null}
+
+          <div className="result-assoc-rules-panel" style={{ marginTop: 16 }}>
+            <h4 style={{ marginTop: 0 }}>Tentativas e esgotamento</h4>
+            <p className="muted" style={{ fontSize: "0.8125rem" }}>
+              Define como esta combinação ligação × comercial alimenta os contadores por telefone. O registro comercial da
+              BDR prevalece sobre o código técnico do discador.
+            </p>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.dial_counts_for_exhaustion}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    dial_counts_for_exhaustion: e.target.checked,
+                    dial_occurrence_kind: e.target.checked && !f.dial_occurrence_kind ? "no_answer" : f.dial_occurrence_kind
+                  }))
+                }
+              />
+              Conta para esgotamento do telefone
+            </label>
+            {form.dial_counts_for_exhaustion ? (
+              <>
+                <div className="field">
+                  <label className="label">Tipo de ocorrência / contador</label>
+                  <select
+                    className="select"
+                    value={form.dial_occurrence_kind}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        dial_occurrence_kind: e.target.value as OccurrenceKindOption
+                      }))
+                    }
+                  >
+                    <option value="">Selecione…</option>
+                    <option value="no_answer">Não atendeu / ocupado</option>
+                    <option value="invalid">Número inválido</option>
+                    <option value="wrong_number">Número errado (conversa)</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="label">Limite de ocorrências</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min={1}
+                    max={50}
+                    placeholder="Padrão global (ex.: 3)"
+                    value={form.dial_occurrence_limit}
+                    onChange={(e) => setForm((f) => ({ ...f, dial_occurrence_limit: e.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label className="label">Intervalo mínimo (minutos)</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    placeholder="Padrão global (ex.: 60)"
+                    value={form.dial_min_interval_minutes}
+                    onChange={(e) => setForm((f) => ({ ...f, dial_min_interval_minutes: e.target.value }))}
+                  />
+                </div>
+                <div className="field">
+                  <label className="label">Ao atingir o limite</label>
+                  <select
+                    className="select"
+                    value={form.dial_limit_action}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        dial_limit_action: e.target.value as FormState["dial_limit_action"]
+                      }))
+                    }
+                  >
+                    <option value="exhaust_phone">Esgotar telefone</option>
+                    <option value="flag_review">Sinalizar para revisão</option>
+                  </select>
+                </div>
+              </>
+            ) : (
+              <div className="field">
+                <label className="label">Classificação (sem contagem)</label>
+                <select
+                  className="select"
+                  value={form.dial_occurrence_kind || "conversation_success"}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      dial_occurrence_kind: e.target.value as OccurrenceKindOption
+                    }))
+                  }
+                >
+                  <option value="conversation_success">Conversa válida</option>
+                  <option value="technical_fail">Falha técnica</option>
+                </select>
+              </div>
+            )}
+          </div>
 
           <div className="field">
             <label className="label">Status</label>

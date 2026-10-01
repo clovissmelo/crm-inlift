@@ -19,7 +19,15 @@ const upsertSchema = z.object({
   mark_phone_verified: z.boolean().nullable().optional(),
   allowed_next_actions: z.array(z.string()).nullable().optional(),
   status: z.enum(["active", "inactive"]).optional(),
-  atendimento_answered: z.boolean().optional()
+  atendimento_answered: z.boolean().optional(),
+  dial_counts_for_exhaustion: z.boolean().optional(),
+  dial_occurrence_kind: z
+    .enum(["no_answer", "invalid", "wrong_number", "technical_fail", "conversation_success"])
+    .nullable()
+    .optional(),
+  dial_occurrence_limit: z.number().int().min(1).max(50).nullable().optional(),
+  dial_min_interval_minutes: z.number().int().min(0).max(60 * 24 * 14).nullable().optional(),
+  dial_limit_action: z.enum(["exhaust_phone", "flag_review"]).nullable().optional()
 });
 
 export async function GET() {
@@ -72,6 +80,11 @@ export async function POST(request: Request) {
       ask_decision_maker: data.ask_decision_maker ?? null,
       mark_phone_verified: data.mark_phone_verified ?? null,
       allowed_next_actions: data.allowed_next_actions ?? null,
+      dial_counts_for_exhaustion: data.dial_counts_for_exhaustion ?? false,
+      dial_occurrence_kind: data.dial_occurrence_kind ?? null,
+      dial_occurrence_limit: data.dial_occurrence_limit ?? null,
+      dial_min_interval_minutes: data.dial_min_interval_minutes ?? null,
+      dial_limit_action: data.dial_limit_action ?? null,
       status: data.status ?? "active"
     });
     return Response.json({ id }, { status: 201 });

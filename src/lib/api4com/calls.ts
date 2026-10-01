@@ -119,6 +119,21 @@ export async function initiateApi4comCall(input: {
   const dup = await findRecentDuplicateCall(input.userId, input.clientId ?? null, called);
   if (dup) throw new Error("Já existe uma chamada em andamento para este número. Aguarde alguns segundos.");
 
+  if (input.clientId) {
+    const clientBusy = await get<{ id: number }>(
+      `
+        SELECT id FROM api4com_calls
+        WHERE client_id = @clientId
+          AND status IN ('initiating', 'ringing', 'in_progress')
+        ORDER BY id DESC LIMIT 1
+      `,
+      { clientId: input.clientId }
+    );
+    if (clientBusy) {
+      throw new Error("Já existe uma ligação em andamento para este cliente. Aguarde o encerramento.");
+    }
+  }
+
   const cfg = await getApi4comConfig();
   const now = nowIso();
 

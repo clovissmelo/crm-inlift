@@ -74,6 +74,14 @@ export const ADMIN_CONFIG_CARDS: AdminConfigCardItem[] = [
     description: "Carga em massa de clientes e contatos.",
     logo: <LogoImportSheet />,
     iconClassName: "hub-card-icon--import"
+  },
+  {
+    id: "prospeccao",
+    href: "/admin/prospeccao" as Route,
+    title: "Prospecção",
+    description: "Prioridades operacionais e estratégia de ligações por telefone.",
+    logo: <LogoSettings />,
+    iconClassName: "hub-card-icon--settings"
   }
 ];
 
