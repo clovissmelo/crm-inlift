@@ -1307,6 +1307,36 @@ table.data-table th {
   min-width: 0;
 }
 
+.client-filters-block {
+  margin-bottom: 1rem;
+}
+
+.client-filters-block > .filters-row {
+  margin-bottom: 0.35rem;
+}
+
+.client-filters-more-row {
+  margin-top: 0.15rem;
+}
+
+.client-filters-more-toggle {
+  display: inline-block;
+  margin: 0 0 0.35rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.client-filters-more-toggle:hover {
+  color: var(--text);
+}
+
 .hub-page-header {
   margin-bottom: 1.5rem;
 }

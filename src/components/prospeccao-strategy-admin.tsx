@@ -5,7 +5,10 @@ import { CadastroModal } from "@/components/cadastro-ui";
 import type { CallStrategySettings } from "@/lib/call-strategy/settings";
 import type { ProspeccaoPriorityTypeRow } from "@/lib/call-strategy/priorities-config";
 import {
+  defaultPipelineStageNameForAction,
+  isFixedProspeccaoFunnelAction,
   OPERATIONAL_ACTION_LABELS,
+  PROSPECCAO_PIPELINE_STAGE_NAME,
   type OperationalAction
 } from "@/lib/attendance/operational-actions";
 import "@/components/prospeccao-admin.css";
@@ -43,6 +46,46 @@ function attemptsHint(action: OperationalAction): string {
 
 function stageRequired(action: OperationalAction): boolean {
   return action === "demonstrou_interesse" || action === "reuniao_agendada" || action === "sem_interesse";
+}
+
+function funnelStageConfigurable(action: OperationalAction): boolean {
+  return stageRequired(action) || action === "pediu_retorno";
+}
+
+function prospeccaoStageDisplayName(stages: PipelineStage[]): string {
+  const id = defaultStageIdForAction("pediu_retorno", stages);
+  if (id) {
+    const hit = stages.find((s) => s.id === id);
+    if (hit) return hit.name;
+  }
+  return PROSPECCAO_PIPELINE_STAGE_NAME;
+}
+
+function defaultStageIdForAction(action: OperationalAction, stages: PipelineStage[]): number | null {
+  const name = defaultPipelineStageNameForAction(action);
+  if (!name) return null;
+  const hit = stages.find((s) => s.name.trim().toLowerCase() === name.trim().toLowerCase());
+  return hit?.id ?? null;
+}
+
+function funnelCellLabel(
+  rule: AttendanceRuleItem,
+  stages: PipelineStage[],
+  stageName: (id: number | null) => string
+): { text: string; muted?: boolean } {
+  if (isFixedProspeccaoFunnelAction(rule.operational_action)) {
+    return { text: `${prospeccaoStageDisplayName(stages)} (fixo)`, muted: true };
+  }
+  if (!rule.answered) return { text: "—", muted: true };
+  if (rule.pipeline_stage_id) return { text: stageName(rule.pipeline_stage_id) };
+  const suggested = defaultStageIdForAction(rule.operational_action, stages);
+  if (suggested) {
+    return { text: `${stageName(suggested)} (padrão)`, muted: true };
+  }
+  if (funnelStageConfigurable(rule.operational_action)) {
+    return { text: "Definir em Editar", muted: true };
+  }
+  return { text: "—", muted: true };
 }
 
 export function ProspeccaoStrategyAdmin() {
@@ -107,7 +150,11 @@ export function ProspeccaoStrategyAdmin() {
       name: rule.name,
       slug: rule.slug,
       operational_action: rule.operational_action,
-      pipeline_stage_id: rule.pipeline_stage_id,
+      pipeline_stage_id:
+        rule.pipeline_stage_id ??
+        (funnelStageConfigurable(rule.operational_action)
+          ? defaultStageIdForAction(rule.operational_action, stages)
+          : null),
       sort_order: rule.sort_order
     });
   }
@@ -119,7 +166,7 @@ export function ProspeccaoStrategyAdmin() {
       name: "",
       slug: "",
       operational_action: "pediu_retorno",
-      pipeline_stage_id: null,
+      pipeline_stage_id: defaultStageIdForAction("pediu_retorno", stages),
       sort_order: 50
     });
   }
@@ -127,7 +174,12 @@ export function ProspeccaoStrategyAdmin() {
   async function saveRule() {
     if (!form) return;
     setMsg(null);
-    const payload = { ...form };
+    const payload = {
+      ...form,
+      pipeline_stage_id: isFixedProspeccaoFunnelAction(form.operational_action)
+        ? null
+        : form.pipeline_stage_id
+    };
     const url =
       editId === "new" ? "/api/admin/attendance-rules" : `/api/admin/attendance-rules/${editId}`;
     const method = editId === "new" ? "POST" : "PATCH";
@@ -313,7 +365,16 @@ export function ProspeccaoStrategyAdmin() {
                     <td>{r.name}</td>
                     <td>{r.action_label}</td>
                     <td>{attemptsHint(r.operational_action)}</td>
-                    <td>{stageName(r.pipeline_stage_id)}</td>
+                    <td>
+                      {(() => {
+                        const cell = funnelCellLabel(r, stages, stageName);
+                        return (
+                          <span className={cell.muted ? "muted" : undefined} title="Etapa do funil após registrar o resultado">
+                            {cell.text}
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td className="prospeccao-rules-actions">
                       {r.is_system && r.operational_action === "auto_no_contact" ? (
                         <span className="prospeccao-badge prospeccao-badge--system">Sistema</span>
@@ -390,11 +451,20 @@ export function ProspeccaoStrategyAdmin() {
                     <select
                       className="input select"
                       value={form.operational_action}
-                      onChange={(e) =>
-                        setForm((f) =>
-                          f ? { ...f, operational_action: e.target.value as OperationalAction } : f
-                        )
-                      }
+                      onChange={(e) => {
+                        const next = e.target.value as OperationalAction;
+                        setForm((f) => {
+                          if (!f) return f;
+                          const suggested = defaultStageIdForAction(next, stages);
+                          return {
+                            ...f,
+                            operational_action: next,
+                            pipeline_stage_id: funnelStageConfigurable(next)
+                              ? (f.pipeline_stage_id ?? suggested)
+                              : null
+                          };
+                        });
+                      }}
                     >
                       {ANSWERED_ACTIONS.map((a) => (
                         <option key={a} value={a}>
@@ -406,7 +476,17 @@ export function ProspeccaoStrategyAdmin() {
                 ) : (
                   <p className="muted">Não atendimento usa registro automático (sem formulário BDR).</p>
                 )}
-                {form.answered && stageRequired(form.operational_action) ? (
+                {form.answered && isFixedProspeccaoFunnelAction(form.operational_action) ? (
+                  <div className="field">
+                    <label className="label">Etapa do funil</label>
+                    <p className="muted" style={{ margin: 0, fontSize: "0.9375rem" }}>
+                      {prospeccaoStageDisplayName(stages)} <span className="muted">(fixo)</span>
+                    </p>
+                    <p className="muted" style={{ marginTop: "0.35rem", fontSize: "0.8125rem" }}>
+                      Permanece na prospecção, como o não atendimento automático — sem mover etapa no funil ao registrar.
+                    </p>
+                  </div>
+                ) : form.answered && funnelStageConfigurable(form.operational_action) ? (
                   <div className="field">
                     <label className="label">Etapa do funil</label>
                     <select
@@ -423,13 +503,18 @@ export function ProspeccaoStrategyAdmin() {
                         )
                       }
                     >
-                      <option value="">—</option>
+                      <option value="">{stageRequired(form.operational_action) ? "Selecione…" : "Selecione a etapa…"}</option>
                       {stages.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.name}
                         </option>
                       ))}
                     </select>
+                    <p className="muted" style={{ marginTop: "0.35rem", fontSize: "0.8125rem" }}>
+                      {form.operational_action === "pediu_retorno"
+                        ? "Ex.: Prospecção enquanto o retorno está na fila — você pode escolher outra etapa se fizer sentido."
+                        : "Ao registrar este resultado, o negócio do produto vai para esta etapa."}
+                    </p>
                   </div>
                 ) : null}
                 <div className="field">

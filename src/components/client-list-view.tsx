@@ -36,7 +36,16 @@ export function ClientListView({ initialItems, initialTotal, products, bdrs, def
     official_client: ""
   });
   const [offset, setOffset] = useState(0);
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const limit = 50;
+
+  const advancedFiltersActive = Boolean(
+    filters.segment ||
+      filters.bdr_user_id ||
+      filters.phone_availability ||
+      filters.official_client ||
+      filters.without_approach
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,59 +72,112 @@ export function ClientListView({ initialItems, initialTotal, products, bdrs, def
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (advancedFiltersActive) setMoreFiltersOpen(true);
+  }, [advancedFiltersActive]);
+
   return (
     <div>
-      <FilterBar>
-        <FilterInput
-          label="Busca"
-          className="filter-chip-grow"
-          value={filters.search}
-          onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-          placeholder="Nome, CNPJ…"
-        />
-        <FilterInput label="Cidade" value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} placeholder="—" />
-        <FilterInput label="UF" maxLength={2} value={filters.uf} onChange={(e) => setFilters((f) => ({ ...f, uf: e.target.value }))} placeholder="—" />
-        <FilterInput label="Segmento" value={filters.segment} onChange={(e) => setFilters((f) => ({ ...f, segment: e.target.value }))} placeholder="—" />
-        <FilterSelect label="Produto" value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}>
-          <option value="">Todos</option>
-          {products.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </FilterSelect>
-        <FilterSelect label="BDR" value={filters.bdr_user_id} onChange={(e) => setFilters((f) => ({ ...f, bdr_user_id: e.target.value }))}>
-          <option value="">Todas</option>
-          {bdrs.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </FilterSelect>
-        <FilterSelect label="Telefone" value={filters.phone_availability} onChange={(e) => setFilters((f) => ({ ...f, phone_availability: e.target.value }))}>
-          <option value="">Qualquer</option>
-          <option value="mobile">Celular</option>
-          <option value="landline">Fixo</option>
-          <option value="none">Sem telefone</option>
-        </FilterSelect>
-        <FilterSelect label="Qualificação" value={filters.lead_qualification} onChange={(e) => setFilters((f) => ({ ...f, lead_qualification: e.target.value }))}>
-          <option value="">Todas</option>
-          {LEAD_QUALIFICATION_ORDER.map((q) => (
-            <option key={q} value={q}>
-              {LEAD_QUALIFICATION_LABELS[q]}
-            </option>
-          ))}
-        </FilterSelect>
-        <FilterSelect
-          label="Cliente oficial"
-          value={filters.official_client}
-          onChange={(e) => setFilters((f) => ({ ...f, official_client: e.target.value }))}
+      <div className="client-filters-block">
+        <FilterBar>
+          <FilterInput
+            label="Busca"
+            className="filter-chip-grow"
+            value={filters.search}
+            onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+            placeholder="Nome, CNPJ…"
+          />
+          <FilterInput
+            label="Cidade"
+            value={filters.city}
+            onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))}
+            placeholder="—"
+          />
+          <FilterInput
+            label="UF"
+            maxLength={2}
+            value={filters.uf}
+            onChange={(e) => setFilters((f) => ({ ...f, uf: e.target.value }))}
+            placeholder="—"
+          />
+          <FilterSelect
+            label="Produto"
+            value={filters.product_id}
+            onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}
+          >
+            <option value="">Todos</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </FilterSelect>
+          <FilterSelect
+            label="Qualificação"
+            value={filters.lead_qualification}
+            onChange={(e) => setFilters((f) => ({ ...f, lead_qualification: e.target.value }))}
+          >
+            <option value="">Todas</option>
+            {LEAD_QUALIFICATION_ORDER.map((q) => (
+              <option key={q} value={q}>
+                {LEAD_QUALIFICATION_LABELS[q]}
+              </option>
+            ))}
+          </FilterSelect>
+        </FilterBar>
+
+        <button
+          type="button"
+          className="client-filters-more-toggle"
+          aria-expanded={moreFiltersOpen}
+          onClick={() => setMoreFiltersOpen((o) => !o)}
         >
-          <option value="">Todos</option>
-          <option value="yes">Oficial</option>
-          <option value="no">Não oficial</option>
-        </FilterSelect>
-      </FilterBar>
+          {moreFiltersOpen ? "menos filtros" : "mais filtros"}
+          {!moreFiltersOpen && advancedFiltersActive ? " · ativos" : null}
+        </button>
+
+        {moreFiltersOpen ? (
+          <FilterBar className="client-filters-more-row">
+            <FilterInput
+              label="Segmento"
+              value={filters.segment}
+              onChange={(e) => setFilters((f) => ({ ...f, segment: e.target.value }))}
+              placeholder="—"
+            />
+            <FilterSelect
+              label="BDR"
+              value={filters.bdr_user_id}
+              onChange={(e) => setFilters((f) => ({ ...f, bdr_user_id: e.target.value }))}
+            >
+              <option value="">Todas</option>
+              {bdrs.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </FilterSelect>
+            <FilterSelect
+              label="Telefone"
+              value={filters.phone_availability}
+              onChange={(e) => setFilters((f) => ({ ...f, phone_availability: e.target.value }))}
+            >
+              <option value="">Qualquer</option>
+              <option value="mobile">Celular</option>
+              <option value="landline">Fixo</option>
+              <option value="none">Sem telefone</option>
+            </FilterSelect>
+            <FilterSelect
+              label="Cliente oficial"
+              value={filters.official_client}
+              onChange={(e) => setFilters((f) => ({ ...f, official_client: e.target.value }))}
+            >
+              <option value="">Todos</option>
+              <option value="yes">Oficial</option>
+              <option value="no">Não oficial</option>
+            </FilterSelect>
+          </FilterBar>
+        ) : null}
+      </div>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
       {loading ? <p className="muted">Carregando…</p> : null}

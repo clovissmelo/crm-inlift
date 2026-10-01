@@ -116,8 +116,17 @@ export function enforceRulesForAction(action: OperationalAction): EnforcedRegist
   }
 }
 
+/** Etapa exibida e sugerida para quem permanece na prospecção (fila / retorno). */
+export const PROSPECCAO_PIPELINE_STAGE_NAME = "Prospecção";
+
+export function isFixedProspeccaoFunnelAction(action: OperationalAction): boolean {
+  return action === "auto_no_contact" || action === "sem_contato";
+}
+
 export function defaultPipelineStageNameForAction(action: OperationalAction): string | null {
   switch (action) {
+    case "pediu_retorno":
+      return PROSPECCAO_PIPELINE_STAGE_NAME;
     case "demonstrou_interesse":
       return "Interessados";
     case "reuniao_agendada":
