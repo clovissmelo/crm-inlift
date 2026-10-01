@@ -1,4 +1,4 @@
-import { AdminApi4comPanel } from "@/components/admin-api4com-panel";
+import { AdminApi4comTabs } from "@/components/admin-api4com-tabs";
 import Link from "next/link";
 import { PageIntro } from "@/components/page-intro";
 import { requireUser } from "@/lib/auth";
@@ -14,8 +14,10 @@ export default async function AdminIntegracoesApi4comPage() {
       <p className="muted" style={{ marginTop: 0 }}>
         <Link href="/admin">← Admin</Link>
       </p>
-      <PageIntro>Token, gateway, webhook e registro na API4COM — tudo nesta página.</PageIntro>
-      <AdminApi4comPanel />
+      <PageIntro>
+        Telefonia API4COM: credenciais, webhook e mapeamento dos códigos técnicos do provedor para resultados da ligação.
+      </PageIntro>
+      <AdminApi4comTabs />
     </div>
   );
 }

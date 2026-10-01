@@ -23,7 +23,7 @@ export const ADMIN_CONFIG_CARDS: AdminConfigCardItem[] = [
     id: "api4com",
     href: "/admin/integracoes/api4com",
     title: "API4COM",
-    description: "Telefonia, webhooks e registro de chamadas.",
+    description: "Telefonia, webhook, registro de chamadas e mapeamento do discador.",
     logo: <LogoApi4com />,
     iconClassName: "hub-card-icon--api4com"
   },

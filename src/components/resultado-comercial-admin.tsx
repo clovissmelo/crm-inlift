@@ -218,7 +218,11 @@ export function ResultadoComercialAdmin({
     <div>
       {error && !resultModal ? <div className="alert alert-error">{error}</div> : null}
 
-      <CadastroPageHeader title="Resultado comercial" onNew={openResultCreate} newLabel="Novo resultado" />
+      <CadastroPageHeader
+        title={commercialOnly ? "Resultados Comerciais" : "Resultado comercial"}
+        onNew={openResultCreate}
+        newLabel="Novo resultado"
+      />
       <div className="panel table-wrap">
         <table className="data-table">
           <thead>

@@ -146,9 +146,9 @@ export function ProspeccaoStrategyAdmin() {
       {tab === "strategy" && settings ? (
         <div>
           <p className="muted" style={{ maxWidth: 640 }}>
-            Valores <strong>padrão</strong> quando a matriz de associações não define limite/intervalo por linha.
+            Valores <strong>padrão</strong> quando a matriz de fluxo operacional não define limite/intervalo por linha.
             Contagem e esgotamento por resultado são configurados em{" "}
-            <a href="/resultado-comercial">Resultado comercial → Matriz de associações</a> (seção Tentativas e
+            <a href="/resultado-comercial">Resultado comercial → Matriz de fluxo operacional</a> (seção Tentativas e
             esgotamento). Alterações de limite não removem leads automaticamente — use a reavaliação abaixo.
           </p>
           <ReEvalPreviewButton />
@@ -220,7 +220,7 @@ export function ProspeccaoStrategyAdmin() {
 
           <p className="muted">
             Regras legadas de fallback: preferir a{" "}
-            <Link href="/resultado-comercial">matriz de associações</Link>. Tabela abaixo só para compatibilidade.
+            <Link href="/resultado-comercial">matriz de fluxo operacional</Link>. Tabela abaixo só para compatibilidade.
           </p>
           <table className="table" style={{ marginTop: 8 }}>
             <thead>

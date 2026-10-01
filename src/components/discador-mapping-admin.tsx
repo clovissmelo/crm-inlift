@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CadastroModal, CadastroPageHeader } from "@/components/cadastro-ui";
 
@@ -76,7 +77,7 @@ function flattenProviderRules(items: TechnicalRow[]): FlatMapping[] {
   return rows;
 }
 
-export function DiscadorMappingAdmin() {
+export function DiscadorMappingAdmin({ embedded = false }: { embedded?: boolean }) {
   const [items, setItems] = useState<TechnicalRow[]>([]);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
@@ -150,11 +151,13 @@ export function DiscadorMappingAdmin() {
 
   return (
     <>
-      <CadastroPageHeader title="Mapeamento do discador" onNew={() => {}} newLabel="" />
-      <p className="muted" style={{ marginTop: 0, maxWidth: "42rem" }}>
-        Códigos e rótulos técnicos do provedor apontam para um <strong>resultado da ligação</strong>. O{" "}
-        <strong>Atendimento</strong> (Atendeu / Não atendeu) vem desse resultado — use a matriz de associações para
-        regras comerciais.
+      {embedded ? null : (
+        <CadastroPageHeader title="Mapeamento do discador" onNew={() => {}} newLabel="" />
+      )}
+      <p className="muted" style={{ marginTop: embedded ? 0 : undefined, maxWidth: "42rem" }}>
+        Códigos e rótulos técnicos da <strong>API4COM</strong> apontam para um <strong>resultado da ligação</strong>. O{" "}
+        atendimento (Atendeu / Não atendeu) vem desse resultado — regras comerciais ficam em{" "}
+        <Link href="/resultado-comercial">Resultado comercial → Matriz de fluxo operacional</Link>.
       </p>
       <div className="result-assoc-toolbar">
         <input

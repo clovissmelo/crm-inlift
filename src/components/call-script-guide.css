@@ -5,7 +5,7 @@
   left: var(--app-sidebar-width, 260px);
   right: 50%;
   z-index: 45;
-  pointer-events: none;
+  pointer-events: none !important;
 }
 
 .call-script-panel {

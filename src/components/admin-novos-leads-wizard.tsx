@@ -11,6 +11,7 @@ import { LeadGenFlowField } from "@/components/lead-gen-flow-field";
 import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
 import { formatRunResultsSummary } from "@/lib/lead-generation/run-outcome";
 import type { LeadGenCounts } from "@/lib/lead-generation/types";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type RunFilters = {
@@ -123,6 +124,9 @@ function showRunResultColumn(r: RunRow): boolean {
 }
 
 export function AdminNovosLeadsWizard() {
+  const pathname = usePathname();
+  const onNovosLeadsPage = pathname === "/admin/novos-leads" || pathname.startsWith("/admin/novos-leads/");
+
   const [ufOptions, setUfOptions] = useState<UfOption[]>([]);
   const [uf, setUf] = useState("");
   const [allCities, setAllCities] = useState(false);
@@ -328,7 +332,7 @@ export function AdminNovosLeadsWizard() {
   }, [listActiveRun, activeRunId, activeRun?.id, activeRun?.status]);
 
   useEffect(() => {
-    if (runIdToPoll == null) return;
+    if (!onNovosLeadsPage || runIdToPoll == null) return;
 
     let cancelled = false;
 
@@ -357,12 +361,25 @@ export function AdminNovosLeadsWizard() {
       window.clearInterval(t);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [runIdToPoll, listActiveRun?.status, tickActiveRun]);
+  }, [onNovosLeadsPage, runIdToPoll, listActiveRun?.status, tickActiveRun]);
+
+  const selectedRunStatus = useMemo(() => {
+    if (activeRunId == null) return null;
+    if (activeRun?.id === activeRunId) return activeRun.status;
+    return runs.find((r) => r.id === activeRunId)?.status ?? null;
+  }, [activeRunId, activeRun?.id, activeRun?.status, runs]);
 
   useEffect(() => {
-    if (activeRunId == null) return;
+    if (!onNovosLeadsPage || activeRunId == null) return;
+    if (selectedRunStatus && RUN_POLL_STATUSES.has(selectedRunStatus)) return;
+    if (
+      selectedRunStatus &&
+      !["completed", "partial", "failed", "cancelled"].includes(selectedRunStatus)
+    ) {
+      return;
+    }
     void fetchRunDetail(activeRunId, resultTab);
-  }, [activeRunId, resultTab, fetchRunDetail]);
+  }, [onNovosLeadsPage, activeRunId, resultTab, fetchRunDetail, selectedRunStatus]);
 
   async function startRun() {
     if (!uf || uf.length !== 2) {

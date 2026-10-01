@@ -13,6 +13,7 @@ import {
   mergeRegistrationRules,
   type EffectiveRegistrationRules
 } from "@/lib/classifications/registration-rules";
+import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
 import { formatOccurrenceSummary } from "@/lib/call-strategy/occurrence-policy-shared";
 
 type OccurrenceKindOption =
@@ -327,30 +328,11 @@ export function ResultAssociationMatrixAdmin() {
     void load();
   }
 
-  async function deactivateRow(row: AssociationRow) {
-    if (!window.confirm(`Desativar associação “${row.technical_display_name} → ${row.commercial_name}”?`)) return;
-    const res = await fetch(`/api/result-registration-associations/${row.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "inactive" })
-    });
-    if (!res.ok) {
-      setError("Não foi possível desativar.");
-      return;
-    }
-    void load();
-  }
-
   function renderDataRow(row: AssociationRow) {
     const comm = commercialById.get(row.commercial_result_type_id);
     const eff = effectiveForRow(row, comm);
     return (
       <tr key={row.id} className={row.status === "inactive" ? "result-assoc-row--inactive" : undefined}>
-        <td>
-          <span className={`result-assoc-badge result-assoc-badge--${row.technical_answered ? "yes" : "no"}`}>
-            {row.technical_answered ? "Atendeu" : "Não atendeu"}
-          </span>
-        </td>
         <td>{row.technical_display_name}</td>
         <td>{row.commercial_name}</td>
         <td>{row.pipeline_stage_name ?? <span className="muted">Manter etapa atual</span>}</td>
@@ -376,11 +358,6 @@ export function ResultAssociationMatrixAdmin() {
             <button type="button" className="btn" onClick={() => openEdit(row)}>
               Editar
             </button>
-            {row.status === "active" ? (
-              <button type="button" className="btn btn-danger" onClick={() => void deactivateRow(row)}>
-                Desativar
-              </button>
-            ) : null}
           </div>
         </td>
       </tr>
@@ -391,47 +368,44 @@ export function ResultAssociationMatrixAdmin() {
     <div className="result-assoc-matrix">
       {error && !modalOpen ? <div className="alert alert-error">{error}</div> : null}
 
-      <CadastroPageHeader title="Matriz de associações" onNew={openCreate} newLabel="Nova associação" />
+      <CadastroPageHeader title="Matriz de fluxo operacional" onNew={openCreate} newLabel="Nova associação" />
       <p className="muted page-intro" style={{ marginTop: 0 }}>
         Cada linha liga um <strong>resultado da ligação</strong> a um <strong>resultado comercial</strong>, com regras de
         finalização e etapa do funil. Um mesmo resultado comercial pode aparecer em várias linhas.
       </p>
 
-      <div className="result-assoc-toolbar">
-        <input
-          className="input"
-          placeholder="Buscar…"
+      <FilterBar>
+        <FilterInput
+          label="Busca"
+          className="filter-chip-grow"
+          placeholder="Resultado da ligação, comercial, etapa…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          aria-label="Buscar associações"
         />
-        <select
-          className="select"
+        <FilterSelect
+          label="Atendimento"
           value={filterAtendimento}
           onChange={(e) => setFilterAtendimento(e.target.value as typeof filterAtendimento)}
-          aria-label="Filtrar atendimento"
         >
-          <option value="all">Atendimento: todos</option>
+          <option value="all">Todos</option>
           <option value="answered">Atendeu</option>
           <option value="not_answered">Não atendeu</option>
-        </select>
-        <select
-          className="select"
+        </FilterSelect>
+        <FilterSelect
+          label="Status"
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
-          aria-label="Filtrar status"
         >
           <option value="active">Somente ativas</option>
           <option value="inactive">Somente inativas</option>
           <option value="all">Todas</option>
-        </select>
-      </div>
+        </FilterSelect>
+      </FilterBar>
 
       <div className="panel table-wrap">
         <table className="data-table result-assoc-table">
           <thead>
             <tr>
-              <th>Atendimento</th>
               <th>Resultado da ligação</th>
               <th>Resultado comercial</th>
               <th>Etapa de destino do funil</th>
@@ -444,23 +418,23 @@ export function ResultAssociationMatrixAdmin() {
           <tbody>
             {grouped.answered.length > 0 ? (
               <>
-                <tr className="result-assoc-group-row">
-                  <td colSpan={8}>Atendeu</td>
+                <tr className="result-assoc-group-row result-assoc-group-row--yes">
+                  <td colSpan={7}>Atendeu</td>
                 </tr>
                 {grouped.answered.map(renderDataRow)}
               </>
             ) : null}
             {grouped.notAnswered.length > 0 ? (
               <>
-                <tr className="result-assoc-group-row">
-                  <td colSpan={8}>Não atendeu</td>
+                <tr className="result-assoc-group-row result-assoc-group-row--no">
+                  <td colSpan={7}>Não atendeu</td>
                 </tr>
                 {grouped.notAnswered.map(renderDataRow)}
               </>
             ) : null}
             {grouped.answered.length === 0 && grouped.notAnswered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="muted">
+                <td colSpan={7} className="muted">
                   Nenhuma associação encontrada.
                 </td>
               </tr>
@@ -759,18 +733,6 @@ export function ResultAssociationMatrixAdmin() {
                 </select>
               </div>
             )}
-          </div>
-
-          <div className="field">
-            <label className="label">Status</label>
-            <select
-              className="select"
-              value={form.status}
-              onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as "active" | "inactive" }))}
-            >
-              <option value="active">Ativo</option>
-              <option value="inactive">Inativo</option>
-            </select>
           </div>
 
           <div className="form-actions">
