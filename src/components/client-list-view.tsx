@@ -126,15 +126,20 @@ export function ClientListView({ initialItems, initialTotal, products, bdrs, def
           </FilterSelect>
         </FilterBar>
 
-        <button
-          type="button"
-          className="client-filters-more-toggle"
-          aria-expanded={moreFiltersOpen}
-          onClick={() => setMoreFiltersOpen((o) => !o)}
-        >
-          {moreFiltersOpen ? "menos filtros" : "mais filtros"}
-          {!moreFiltersOpen && advancedFiltersActive ? " · ativos" : null}
-        </button>
+        <div className="client-filters-more-toggle-wrap">
+          <button
+            type="button"
+            className={`client-filters-more-toggle${moreFiltersOpen ? " is-open" : ""}`}
+            aria-expanded={moreFiltersOpen}
+            onClick={() => setMoreFiltersOpen((o) => !o)}
+          >
+            <span className="client-filters-more-toggle__chev" aria-hidden />
+            <span className="client-filters-more-toggle__label">
+              {moreFiltersOpen ? "menos filtros" : "mais filtros"}
+              {!moreFiltersOpen && advancedFiltersActive ? " · ativos" : null}
+            </span>
+          </button>
+        </div>
 
         {moreFiltersOpen ? (
           <FilterBar className="client-filters-more-row">

@@ -1,5 +1,11 @@
 import { all, get, nowIso, run } from "@/lib/db";
 import { periodToRange, ymdRangeToClosedAtIso, type DashboardPeriod } from "@/lib/datetime";
+import { applyPipelineStageEnterEffects } from "@/lib/pipeline-stage-enter-effects";
+import {
+  parsePipelineStageEnterRules,
+  validateStageEnterPayload,
+  type StageEnterActionPayload
+} from "@/lib/pipeline-stage-enter-rules";
 import { getPipelineStage } from "@/lib/pipeline-stages";
 
 export type OpportunityOutcome = "open" | "won" | "lost";
@@ -510,6 +516,8 @@ export async function moveOpportunityStage(input: {
     deal_value?: number | null;
     deal_value_tbd?: boolean;
   };
+  enter_notes?: string | null;
+  enter_action?: StageEnterActionPayload | null;
 }) {
   const opp = await get<{
     id: number;
@@ -548,7 +556,17 @@ export async function moveOpportunityStage(input: {
     }
   }
 
+  if (toStage.kind === "in_progress") {
+    const enterRules = parsePipelineStageEnterRules(toStage);
+    const enterErr = validateStageEnterPayload(enterRules, {
+      enter_notes: input.enter_notes,
+      enter_action: input.enter_action
+    });
+    if (enterErr) throw new Error(enterErr);
+  }
+
   const now = nowIso();
+  const stageLogNotes = input.notes ?? input.enter_notes ?? null;
   let outcome: OpportunityOutcome = "open";
   let closedAt: string | null = null;
   if (toStage.kind === "won") {
@@ -612,10 +630,20 @@ export async function moveOpportunityStage(input: {
       fromId: fromStageId,
       toId: input.to_stage_id,
       userId: input.user_id,
-      notes: input.notes ?? null,
+      notes: stageLogNotes,
       now
     }
   );
+
+  if (toStage.kind === "in_progress" && input.enter_action) {
+    await applyPipelineStageEnterEffects({
+      opportunity_id: input.opportunity_id,
+      client_id: opp.client_id,
+      product_id: opp.product_id,
+      user_id: input.user_id,
+      enter_action: input.enter_action
+    });
+  }
 
   if (toStage.kind === "won" && input.conversion) {
     await run(`UPDATE opportunity_conversion_snapshots SET is_current = false WHERE opportunity_id = @id`, {

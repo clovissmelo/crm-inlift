@@ -29,10 +29,11 @@ export async function listUpcomingClientAgendas(clientId: number): Promise<Clien
       FROM follow_ups
       WHERE client_id = @clientId
         AND status = 'pending'
+        AND scheduled_at >= @now
       ORDER BY scheduled_at ASC
       LIMIT 20
     `,
-    { clientId }
+    { clientId, now }
   );
 
   const items: ClientAgendaItem[] = [

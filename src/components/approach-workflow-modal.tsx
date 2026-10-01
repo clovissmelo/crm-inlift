@@ -11,9 +11,14 @@ import {
 } from "@/lib/approach-next-actions";
 import { ApproachDecisionMakerField } from "@/components/approach-decision-maker-field";
 import { confirmProceedIfClientHasAgenda } from "@/lib/client-agenda-warning";
+import {
+  resolveEffectiveBdrRules,
+  type AttendanceRuleForUi
+} from "@/lib/attendance/bdr-registration";
 
 type ResultType = {
   id: number;
+  slug: string;
   name: string;
   suggest_follow_up: boolean;
   collect_notes?: boolean;
@@ -21,6 +26,7 @@ type ResultType = {
   require_final_registration?: boolean;
   ask_decision_maker?: boolean;
   allowed_next_actions?: unknown;
+  lead_qualification?: string | null;
 };
 type ClosureReason = { id: number; name: string; kind: "pause" | "close" };
 
@@ -53,6 +59,7 @@ export function ApproachWorkflowModal({
   followUpId?: number;
 }) {
   const [resultTypes, setResultTypes] = useState<ResultType[]>([]);
+  const [attendanceRules, setAttendanceRules] = useState<AttendanceRuleForUi[]>([]);
   const [closureReasons, setClosureReasons] = useState<ClosureReason[]>([]);
   const [channel, setChannel] = useState(defaultChannel);
   const [contactId, setContactId] = useState<string>(defaultContactId ? String(defaultContactId) : "");
@@ -82,9 +89,10 @@ export function ApproachWorkflowModal({
     setContactId(defaultContactId ? String(defaultContactId) : "");
     setProductId(resolvedProductId != null ? String(resolvedProductId) : "");
     void (async () => {
-      const [rt, cr] = await Promise.all([
+      const [rt, cr, ar] = await Promise.all([
         fetch("/api/approach-result-types").then((r) => r.json()),
-        fetch("/api/closure-reason-types").then((r) => r.json())
+        fetch("/api/closure-reason-types").then((r) => r.json()),
+        fetch("/api/attendance-rules").then((r) => r.json())
       ]);
       setResultTypes(
         (rt as { items: Array<ResultType & { status?: string }> }).items.filter(
@@ -92,13 +100,19 @@ export function ApproachWorkflowModal({
         )
       );
       setClosureReasons((cr as { items: ClosureReason[] }).items);
+      setAttendanceRules((ar as { items: AttendanceRuleForUi[] }).items ?? []);
     })();
   }, [open, defaultChannel, defaultContactId, defaultProductId, resolvedProductId]);
 
   const selectedResult = resultTypes.find((r) => String(r.id) === resultTypeId);
-  const showNotesField = selectedResult?.collect_notes === true;
-  const showRegistrationSteps = selectedResult?.require_final_registration !== false;
-  const showDecisionMakerField = selectedResult?.ask_decision_maker === true;
+  const effectiveResult = selectedResult
+    ? resolveEffectiveBdrRules(selectedResult, attendanceRules)
+    : null;
+  const showNotesField = effectiveResult?.collect_notes === true;
+  const showRegistrationSteps =
+    effectiveResult?.requires_meeting === true || effectiveResult?.require_final_registration !== false;
+  const showDecisionMakerField = effectiveResult?.ask_decision_maker === true;
+  const requiresMeeting = effectiveResult?.requires_meeting === true;
 
   useEffect(() => {
     setSpokeWithDecisionMaker(null);
@@ -108,14 +122,14 @@ export function ApproachWorkflowModal({
     setError(null);
     setLoading(true);
 
-    if (selectedResult) {
-      const nextErr = validateNextActionChoice(selectedResult, nextType);
+    if (effectiveResult) {
+      const nextErr = validateNextActionChoice(effectiveResult, nextType);
       if (nextErr) {
         setError(nextErr);
         setLoading(false);
         return;
       }
-      if (selectedResult.ask_decision_maker && spokeWithDecisionMaker === null) {
+      if (effectiveResult.ask_decision_maker && spokeWithDecisionMaker === null) {
         setError("Informe se houve contato com o decisor.");
         setLoading(false);
         return;
@@ -252,9 +266,9 @@ export function ApproachWorkflowModal({
 
         {showRegistrationSteps ? (
           <>
-            <h4>Próxima ação</h4>
+            <h4 style={{ marginBottom: 8 }}>{requiresMeeting ? "Agendar reunião" : "Próxima ação"}</h4>
             <ApproachNextStepField
-              result={selectedResult}
+              result={effectiveResult}
               nextType={nextType}
               onNextTypeChange={setNextType}
               nextDate={nextDate}

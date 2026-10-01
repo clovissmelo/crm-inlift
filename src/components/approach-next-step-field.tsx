@@ -37,6 +37,7 @@ export function useSyncNextTypeWithResult(
     id: (result as { id?: number } | null)?.id,
     allowed: result?.allowed_next_actions,
     require: result?.require_schedule_return,
+    meeting: result?.requires_meeting,
     suggest: result?.suggest_follow_up
   });
   useEffect(() => {
@@ -44,6 +45,7 @@ export function useSyncNextTypeWithResult(
     const allowed = resolveAllowedNextActions(result);
     const preferred = defaultNextTypeForResult(result);
     if (!allowed.includes(nextType)) setNextType(preferred);
+    else if (result.requires_meeting) setNextType("schedule_meeting");
     else if (result.require_schedule_return) setNextType("schedule_return");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync when result rules change
   }, [resultKey]);
@@ -68,6 +70,7 @@ export function ApproachNextStepField({
 
   const allowed = result ? resolveAllowedNextActions(result) : (["none"] as ApproachNextActionKey[]);
   const requireReturn = result?.require_schedule_return === true;
+  const requireMeeting = result?.requires_meeting === true;
   const mustPick = result ? requiresNonNoneNextStep(result) : false;
 
   if (allowed.length === 1 && allowed[0] === "none") {
@@ -83,7 +86,11 @@ export function ApproachNextStepField({
     <>
       <div className="field">
         <label className="label">Próximo passo</label>
-        {requireReturn ? (
+        {requireMeeting ? (
+          <p className="muted" style={{ fontSize: "0.75rem", margin: "0 0 6px" }}>
+            Este resultado exige agendar uma reunião na agenda.
+          </p>
+        ) : requireReturn ? (
           <p className="muted" style={{ fontSize: "0.75rem", margin: "0 0 6px" }}>
             Este resultado exige agendar retorno.
           </p>
@@ -100,7 +107,7 @@ export function ApproachNextStepField({
           className="select"
           value={nextType}
           onChange={(e) => onNextTypeChange(e.target.value as ApproachNextActionKey)}
-          disabled={requireReturn || allowed.length === 1}
+          disabled={requireReturn || requireMeeting || allowed.length === 1}
         >
           {allowed.map((key) => (
             <option key={key} value={key}>

@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions } from "@/components/cadastro-ui";
+import {
+  STAGE_ENTER_NEXT_ACTION_KEYS,
+  parsePipelineStageEnterRules,
+  serializeStageEnterAllowedActions,
+  stageEnterActionLabels
+} from "@/lib/pipeline-stage-enter-rules";
 import type { PipelineStageKind } from "@/lib/pipeline-stages";
+import { APPROACH_NEXT_ACTION_LABELS, type ApproachNextActionKey } from "@/lib/approach-next-actions";
 
 type Stage = {
   id: number;
@@ -11,6 +18,9 @@ type Stage = {
   color: string;
   status: "active" | "inactive";
   kind: PipelineStageKind;
+  enter_collect_notes?: boolean;
+  enter_allowed_next_actions?: string | null;
+  enter_require_next_action?: boolean;
 };
 
 type StageForm = {
@@ -19,6 +29,9 @@ type StageForm = {
   color: string;
   status: "active" | "inactive";
   kind: PipelineStageKind;
+  enter_collect_notes: boolean;
+  enter_allowed_next_actions: ApproachNextActionKey[];
+  enter_require_next_action: boolean;
 };
 
 const KIND_LABEL: Record<PipelineStageKind, string> = {
@@ -32,7 +45,10 @@ const emptyForm = (): StageForm => ({
   sort_order: 50,
   color: "#6366f1",
   status: "active",
-  kind: "in_progress"
+  kind: "in_progress",
+  enter_collect_notes: false,
+  enter_allowed_next_actions: [],
+  enter_require_next_action: false
 });
 
 export function PipelineStagesAdmin() {
@@ -82,12 +98,16 @@ export function PipelineStagesAdmin() {
 
   function openEdit(stage: Stage) {
     setEditingId(stage.id);
+    const enter = parsePipelineStageEnterRules(stage);
     setForm({
       name: stage.name,
       sort_order: stage.sort_order,
       color: stage.color,
       status: stage.status,
-      kind: stage.kind
+      kind: stage.kind,
+      enter_collect_notes: enter.enter_collect_notes,
+      enter_allowed_next_actions: enter.enter_allowed_next_actions,
+      enter_require_next_action: enter.enter_require_next_action
     });
     setError(null);
     setModalOpen(true);
@@ -103,7 +123,18 @@ export function PipelineStagesAdmin() {
     e.preventDefault();
     setSaving(true);
     setError(null);
-    const payload = { ...form };
+    const payload = {
+      name: form.name,
+      sort_order: form.sort_order,
+      color: form.color,
+      status: form.status,
+      kind: form.kind,
+      enter_collect_notes: form.kind === "in_progress" ? form.enter_collect_notes : false,
+      enter_allowed_next_actions:
+        form.kind === "in_progress" ? serializeStageEnterAllowedActions(form.enter_allowed_next_actions) : null,
+      enter_require_next_action:
+        form.kind === "in_progress" ? form.enter_require_next_action && form.enter_allowed_next_actions.length > 0 : false
+    };
     const url = editingId ? `/api/pipeline-stages/${editingId}` : "/api/pipeline-stages";
     const method = editingId ? "PATCH" : "POST";
     const res = await fetch(url, {
@@ -189,6 +220,7 @@ export function PipelineStagesAdmin() {
                 <th>Ordem</th>
                 <th>Tipo</th>
                 <th>Situação</th>
+                <th>Ao entrar na etapa</th>
                 <th style={{ width: 180 }} />
               </tr>
             </thead>
@@ -207,6 +239,21 @@ export function PipelineStagesAdmin() {
                   <td>{s.sort_order}</td>
                   <td>{KIND_LABEL[s.kind]}</td>
                   <td>{s.status === "active" ? "Ativo" : "Inativo"}</td>
+                  <td className="muted" style={{ fontSize: "0.8125rem", maxWidth: 220 }}>
+                    {s.kind === "in_progress" ? (
+                      (() => {
+                        const r = parsePipelineStageEnterRules(s);
+                        const parts: string[] = [];
+                        if (r.enter_collect_notes) parts.push("Observação");
+                        if (r.enter_allowed_next_actions.length) {
+                          parts.push(stageEnterActionLabels(r.enter_allowed_next_actions));
+                        }
+                        return parts.length ? parts.join(" · ") : "—";
+                      })()
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td>
                     <CadastroRowActions canDelete onEdit={() => openEdit(s)} onDelete={() => void openDelete(s)} />
                   </td>
@@ -263,6 +310,57 @@ export function PipelineStagesAdmin() {
               <option value="inactive">Inativo</option>
             </select>
           </div>
+          {form.kind === "in_progress" ? (
+            <div className="field" style={{ marginTop: 12 }}>
+              <label className="label">Ao mover para esta etapa</label>
+              <p className="muted" style={{ margin: "0 0 8px", fontSize: "0.8125rem" }}>
+                O funil pede estas informações antes de concluir a movimentação (além de convertido/perdido).
+              </p>
+              <label style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={form.enter_collect_notes}
+                  onChange={(e) => setForm((f) => ({ ...f, enter_collect_notes: e.target.checked }))}
+                />
+                Registrar observação
+              </label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+                {STAGE_ENTER_NEXT_ACTION_KEYS.map((key) => (
+                  <label key={key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={form.enter_allowed_next_actions.includes(key)}
+                      onChange={(e) =>
+                        setForm((f) => {
+                          const set = new Set(f.enter_allowed_next_actions);
+                          if (e.target.checked) set.add(key);
+                          else set.delete(key);
+                          const next = STAGE_ENTER_NEXT_ACTION_KEYS.filter((k) => set.has(k));
+                          return {
+                            ...f,
+                            enter_allowed_next_actions: next,
+                            enter_require_next_action:
+                              next.length === 0 ? false : f.enter_require_next_action
+                          };
+                        })
+                      }
+                    />
+                    {APPROACH_NEXT_ACTION_LABELS[key]}
+                  </label>
+                ))}
+              </div>
+              {form.enter_allowed_next_actions.length > 0 ? (
+                <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={form.enter_require_next_action}
+                    onChange={(e) => setForm((f) => ({ ...f, enter_require_next_action: e.target.checked }))}
+                  />
+                  Exigir escolher um próximo passo
+                </label>
+              ) : null}
+            </div>
+          ) : null}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
             <button type="button" className="btn" onClick={closeModal}>
               Cancelar

@@ -9,6 +9,9 @@ export type PipelineStage = {
   color: string;
   status: "active" | "inactive";
   kind: PipelineStageKind;
+  enter_collect_notes?: boolean;
+  enter_allowed_next_actions?: string | null;
+  enter_require_next_action?: boolean;
 };
 
 export async function listPipelineStages(activeOnly = true) {
@@ -27,13 +30,20 @@ export async function upsertPipelineStage(input: {
   color: string;
   status: "active" | "inactive";
   kind: PipelineStageKind;
+  enter_collect_notes?: boolean;
+  enter_allowed_next_actions?: string | null;
+  enter_require_next_action?: boolean;
 }) {
   const now = nowIso();
   if (input.id) {
     await run(
       `
         UPDATE pipeline_stages SET name = @name, sort_order = @sortOrder, color = @color,
-          status = @status, kind = @kind, updated_at = @now
+          status = @status, kind = @kind,
+          enter_collect_notes = @enterCollectNotes,
+          enter_allowed_next_actions = @enterAllowed,
+          enter_require_next_action = @enterRequireNext,
+          updated_at = @now
         WHERE id = @id
       `,
       {
@@ -43,6 +53,9 @@ export async function upsertPipelineStage(input: {
         color: input.color,
         status: input.status,
         kind: input.kind,
+        enterCollectNotes: input.enter_collect_notes ?? false,
+        enterAllowed: input.enter_allowed_next_actions ?? null,
+        enterRequireNext: input.enter_require_next_action ?? false,
         now
       }
     );
@@ -50,8 +63,16 @@ export async function upsertPipelineStage(input: {
   }
   const r = await run(
     `
-      INSERT INTO pipeline_stages (name, sort_order, color, status, kind, created_at, updated_at)
-      VALUES (@name, @sortOrder, @color, @status, @kind, @now, @now)
+      INSERT INTO pipeline_stages (
+        name, sort_order, color, status, kind,
+        enter_collect_notes, enter_allowed_next_actions, enter_require_next_action,
+        created_at, updated_at
+      )
+      VALUES (
+        @name, @sortOrder, @color, @status, @kind,
+        @enterCollectNotes, @enterAllowed, @enterRequireNext,
+        @now, @now
+      )
     `,
     {
       name: input.name,
@@ -59,6 +80,9 @@ export async function upsertPipelineStage(input: {
       color: input.color,
       status: input.status,
       kind: input.kind,
+      enterCollectNotes: input.enter_collect_notes ?? false,
+      enterAllowed: input.enter_allowed_next_actions ?? null,
+      enterRequireNext: input.enter_require_next_action ?? false,
       now
     }
   );

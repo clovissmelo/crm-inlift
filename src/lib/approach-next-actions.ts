@@ -27,13 +27,14 @@ export const RESULT_REGISTRATION_ACTION_KEYS: ApproachNextActionKey[] = [
 export type ApproachResultNextRules = {
   allowed_next_actions?: unknown;
   require_schedule_return?: boolean;
+  requires_meeting?: boolean;
   require_final_registration?: boolean;
   suggest_follow_up?: boolean;
 };
 
 /** Exige escolher um próximo passo diferente de Nenhum (quando Nenhum ainda está entre as opções). */
 export function requiresNonNoneNextStep(row: ApproachResultNextRules): boolean {
-  if (row.require_schedule_return) return true;
+  if (row.require_schedule_return || row.requires_meeting) return true;
   const allowed = resolveAllowedNextActions(row);
   const hasAlternatives = allowed.some((k) => k !== "none");
   if (!hasAlternatives) return false;
@@ -60,6 +61,7 @@ export function parseAllowedNextActions(raw: unknown): ApproachNextActionKey[] {
 export function resolveAllowedNextActions(row: ApproachResultNextRules): ApproachNextActionKey[] {
   const explicit = parseAllowedNextActions(row.allowed_next_actions);
   if (explicit.length > 0) return explicit;
+  if (row.requires_meeting) return ["schedule_meeting"];
   if (row.require_schedule_return) return ["schedule_return"];
   if (row.suggest_follow_up) {
     return ["none", "schedule_return", "schedule_meeting", "pause", "close"];
@@ -84,6 +86,9 @@ export function validateNextActionChoice(
   if (row.require_schedule_return && nextType !== "schedule_return") {
     return "Este resultado exige agendar retorno com data e hora.";
   }
+  if (row.requires_meeting && nextType !== "schedule_meeting") {
+    return "Este resultado exige agendar reunião com data e hora.";
+  }
   if (requiresNonNoneNextStep(row) && nextType === "none") {
     return "Este resultado exige definir um próximo passo além de Nenhum.";
   }
@@ -95,6 +100,7 @@ export function validateNextActionChoice(
 
 export function defaultNextTypeForResult(row: ApproachResultNextRules): ApproachNextActionKey {
   const allowed = resolveAllowedNextActions(row);
+  if (row.requires_meeting) return "schedule_meeting";
   if (row.require_schedule_return) return "schedule_return";
   if (allowed.includes("none")) return "none";
   return allowed[0] ?? "none";

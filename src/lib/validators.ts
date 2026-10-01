@@ -264,6 +264,16 @@ export const opportunityStageMoveSchema = z.object({
   to_stage_id: z.number().int().positive(),
   expected_version: z.number().int().positive(),
   notes: z.string().trim().optional().nullable(),
+  enter_notes: z.string().trim().optional().nullable(),
+  enter_action: z
+    .object({
+      type: z.enum(["schedule_return", "schedule_meeting", "pause"]),
+      scheduled_at: z.string().optional(),
+      notes: z.string().trim().optional().nullable(),
+      reason_id: z.number().int().positive().optional()
+    })
+    .optional()
+    .nullable(),
   lost_reason_id: z.number().int().positive().optional().nullable(),
   lost_notes: z.string().trim().optional().nullable(),
   conversion: z
@@ -282,7 +292,10 @@ export const pipelineStageSchema = z.object({
   sort_order: z.number().int(),
   color: z.string().trim().min(1),
   status: z.enum(["active", "inactive"]),
-  kind: z.enum(["in_progress", "won", "lost"])
+  kind: z.enum(["in_progress", "won", "lost"]),
+  enter_collect_notes: z.boolean().optional(),
+  enter_allowed_next_actions: z.string().nullable().optional(),
+  enter_require_next_action: z.boolean().optional()
 });
 
 export const pipelineStageDeleteSchema = z.object({
