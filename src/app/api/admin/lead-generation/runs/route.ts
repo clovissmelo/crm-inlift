@@ -83,7 +83,7 @@ export async function POST(request: Request) {
   const initialSource = flowSnapshot.initial_source;
   const ibge = await getUfGeoFromIbge(uf);
 
-  let selected: LeadGenMunicipalityRef[] = parsed.data.municipalities.map((m) => ({
+  const selected: LeadGenMunicipalityRef[] = parsed.data.municipalities.map((m) => ({
     ibge_code: m.ibge_code,
     name: m.name,
     commercial_zone_id: m.commercial_zone_id ?? null,

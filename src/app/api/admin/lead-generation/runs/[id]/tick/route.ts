@@ -47,7 +47,7 @@ export async function POST(request: Request, { params }: Params) {
   const phase_line = runPhaseActivityLine({
     phase: run.phase,
     uf: run.uf,
-    counts_json: run.counts_json as Record<string, number>
+    counts_json: run.counts_json
   });
 
   return Response.json({ run, activity, phase_line });

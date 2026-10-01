@@ -1,4 +1,5 @@
 import type { AnpStation } from "@/lib/lead-motor/anp";
+import type { LeadGenCounts } from "@/lib/lead-generation/types";
 
 const STATUS_PT: Record<string, string> = {
   created: "Novo lead",
@@ -75,7 +76,7 @@ export function formatLeadGenActivityEntry(row: Record<string, unknown>): LeadGe
 export function runPhaseActivityLine(input: {
   phase: string;
   uf: string;
-  counts_json: Record<string, number>;
+  counts_json: LeadGenCounts | Record<string, number>;
 }): string | null {
   const counts = input.counts_json ?? {};
   const lastCity = counts.last_anp_city ? String(counts.last_anp_city) : "";
