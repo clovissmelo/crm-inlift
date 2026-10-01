@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, HelpCircle } from "lucide-react";
+import { Check, Eye, EyeOff, HelpCircle } from "lucide-react";
+import { CadastroModal } from "@/components/cadastro-ui";
 
 function Api4comHelpTooltip() {
   return (
@@ -58,7 +59,7 @@ function TokenInput({
   );
 }
 
-/** Ramal e token API4COM para perfil BDR — campos abertos por botão. */
+/** Ramal e token API4COM para perfil BDR. */
 export function Api4comBdrFields({
   extension,
   onExtensionChange,
@@ -79,58 +80,62 @@ export function Api4comBdrFields({
   /** false quando o admin usa token global único */
   allowPersonalToken?: boolean;
 }) {
-  const [showExtension, setShowExtension] = useState(false);
-  const [showToken, setShowToken] = useState(false);
+  const [extensionModalOpen, setExtensionModalOpen] = useState(false);
+  const [tokenModalOpen, setTokenModalOpen] = useState(false);
 
-  const extensionSummary = extension.trim() ? `Ramal: ${extension.trim()}` : "Ramal não definido";
-  const tokenSummary = !allowPersonalToken
-    ? "Token global (admin)"
-    : hasApiToken
-      ? "Token cadastrado"
-      : apiToken.trim()
-        ? "Token preenchido (salvar)"
-        : "Token não cadastrado";
+  const extensionTrimmed = extension.trim();
+  const hasExtension = extensionTrimmed.length > 0;
+  const tokenConfigured = Boolean(hasApiToken);
 
   return (
     <div className="api4com-bdr-fields">
       <div className="api4com-bdr-toolbar">
         <span className="label" style={{ margin: 0 }}>
-          API4COM (BDR)
+          Integração API4COM
         </span>
         <Api4comHelpTooltip />
       </div>
-      <div className="api4com-bdr-actions">
+
+      <div
+        className={
+          allowPersonalToken ? "api4com-bdr-actions api4com-bdr-actions--split" : "api4com-bdr-actions"
+        }
+      >
         <button
           type="button"
-          className="btn"
-          aria-expanded={showExtension}
-          onClick={() => {
-            setShowExtension((v) => !v);
-            setShowToken(false);
-          }}
+          className={hasExtension ? "btn btn-primary api4com-bdr-action-btn" : "btn api4com-bdr-action-btn"}
+          onClick={() => setExtensionModalOpen(true)}
         >
-          {showExtension ? "Fechar ramal" : "Configurar ramal"}
+          {hasExtension ? `Ramal ${extensionTrimmed}` : "Configurar ramal"}
         </button>
         {allowPersonalToken ? (
           <button
             type="button"
-            className="btn"
-            aria-expanded={showToken}
-            onClick={() => {
-              setShowToken((v) => !v);
-              setShowExtension(false);
-            }}
+            className={
+              tokenConfigured
+                ? "btn api4com-bdr-action-btn api4com-bdr-btn--token-ok"
+                : "btn api4com-bdr-action-btn"
+            }
+            onClick={() => setTokenModalOpen(true)}
           >
-            {showToken ? "Fechar token" : "Configurar token"}
+            {tokenConfigured ? (
+              <>
+                Token cadastrado
+                <Check size={16} aria-hidden className="api4com-bdr-btn-check" />
+              </>
+            ) : (
+              "Configurar token"
+            )}
           </button>
         ) : null}
       </div>
-      <p className="muted api4com-bdr-summary">
-        {extensionSummary} · {tokenSummary}
-      </p>
 
-      {showExtension ? (
-        <div className="field api4com-bdr-panel">
+      <CadastroModal
+        open={extensionModalOpen}
+        title={hasExtension ? "Alterar ramal" : "Configurar ramal"}
+        onClose={() => setExtensionModalOpen(false)}
+      >
+        <div className="field">
           <label className="label">Ramal API4COM</label>
           <input
             className="input"
@@ -139,19 +144,47 @@ export function Api4comBdrFields({
             placeholder="Ex.: 1001"
             autoComplete="off"
           />
+          <p className="muted" style={{ marginTop: "0.5rem", fontSize: "0.8125rem" }}>
+            Use o ramal do seu usuário no painel API4COM (menu Usuários). Salve o perfil para aplicar.
+          </p>
         </div>
-      ) : null}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.75rem" }}>
+          <button type="button" className="btn btn-primary" onClick={() => setExtensionModalOpen(false)}>
+            Concluir
+          </button>
+        </div>
+      </CadastroModal>
 
-      {allowPersonalToken && showToken ? (
-        <div className="field api4com-bdr-panel">
-          <label className="label">Token de acesso API4COM</label>
-          <TokenInput value={apiToken} onChange={onApiTokenChange} hasApiToken={hasApiToken} />
-          {hasApiToken && onClearToken ? (
-            <button type="button" className="btn" style={{ marginTop: 8 }} onClick={onClearToken} disabled={clearingToken}>
-              {clearingToken ? "Removendo…" : "Remover token salvo"}
+      {allowPersonalToken ? (
+        <CadastroModal
+          open={tokenModalOpen}
+          title={tokenConfigured ? "Alterar token" : "Configurar token"}
+          onClose={() => setTokenModalOpen(false)}
+        >
+          <div className="field">
+            <label className="label">Token de acesso API4COM</label>
+            <TokenInput value={apiToken} onChange={onApiTokenChange} hasApiToken={hasApiToken} />
+            {hasApiToken && onClearToken ? (
+              <button
+                type="button"
+                className="btn"
+                style={{ marginTop: 8 }}
+                onClick={onClearToken}
+                disabled={clearingToken}
+              >
+                {clearingToken ? "Removendo…" : "Remover token salvo"}
+              </button>
+            ) : null}
+            <p className="muted" style={{ marginTop: "0.5rem", fontSize: "0.8125rem" }}>
+              Cole o token completo e salve o perfil. O valor fica apenas no servidor.
+            </p>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.75rem" }}>
+            <button type="button" className="btn btn-primary" onClick={() => setTokenModalOpen(false)}>
+              Concluir
             </button>
-          ) : null}
-        </div>
+          </div>
+        </CadastroModal>
       ) : null}
     </div>
   );
