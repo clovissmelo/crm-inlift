@@ -1,3 +1,4 @@
+import { normalizeApi4comApiToken } from "@/lib/api4com/token-normalize";
 import { getSystemSetting } from "@/lib/system-settings";
 import { decryptSecret } from "@/lib/token-crypto";
 
@@ -46,8 +47,9 @@ export async function getApi4comConfig(): Promise<Api4comConfig> {
   const envSecret = process.env.API4COM_WEBHOOK_SECRET?.trim();
   const envBase = process.env.API4COM_BASE_URL?.trim();
 
+  const rawToken = envToken || readSecret(tokenRow?.value) || null;
   return {
-    apiToken: envToken || readSecret(tokenRow?.value) || null,
+    apiToken: rawToken ? normalizeApi4comApiToken(rawToken) : null,
     gateway: envGateway || gatewayRow?.value?.trim() || "inlift-crm",
     webhookSecret: envSecret || readSecret(secretRow?.value) || null,
     baseUrl: (envBase || baseRow?.value?.trim() || "https://api.api4com.com").replace(/\/$/, "")

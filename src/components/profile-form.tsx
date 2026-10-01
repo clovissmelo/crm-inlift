@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import type { Api4comSetupProbe } from "@/lib/api4com/setup-probe";
 import type { Api4comTokenPolicy } from "@/lib/api4com/token-policy-shared";
 import { Api4comBdrFields } from "@/components/api4com-bdr-fields";
 import type { User } from "@/lib/types";
@@ -22,6 +23,8 @@ export function ProfileForm({ user }: { user: User }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [api4comTokenPolicy, setApi4comTokenPolicy] = useState<Api4comTokenPolicy>("global");
+  const [setupProbe, setSetupProbe] = useState<Api4comSetupProbe | null>(null);
+  const [setupChecking, setSetupChecking] = useState(false);
 
   useEffect(() => {
     if (!isBdr) return;
@@ -30,6 +33,29 @@ export function ProfileForm({ user }: { user: User }) {
       .then((d: { policy?: Api4comTokenPolicy }) => setApi4comTokenPolicy(d.policy === "per_bdr" ? "per_bdr" : "global"))
       .catch(() => null);
   }, [isBdr]);
+
+  async function runSetupCheck() {
+    setSetupChecking(true);
+    setSetupProbe(null);
+    try {
+      const res = await fetch("/api/api4com/setup-check");
+      const data = (await res.json()) as Api4comSetupProbe & { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Não foi possível validar API4COM.");
+        return;
+      }
+      setSetupProbe(data);
+      if (!data.ok) setError(data.message);
+      else {
+        setError(null);
+        setMessage(data.message);
+      }
+    } catch {
+      setError("Não foi possível validar API4COM.");
+    } finally {
+      setSetupChecking(false);
+    }
+  }
 
   function closePasswordSection() {
     setChangingPassword(false);
@@ -90,6 +116,9 @@ export function ProfileForm({ user }: { user: User }) {
     setMessage(changingPassword && newPassword ? "Perfil e senha atualizados." : "Perfil atualizado.");
     if (changingPassword) closePasswordSection();
     router.refresh();
+    if (isBdr && api4comTokenPolicy === "per_bdr") {
+      void runSetupCheck();
+    }
   }
 
   async function clearApiToken() {
@@ -131,16 +160,26 @@ export function ProfileForm({ user }: { user: User }) {
       </div>
 
       {isBdr ? (
-        <Api4comBdrFields
-          extension={api4comExtension}
-          onExtensionChange={setApi4comExtension}
-          apiToken={api4comApiToken}
-          onApiTokenChange={setApi4comApiToken}
-          hasApiToken={hasApiToken}
-          onClearToken={api4comTokenPolicy === "per_bdr" ? () => void clearApiToken() : undefined}
-          clearingToken={loading}
-          allowPersonalToken={api4comTokenPolicy === "per_bdr"}
-        />
+        <>
+          <Api4comBdrFields
+            extension={api4comExtension}
+            onExtensionChange={setApi4comExtension}
+            apiToken={api4comApiToken}
+            onApiTokenChange={setApi4comApiToken}
+            hasApiToken={hasApiToken}
+            onClearToken={api4comTokenPolicy === "per_bdr" ? () => void clearApiToken() : undefined}
+            clearingToken={loading}
+            allowPersonalToken={api4comTokenPolicy === "per_bdr"}
+          />
+          {api4comTokenPolicy === "per_bdr" ? (
+            <div style={{ marginBottom: "1rem" }}>
+              <button type="button" className="btn" disabled={loading || setupChecking} onClick={() => void runSetupCheck()}>
+                {setupChecking ? "Validando…" : "Validar token e ramal na API4COM"}
+              </button>
+              {setupProbe?.detail ? <p className="muted" style={{ marginTop: 8, fontSize: "0.85rem" }}>{setupProbe.detail}</p> : null}
+            </div>
+          ) : null}
+        </>
       ) : null}
 
       {!changingPassword ? (

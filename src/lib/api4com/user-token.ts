@@ -1,5 +1,6 @@
 import { get, run } from "@/lib/db";
 import { getApi4comConfig } from "@/lib/api4com/config";
+import { normalizeApi4comApiToken } from "@/lib/api4com/token-normalize";
 import { getApi4comTokenPolicy } from "@/lib/api4com/token-policy";
 import type { UserRole } from "@/lib/types";
 
@@ -22,7 +23,9 @@ export async function applyUserApi4comApiToken(
   }
   if (token === undefined && !options?.clear) return;
   const value =
-    options?.clear || token === null || token === "" || token === undefined ? null : token.trim();
+    options?.clear || token === null || token === "" || token === undefined
+      ? null
+      : normalizeApi4comApiToken(token);
   await run("UPDATE users SET api4com_api_token = @token WHERE id = @id", { token: value, id: userId });
 }
 
@@ -37,5 +40,6 @@ export async function resolveApi4comApiTokenForUser(userId: number): Promise<str
     "SELECT api4com_api_token FROM users WHERE id = @id",
     { id: userId }
   );
-  return row?.api4com_api_token?.trim() || null;
+  const raw = row?.api4com_api_token?.trim();
+  return raw ? normalizeApi4comApiToken(raw) : null;
 }
