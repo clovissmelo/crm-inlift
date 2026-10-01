@@ -33,7 +33,8 @@ async function attachRoles(users: UserRow[]): Promise<User[]> {
 }
 
 export function sanitizeUserForClient(user: User & { api4com_api_token?: string | null }): User {
-  const has_api4com_api_token = Boolean(user.api4com_api_token?.trim());
+  const has_api4com_api_token =
+    user.has_api4com_api_token ?? Boolean(user.api4com_api_token?.trim());
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- strip secret before client
   const { api4com_api_token, ...rest } = user;
   return { ...rest, has_api4com_api_token };
@@ -52,7 +53,7 @@ export async function getUserById(id: number) {
   const row = await get<UserRow>("SELECT * FROM users WHERE id = @id", { id });
   if (!row) return null;
   const [user] = await attachRoles([row]);
-  return sanitizeUserForClient(user);
+  return user;
 }
 
 export async function setUserRoles(userId: number, roles: UserRole[]) {

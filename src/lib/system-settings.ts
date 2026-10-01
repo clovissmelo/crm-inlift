@@ -45,9 +45,6 @@ export async function updateSystemSettings(
     if ((row.key === "api4com_api_token" || row.key === "api4com_webhook_secret") && value && value.trim()) {
       value = encryptSecret(value.trim());
     }
-    if (row.key === "api4com_token_policy" && value === "global") {
-      await run("UPDATE users SET api4com_api_token = NULL WHERE api4com_api_token IS NOT NULL");
-    }
     await run(
       `
         UPDATE system_settings SET value = @value, updated_at = @now, updated_by_user_id = @userId

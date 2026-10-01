@@ -143,22 +143,22 @@ export function AdminApi4comPanel() {
         </p>
         <form onSubmit={saveCredentials}>
           <div className="field">
-            <span className="label">Quem cadastra o token para ligar?</span>
-            <div className="contact-verification-picker" role="radiogroup" aria-label="Política de token API4COM">
+            <label className="label" htmlFor="api4com-token-policy">
+              Quem cadastra o token para ligar?
+            </label>
+            <select
+              id="api4com-token-policy"
+              className="input"
+              value={tokenPolicy}
+              onChange={(e) => setTokenPolicy(e.target.value === "per_bdr" ? "per_bdr" : "global")}
+            >
               {(["global", "per_bdr"] as const).map((val) => (
-                <button
-                  key={val}
-                  type="button"
-                  role="radio"
-                  aria-checked={tokenPolicy === val}
-                  className={`contact-verification-option${tokenPolicy === val ? " contact-verification-option--active" : ""}`}
-                  onClick={() => setTokenPolicy(val)}
-                >
+                <option key={val} value={val}>
                   {API4COM_TOKEN_POLICY_LABELS[val]}
-                </button>
+                </option>
               ))}
-            </div>
-            <p className="muted" style={{ fontSize: "0.8125rem", marginBottom: 0 }}>
+            </select>
+            <p className="muted" style={{ fontSize: "0.8125rem", marginBottom: 0, marginTop: "0.35rem" }}>
               {globalDialMode ? (
                 <>
                   O administrador informa um <strong>token único</strong> abaixo. BDRs configuram só o <strong>ramal</strong>{" "}
@@ -166,25 +166,29 @@ export function AdminApi4comPanel() {
                 </>
               ) : (
                 <>
-                  Cada BDR cadastra o <strong>próprio token</strong> em Meu perfil (e o ramal). O token abaixo serve só para{" "}
-                  <strong>registrar o webhook</strong> na API4COM (conta master).
+                  Cada BDR cadastra o <strong>próprio token</strong> em Meu perfil (e o ramal). O token de integração fica na
+                  seção <strong>Webhook e telefonia</strong> (conta master). Ao alternar o modo, o que já foi salvo no servidor
+                  permanece — nada é apagado.
                 </>
               )}
             </p>
           </div>
-          <div className="field">
-            <label className="label">
-              {globalDialMode ? "Token API (ligações de todas as BDRs)" : "Token API (integração / webhook)"}
-            </label>
-            <input
-              className="input"
-              type="password"
-              autoComplete="new-password"
-              placeholder={hasToken ? "•••••••• (informe para substituir)" : "Token da API4COM"}
-              value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
-            />
-          </div>
+          {globalDialMode ? (
+            <div className="field">
+              <label className="label" htmlFor="api4com-global-token">
+                Token API (ligações de todas as BDRs)
+              </label>
+              <input
+                id="api4com-global-token"
+                className="input"
+                type="password"
+                autoComplete="new-password"
+                placeholder={hasToken ? "•••••••• (informe para substituir)" : "Token da API4COM"}
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+              />
+            </div>
+          ) : null}
           <div className="field">
             <label className="label">Gateway (metadata)</label>
             <input className="input" value={gateway} onChange={(e) => setGateway(e.target.value)} />
@@ -219,9 +223,28 @@ export function AdminApi4comPanel() {
                     : "Token de integração configurado"
                   : globalDialMode
                     ? "Cadastre o token global acima"
-                    : "Cadastre o token de integração acima (webhook)"}
+                    : "Cadastre o token de integração abaixo (webhook)"}
               </strong>
             </p>
+            {!globalDialMode ? (
+              <div className="field">
+                <label className="label" htmlFor="api4com-integration-token">
+                  Token API (integração / webhook)
+                </label>
+                <input
+                  id="api4com-integration-token"
+                  className="input"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder={hasToken ? "•••••••• (informe para substituir)" : "Token da conta master na API4COM"}
+                  value={tokenInput}
+                  onChange={(e) => setTokenInput(e.target.value)}
+                />
+                <p className="muted" style={{ fontSize: "0.8125rem", marginBottom: 0, marginTop: "0.35rem" }}>
+                  Usado só para registrar o webhook. Ligações usam o token de cada BDR em Meu perfil.
+                </p>
+              </div>
+            ) : null}
             <div className="field">
               <label className="label">URL do webhook (CRM)</label>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

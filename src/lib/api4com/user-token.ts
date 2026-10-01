@@ -15,7 +15,9 @@ export async function applyUserApi4comApiToken(
   }
   const policy = await getApi4comTokenPolicy();
   if (policy === "global") {
-    await run("UPDATE users SET api4com_api_token = NULL WHERE id = @id", { id: userId });
+    if (options?.clear) {
+      await run("UPDATE users SET api4com_api_token = NULL WHERE id = @id", { id: userId });
+    }
     return;
   }
   if (token === undefined && !options?.clear) return;
