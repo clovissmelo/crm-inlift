@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { API4COM_TOKEN_POLICY_LABELS, type Api4comTokenPolicy } from "@/lib/api4com/token-policy-shared";
 
 type Status = {
   configured: boolean;
+  token_policy: Api4comTokenPolicy;
   webhook_url: string;
   gateway: string;
   base_url: string;
@@ -24,10 +26,11 @@ type SettingRow = {
   has_value?: boolean;
 };
 
-const API4COM_KEYS = ["api4com_api_token", "api4com_gateway", "api4com_webhook_secret"] as const;
+const API4COM_KEYS = ["api4com_api_token", "api4com_gateway", "api4com_webhook_secret", "api4com_token_policy"] as const;
 
 export function AdminApi4comPanel() {
   const [status, setStatus] = useState<Status | null>(null);
+  const [tokenPolicy, setTokenPolicy] = useState<Api4comTokenPolicy>("global");
   const [gateway, setGateway] = useState("inlift-crm");
   const [tokenInput, setTokenInput] = useState("");
   const [webhookSecretInput, setWebhookSecretInput] = useState("");
@@ -52,6 +55,7 @@ export function AdminApi4comPanel() {
       return;
     }
     setStatus(data);
+    setTokenPolicy(data.token_policy ?? "global");
 
     if (settingsRes.ok) {
       const settingsData = (await settingsRes.json()) as { settings?: SettingRow[] };
@@ -59,7 +63,11 @@ export function AdminApi4comPanel() {
         (API4COM_KEYS as readonly string[]).includes(s.key)
       );
       const gw = rows.find((r) => r.key === "api4com_gateway");
-      if (gw?.value) setGateway(gw.value);
+      if (gw?.value && gw.value !== "••••••••") setGateway(gw.value);
+      const pol = rows.find((r) => r.key === "api4com_token_policy");
+      if (pol?.value && pol.value !== "••••••••") {
+        setTokenPolicy(pol.value === "per_bdr" ? "per_bdr" : "global");
+      }
       setHasToken(Boolean(rows.find((r) => r.key === "api4com_api_token")?.has_value));
       setHasWebhookSecret(Boolean(rows.find((r) => r.key === "api4com_webhook_secret")?.has_value));
     }
@@ -76,7 +84,8 @@ export function AdminApi4comPanel() {
     setError(null);
     setMessage(null);
     const payload: Array<{ key: string; value: string | null }> = [
-      { key: "api4com_gateway", value: gateway.trim() || "inlift-crm" }
+      { key: "api4com_gateway", value: gateway.trim() || "inlift-crm" },
+      { key: "api4com_token_policy", value: tokenPolicy }
     ];
     if (tokenInput.trim()) payload.push({ key: "api4com_api_token", value: tokenInput.trim() });
     if (webhookSecretInput.trim()) payload.push({ key: "api4com_webhook_secret", value: webhookSecretInput.trim() });
@@ -93,7 +102,7 @@ export function AdminApi4comPanel() {
     }
     setTokenInput("");
     setWebhookSecretInput("");
-    setMessage("Credenciais API4COM salvas no banco.");
+    setMessage("Configuração API4COM salva.");
     void load();
   }
 
@@ -118,6 +127,8 @@ export function AdminApi4comPanel() {
     setMessage("URL copiada.");
   }
 
+  const globalDialMode = tokenPolicy === "global";
+
   return (
     <div>
       {loading ? <p className="muted">Carregando…</p> : null}
@@ -127,13 +138,44 @@ export function AdminApi4comPanel() {
       <section className="panel" style={{ marginBottom: "1rem" }}>
         <h2 style={{ marginTop: 0 }}>Credenciais</h2>
         <p className="muted" style={{ fontSize: "0.875rem" }}>
-          Tudo fica nesta página (banco criptografado para token e segredo). URL base da API:{" "}
-          <code>{status?.base_url ?? "https://api.api4com.com"}</code> — altere só via variável de ambiente{" "}
-          <code>API4COM_BASE_URL</code> se necessário.
+          URL base da API: <code>{status?.base_url ?? "https://api.api4com.com"}</code> — altere via{" "}
+          <code>API4COM_BASE_URL</code> se necessário. Token e segredo ficam criptografados no banco.
         </p>
         <form onSubmit={saveCredentials}>
           <div className="field">
-            <label className="label">Token API</label>
+            <span className="label">Quem cadastra o token para ligar?</span>
+            <div className="contact-verification-picker" role="radiogroup" aria-label="Política de token API4COM">
+              {(["global", "per_bdr"] as const).map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  role="radio"
+                  aria-checked={tokenPolicy === val}
+                  className={`contact-verification-option${tokenPolicy === val ? " contact-verification-option--active" : ""}`}
+                  onClick={() => setTokenPolicy(val)}
+                >
+                  {API4COM_TOKEN_POLICY_LABELS[val]}
+                </button>
+              ))}
+            </div>
+            <p className="muted" style={{ fontSize: "0.8125rem", marginBottom: 0 }}>
+              {globalDialMode ? (
+                <>
+                  O administrador informa um <strong>token único</strong> abaixo. BDRs configuram só o <strong>ramal</strong>{" "}
+                  em Meu perfil.
+                </>
+              ) : (
+                <>
+                  Cada BDR cadastra o <strong>próprio token</strong> em Meu perfil (e o ramal). O token abaixo serve só para{" "}
+                  <strong>registrar o webhook</strong> na API4COM (conta master).
+                </>
+              )}
+            </p>
+          </div>
+          <div className="field">
+            <label className="label">
+              {globalDialMode ? "Token API (ligações de todas as BDRs)" : "Token API (integração / webhook)"}
+            </label>
             <input
               className="input"
               type="password"
@@ -159,7 +201,7 @@ export function AdminApi4comPanel() {
             />
           </div>
           <button className="btn btn-primary" type="submit" disabled={saving}>
-            {saving ? "Salvando…" : "Salvar credenciais"}
+            {saving ? "Salvando…" : "Salvar configuração"}
           </button>
         </form>
       </section>
@@ -169,7 +211,16 @@ export function AdminApi4comPanel() {
         {status ? (
           <>
             <p>
-              Status: <strong>{status.configured ? "Token configurado" : "Informe o token acima"}</strong>
+              Status integração:{" "}
+              <strong>
+                {status.configured
+                  ? globalDialMode
+                    ? "Token global configurado"
+                    : "Token de integração configurado"
+                  : globalDialMode
+                    ? "Cadastre o token global acima"
+                    : "Cadastre o token de integração acima (webhook)"}
+              </strong>
             </p>
             <div className="field">
               <label className="label">URL do webhook (CRM)</label>
@@ -198,12 +249,19 @@ export function AdminApi4comPanel() {
                 Gateway na API4COM deve ser <code>{status.gateway}</code>.
               </li>
               <li>
-                Eventos: {status.docs.webhook_events.join(", ")}. Se ficar inativo no painel API4COM, cole a URL e
-                ative manualmente.
+                Eventos: {status.docs.webhook_events.join(", ")}. Se ficar inativo no painel API4COM, cole a URL e ative
+                manualmente.
               </li>
               <li>
-                BDRs: ramal/token em <Link href="/perfil">Meu perfil</Link> ou Admin → Usuários. Token global vale se a
-                BDR não tiver token próprio.
+                {globalDialMode ? (
+                  <>
+                    BDRs: apenas <strong>ramal</strong> em <Link href="/perfil">Meu perfil</Link> ou Admin → Usuários.
+                  </>
+                ) : (
+                  <>
+                    BDRs: <strong>ramal e token</strong> em <Link href="/perfil">Meu perfil</Link> (obrigatório para ligar).
+                  </>
+                )}
               </li>
             </ol>
           </>

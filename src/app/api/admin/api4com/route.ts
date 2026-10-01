@@ -1,6 +1,7 @@
 import { requireAdminApi } from "@/lib/admin";
 import { api4comRegisterWebhookIntegration } from "@/lib/api4com/client";
-import { getApi4comConfig, getApi4comWebhookUrl, isApi4comConfigured } from "@/lib/api4com/config";
+import { getApi4comConfig, getApi4comWebhookUrl, isApi4comIntegrationTokenConfigured } from "@/lib/api4com/config";
+import { getApi4comTokenPolicy } from "@/lib/api4com/token-policy";
 import { requireApiUser } from "@/lib/auth";
 
 export async function GET() {
@@ -8,12 +9,14 @@ export async function GET() {
   const denied = await requireAdminApi(user);
   if (denied) return denied;
 
-  const configured = await isApi4comConfigured();
+  const tokenPolicy = await getApi4comTokenPolicy();
+  const integrationTokenConfigured = await isApi4comIntegrationTokenConfigured();
   const webhookUrl = getApi4comWebhookUrl();
   const cfg = await getApi4comConfig();
 
   return Response.json({
-    configured,
+    configured: integrationTokenConfigured,
+    token_policy: tokenPolicy,
     webhook_url: webhookUrl,
     gateway: cfg.gateway,
     base_url: cfg.baseUrl,

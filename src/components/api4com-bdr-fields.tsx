@@ -18,7 +18,7 @@ function Api4comHelpTooltip() {
         <br />
         <br />
         <strong>Ramal:</strong> no painel API4COM, menu <em>Usuários</em>, veja o ramal do usuário. Sem senha SIP aqui. Sem
-        token pessoal, vale o token global (Admin → Variáveis → API4COM).
+        token pessoal só no modo &quot;cada BDR no perfil&quot; (Admin → API4COM).
       </span>
     </span>
   );
@@ -66,7 +66,8 @@ export function Api4comBdrFields({
   onApiTokenChange,
   hasApiToken,
   onClearToken,
-  clearingToken
+  clearingToken,
+  allowPersonalToken = true
 }: {
   extension: string;
   onExtensionChange: (value: string) => void;
@@ -75,12 +76,20 @@ export function Api4comBdrFields({
   hasApiToken?: boolean;
   onClearToken?: () => void;
   clearingToken?: boolean;
+  /** false quando o admin usa token global único */
+  allowPersonalToken?: boolean;
 }) {
   const [showExtension, setShowExtension] = useState(false);
   const [showToken, setShowToken] = useState(false);
 
   const extensionSummary = extension.trim() ? `Ramal: ${extension.trim()}` : "Ramal não definido";
-  const tokenSummary = hasApiToken ? "Token cadastrado" : apiToken.trim() ? "Token preenchido (salvar)" : "Token não cadastrado";
+  const tokenSummary = !allowPersonalToken
+    ? "Token global (admin)"
+    : hasApiToken
+      ? "Token cadastrado"
+      : apiToken.trim()
+        ? "Token preenchido (salvar)"
+        : "Token não cadastrado";
 
   return (
     <div className="api4com-bdr-fields">
@@ -102,17 +111,19 @@ export function Api4comBdrFields({
         >
           {showExtension ? "Fechar ramal" : "Configurar ramal"}
         </button>
-        <button
-          type="button"
-          className="btn"
-          aria-expanded={showToken}
-          onClick={() => {
-            setShowToken((v) => !v);
-            setShowExtension(false);
-          }}
-        >
-          {showToken ? "Fechar token" : "Configurar token"}
-        </button>
+        {allowPersonalToken ? (
+          <button
+            type="button"
+            className="btn"
+            aria-expanded={showToken}
+            onClick={() => {
+              setShowToken((v) => !v);
+              setShowExtension(false);
+            }}
+          >
+            {showToken ? "Fechar token" : "Configurar token"}
+          </button>
+        ) : null}
       </div>
       <p className="muted api4com-bdr-summary">
         {extensionSummary} · {tokenSummary}
@@ -131,7 +142,7 @@ export function Api4comBdrFields({
         </div>
       ) : null}
 
-      {showToken ? (
+      {allowPersonalToken && showToken ? (
         <div className="field api4com-bdr-panel">
           <label className="label">Token de acesso API4COM</label>
           <TokenInput value={apiToken} onChange={onApiTokenChange} hasApiToken={hasApiToken} />

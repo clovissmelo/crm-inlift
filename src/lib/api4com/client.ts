@@ -21,7 +21,7 @@ export async function api4comStartCall(
   const cfg = await getApi4comConfig();
   if (!apiToken) {
     throw new Error(
-      "Token API4COM ausente. Cadastre em Meu perfil (BDR) ou peça ao admin (Variáveis / cadastro de usuário)."
+      "Token API4COM ausente. No modo por BDR, cadastre em Meu perfil; no modo global, peça ao admin em Admin → API4COM."
     );
   }
 

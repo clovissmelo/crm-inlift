@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Api4comBdrFields } from "@/components/api4com-bdr-fields";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
 import { UserRolePicker } from "@/components/user-role-picker";
+import type { Api4comTokenPolicy } from "@/lib/api4com/token-policy-shared";
 import { ROLE_LABELS, type User, type UserRole } from "@/lib/types";
 
 type UserForm = {
@@ -38,6 +39,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
   const [saving, setSaving] = useState(false);
   const [editingHasApiToken, setEditingHasApiToken] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [api4comTokenPolicy, setApi4comTokenPolicy] = useState<Api4comTokenPolicy>("global");
 
   async function load() {
     setLoading(true);
@@ -49,6 +51,10 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
 
   useEffect(() => {
     void load();
+    void fetch("/api/api4com/token-policy")
+      .then((r) => r.json())
+      .then((d: { policy?: Api4comTokenPolicy }) => setApi4comTokenPolicy(d.policy === "per_bdr" ? "per_bdr" : "global"))
+      .catch(() => null);
   }, []);
 
   function openCreate() {
@@ -98,7 +104,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
       roles: form.roles,
       api4com_extension: form.roles.includes("bdr") ? form.api4com_extension.trim() || null : null
     };
-    if (form.roles.includes("bdr") && form.api4com_api_token.trim()) {
+    if (api4comTokenPolicy === "per_bdr" && form.roles.includes("bdr") && form.api4com_api_token.trim()) {
       payload.api4com_api_token = form.api4com_api_token.trim();
     }
     if (form.password.trim()) payload.password = form.password;
@@ -264,6 +270,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
               apiToken={form.api4com_api_token}
               onApiTokenChange={(v) => setForm((f) => ({ ...f, api4com_api_token: v }))}
               hasApiToken={editingHasApiToken}
+              allowPersonalToken={api4comTokenPolicy === "per_bdr"}
             />
           ) : null}
           <UserRolePicker

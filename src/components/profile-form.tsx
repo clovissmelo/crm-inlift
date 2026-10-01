@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { Api4comTokenPolicy } from "@/lib/api4com/token-policy-shared";
 import { Api4comBdrFields } from "@/components/api4com-bdr-fields";
 import type { User } from "@/lib/types";
 
@@ -20,6 +21,15 @@ export function ProfileForm({ user }: { user: User }) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [api4comTokenPolicy, setApi4comTokenPolicy] = useState<Api4comTokenPolicy>("global");
+
+  useEffect(() => {
+    if (!isBdr) return;
+    void fetch("/api/api4com/token-policy")
+      .then((r) => r.json())
+      .then((d: { policy?: Api4comTokenPolicy }) => setApi4comTokenPolicy(d.policy === "per_bdr" ? "per_bdr" : "global"))
+      .catch(() => null);
+  }, [isBdr]);
 
   function closePasswordSection() {
     setChangingPassword(false);
@@ -53,7 +63,9 @@ export function ProfileForm({ user }: { user: User }) {
     };
     if (isBdr) {
       payload.api4com_extension = api4comExtension.trim() || null;
-      if (api4comApiToken.trim()) payload.api4com_api_token = api4comApiToken.trim();
+      if (api4comTokenPolicy === "per_bdr" && api4comApiToken.trim()) {
+        payload.api4com_api_token = api4comApiToken.trim();
+      }
     }
 
     const res = await fetch("/api/users/me", {
@@ -125,8 +137,9 @@ export function ProfileForm({ user }: { user: User }) {
           apiToken={api4comApiToken}
           onApiTokenChange={setApi4comApiToken}
           hasApiToken={hasApiToken}
-          onClearToken={() => void clearApiToken()}
+          onClearToken={api4comTokenPolicy === "per_bdr" ? () => void clearApiToken() : undefined}
           clearingToken={loading}
+          allowPersonalToken={api4comTokenPolicy === "per_bdr"}
         />
       ) : null}
 

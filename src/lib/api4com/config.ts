@@ -54,7 +54,13 @@ export async function getApi4comConfig(): Promise<Api4comConfig> {
   };
 }
 
-export async function isApi4comConfigured() {
+/** Token global/env disponível (webhook, modo admin). */
+export async function isApi4comIntegrationTokenConfigured() {
   const cfg = await getApi4comConfig();
   return Boolean(cfg.apiToken);
+}
+
+/** @deprecated use isApi4comIntegrationTokenConfigured */
+export async function isApi4comConfigured() {
+  return isApi4comIntegrationTokenConfigured();
 }

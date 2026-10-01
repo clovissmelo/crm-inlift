@@ -1,5 +1,6 @@
 import { get, run } from "@/lib/db";
 import { getApi4comConfig } from "@/lib/api4com/config";
+import { getApi4comTokenPolicy } from "@/lib/api4com/token-policy";
 import type { UserRole } from "@/lib/types";
 
 export async function applyUserApi4comApiToken(
@@ -9,6 +10,11 @@ export async function applyUserApi4comApiToken(
   options?: { clear?: boolean }
 ) {
   if (!roles.includes("bdr")) {
+    await run("UPDATE users SET api4com_api_token = NULL WHERE id = @id", { id: userId });
+    return;
+  }
+  const policy = await getApi4comTokenPolicy();
+  if (policy === "global") {
     await run("UPDATE users SET api4com_api_token = NULL WHERE id = @id", { id: userId });
     return;
   }
@@ -25,6 +31,10 @@ export async function resolveApi4comApiTokenForUser(userId: number): Promise<str
     { id: userId }
   );
   const personal = row?.api4com_api_token?.trim();
+  const policy = await getApi4comTokenPolicy();
+  if (policy === "per_bdr") {
+    return personal || null;
+  }
   if (personal) return personal;
   const cfg = await getApi4comConfig();
   return cfg.apiToken;
