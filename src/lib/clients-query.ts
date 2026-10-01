@@ -3,7 +3,6 @@ import { isMobileBr, phoneDigits } from "@/lib/format";
 import { parseLeadQualification, type LeadQualification } from "@/lib/lead-qualification";
 import type { ClientListItem } from "@/lib/types";
 
-import type { ProspeccaoPrioridadeFilter } from "@/lib/prospeccao-priority";
 
 export type ProspeccaoQueueStatus = "" | "atrasado" | "retorno_hoje" | "novo" | "em_andamento";
 
@@ -20,7 +19,8 @@ export type ClientFilters = {
   created_from?: string;
   created_to?: string;
   queue_status?: ProspeccaoQueueStatus;
-  prioridade?: ProspeccaoPrioridadeFilter | "";
+  /** Slug de prospeccao_priority_types (admin). */
+  prioridade?: string;
   without_approach?: boolean;
   lead_qualification?: LeadQualification | "";
   search?: string;

@@ -797,6 +797,30 @@ table.data-table th {
   background: rgba(34, 197, 94, 0.12);
 }
 
+.prospeccao-queue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.prospeccao-queue-badge--default {
+  border-color: var(--border);
+  color: var(--muted);
+  background: var(--bg-elevated);
+}
+
+.prospeccao-queue-badge__bang {
+  color: #f87171;
+  font-weight: 800;
+}
+
 .lead-qual-picker-wrap {
   display: flex;
   flex-direction: column;

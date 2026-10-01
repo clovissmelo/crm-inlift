@@ -3,6 +3,7 @@ import { normalizeApi4comCalledNumber } from "@/lib/api4com/phone";
 import { getTechnicalResultTypeById } from "@/lib/classifications/technical-result";
 import { getContactOutcomeTypeById } from "@/lib/classifications/contact-commercial";
 import { syncClientPhonesFromContacts } from "@/lib/call-strategy/client-phones";
+import { recordDialRoundTouch } from "@/lib/call-strategy/client-dial-rounds";
 import { evaluateProspeccaoQueueAfterAttempt } from "@/lib/call-strategy/queue-eval";
 import { resolveDialOccurrencePolicy } from "@/lib/call-strategy/occurrence-policy";
 import { applyOccurrenceToPhoneState } from "@/lib/call-strategy/phone-counters";
@@ -141,5 +142,6 @@ export async function recordDialAttemptFromApproach(input: {
   );
 
   await applyOccurrenceToPhoneState(clientPhoneId, policy);
+  await recordDialRoundTouch(input.clientId, clientPhoneId);
   await evaluateProspeccaoQueueAfterAttempt(input.clientId, input.productId);
 }

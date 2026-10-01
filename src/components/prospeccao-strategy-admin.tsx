@@ -5,6 +5,17 @@ import { CadastroModal } from "@/components/cadastro-ui";
 import type { CallStrategySettings } from "@/lib/call-strategy/settings";
 import type { ProspeccaoPriorityTypeRow } from "@/lib/call-strategy/priorities-config";
 import {
+  canDeletePriority,
+  CREATABLE_RULE_KINDS,
+  isFixedQueueAnchor,
+  normalizePrioritySortOrders,
+  parseRuleParams,
+  PROSPECCAO_RULE_KIND_LABELS,
+  ruleKindSummary,
+  sortPrioritiesForDisplay,
+  type CreatableRuleKind
+} from "@/lib/prospeccao-priority-queue-admin";
+import {
   defaultPipelineStageNameForAction,
   isFixedProspeccaoFunnelAction,
   OPERATIONAL_ACTION_LABELS,
@@ -104,6 +115,14 @@ export function ProspeccaoStrategyAdmin() {
     operational_action: OperationalAction;
     pipeline_stage_id: number | null;
     sort_order: number;
+  } | null>(null);
+  const [priorityModal, setPriorityModal] = useState<"new" | number | null>(null);
+  const [priorityForm, setPriorityForm] = useState<{
+    name: string;
+    description: string;
+    color: string;
+    rule_kind: CreatableRuleKind;
+    round: number;
   } | null>(null);
 
   const load = useCallback(async () => {
@@ -217,7 +236,7 @@ export function ProspeccaoStrategyAdmin() {
 
   async function saveAllPriorities() {
     setMsg(null);
-    const sorted = priorities.slice().sort((a, b) => a.sort_order - b.sort_order);
+    const sorted = normalizePrioritySortOrders(priorities);
     const results = await Promise.all(
       sorted.map((row) =>
         fetch("/api/admin/prospeccao-priorities", {
@@ -263,6 +282,90 @@ export function ProspeccaoStrategyAdmin() {
     setMsg("Ordem da fila atualizada.");
   }
 
+  function openNewPriority() {
+    setPriorityModal("new");
+    setPriorityForm({
+      name: "",
+      description: "",
+      color: "#64748b",
+      rule_kind: "dial_round_tier",
+      round: 1
+    });
+  }
+
+  function openEditPriority(row: ProspeccaoPriorityTypeRow) {
+    if (!canDeletePriority(row)) return;
+    const params = parseRuleParams(row.rule_params);
+    const round = typeof params.round === "number" ? params.round : 1;
+    setPriorityModal(row.id);
+    setPriorityForm({
+      name: row.name,
+      description: row.description ?? "",
+      color: row.color.startsWith("#") ? row.color : "#64748b",
+      rule_kind: (CREATABLE_RULE_KINDS.includes(row.rule_kind as CreatableRuleKind)
+        ? row.rule_kind
+        : "dial_round_tier") as CreatableRuleKind,
+      round
+    });
+  }
+
+  async function savePriorityModal() {
+    if (!priorityForm) return;
+    setMsg(null);
+    const rule_params =
+      priorityForm.rule_kind === "dial_round_tier" ? { round: priorityForm.round } : undefined;
+    const payload = {
+      name: priorityForm.name,
+      description: priorityForm.description.trim() || null,
+      color: priorityForm.color,
+      rule_kind: priorityForm.rule_kind,
+      rule_params
+    };
+
+    if (priorityModal === "new") {
+      const res = await fetch("/api/admin/prospeccao-priorities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const j = (await res.json()) as { error?: string };
+        setMsg(j.error ?? "Erro ao criar prioridade");
+        return;
+      }
+    } else if (typeof priorityModal === "number") {
+      const res = await fetch("/api/admin/prospeccao-priorities", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: priorityModal, ...payload })
+      });
+      if (!res.ok) {
+        const j = (await res.json()) as { error?: string };
+        setMsg(j.error ?? "Erro ao salvar prioridade");
+        return;
+      }
+    }
+
+    setPriorityModal(null);
+    setPriorityForm(null);
+    await load();
+    setMsg(priorityModal === "new" ? "Prioridade criada." : "Prioridade atualizada.");
+  }
+
+  async function deletePriority(row: ProspeccaoPriorityTypeRow) {
+    if (!canDeletePriority(row)) return;
+    if (!window.confirm(`Excluir a prioridade “${row.name}”?`)) return;
+    setMsg(null);
+    const res = await fetch(`/api/admin/prospeccao-priorities/${row.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const j = (await res.json()) as { error?: string };
+      setMsg(j.error ?? "Erro ao excluir");
+      return;
+    }
+    await load();
+    setMsg("Prioridade excluída.");
+  }
+
   const sortedRules = useMemo(
     () =>
       rules.slice().sort((a, b) => {
@@ -272,10 +375,7 @@ export function ProspeccaoStrategyAdmin() {
     [rules]
   );
 
-  const sortedPriorities = useMemo(
-    () => priorities.slice().sort((a, b) => a.sort_order - b.sort_order),
-    [priorities]
-  );
+  const sortedPriorities = useMemo(() => sortPrioritiesForDisplay(priorities), [priorities]);
 
   if (loading) return <p className="muted">Carregando…</p>;
 
@@ -552,82 +652,128 @@ export function ProspeccaoStrategyAdmin() {
       {tab === "queue" ? (
         <div>
           <p className="muted prospeccao-admin__intro">
-            A ordem abaixo controla a consulta da fila de prospecção. Retornos com data/hora futura só entram quando
-            vencerem.
+            Primeiro contato fica sempre na ordem 1 e Retorno sempre por último. Entre
+            eles você define quantas faixas quiser (ex.: ligação 1, 2, 3, acompanhamento). Retornos com data/hora futura
+            só entram na fila quando vencerem.
           </p>
 
           <div className="prospeccao-queue-list">
-            {sortedPriorities.map((p) => {
+            {sortedPriorities.map((p, index) => {
               const color = p.color.startsWith("#") ? p.color : "#64748b";
+              const fixed = isFixedQueueAnchor(p);
+              const showMiddleHeader =
+                p.queue_anchor === "none" &&
+                (index === 0 || sortedPriorities[index - 1]?.queue_anchor !== "none");
+              const showEndHeader = p.queue_anchor === "end";
               return (
-                <div key={p.id} className="prospeccao-queue-row">
-                  <div className="prospeccao-queue-row__order">
-                    <span className="prospeccao-queue-row__label">Ordem</span>
-                    <input
-                      className="input"
-                      type="number"
-                      value={p.sort_order}
-                      onChange={(e) =>
-                        setPriorities((rows) =>
-                          rows.map((r) =>
-                            r.id === p.id ? { ...r, sort_order: Number(e.target.value) } : r
-                          )
-                        )
-                      }
-                    />
-                  </div>
-                  <div>
-                    <span className="prospeccao-queue-row__label">Cor</span>
-                    <div className="prospeccao-color-picker">
-                      <span className="prospeccao-color-picker__swatch" style={{ background: color }} aria-hidden />
+                <div key={p.id}>
+                  {showMiddleHeader ? (
+                    <p className="prospeccao-queue-section-title">Prioridades configuráveis</p>
+                  ) : null}
+                  {showEndHeader ? <p className="prospeccao-queue-section-title">Fixo — fim da fila</p> : null}
+                  {p.queue_anchor === "start" ? (
+                    <p className="prospeccao-queue-section-title">Fixo — início da fila</p>
+                  ) : null}
+                  <div
+                    className={
+                      fixed ? "prospeccao-queue-row prospeccao-queue-row--fixed" : "prospeccao-queue-row"
+                    }
+                  >
+                    <div className="prospeccao-queue-row__order">
+                      <span className="prospeccao-queue-row__label">Ordem</span>
+                      {fixed ? (
+                        <span className="prospeccao-queue-row__order-fixed">
+                          {p.queue_anchor === "start" ? "1" : "Última"}
+                        </span>
+                      ) : (
+                        <input
+                          className="input"
+                          type="number"
+                          value={p.sort_order}
+                          onChange={(e) =>
+                            setPriorities((rows) =>
+                              rows.map((r) =>
+                                r.id === p.id ? { ...r, sort_order: Number(e.target.value) } : r
+                              )
+                            )
+                          }
+                        />
+                      )}
+                    </div>
+                    <div>
+                      <span className="prospeccao-queue-row__label">Cor</span>
+                      <div className="prospeccao-color-picker">
+                        <span
+                          className="prospeccao-color-picker__swatch"
+                          style={{ background: color }}
+                          aria-hidden
+                        />
+                        <input
+                          type="color"
+                          value={color}
+                          aria-label={`Cor de ${p.name}`}
+                          onChange={(e) =>
+                            setPriorities((rows) =>
+                              rows.map((r) => (r.id === p.id ? { ...r, color: e.target.value } : r))
+                            )
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="prospeccao-queue-row__label">Nome</span>
                       <input
-                        type="color"
-                        value={color}
-                        aria-label={`Cor de ${p.name}`}
+                        className="input"
+                        value={p.name}
                         onChange={(e) =>
                           setPriorities((rows) =>
-                            rows.map((r) => (r.id === p.id ? { ...r, color: e.target.value } : r))
+                            rows.map((r) => (r.id === p.id ? { ...r, name: e.target.value } : r))
+                          )
+                        }
+                      />
+                      <span className="prospeccao-queue-preview">
+                        <span className="prospeccao-queue-preview__dot" style={{ background: color }} />
+                        Prévia na fila
+                      </span>
+                      <span className="prospeccao-queue-row__rule muted">{ruleKindSummary(p)}</span>
+                    </div>
+                    <div className="prospeccao-queue-row__desc">
+                      <span className="prospeccao-queue-row__label">Descrição</span>
+                      <textarea
+                        className="textarea"
+                        rows={2}
+                        value={p.description ?? ""}
+                        placeholder="Quando este grupo aparece na fila…"
+                        onChange={(e) =>
+                          setPriorities((rows) =>
+                            rows.map((r) =>
+                              r.id === p.id ? { ...r, description: e.target.value || null } : r
+                            )
                           )
                         }
                       />
                     </div>
-                  </div>
-                  <div>
-                    <span className="prospeccao-queue-row__label">Nome</span>
-                    <input
-                      className="input"
-                      value={p.name}
-                      onChange={(e) =>
-                        setPriorities((rows) =>
-                          rows.map((r) => (r.id === p.id ? { ...r, name: e.target.value } : r))
-                        )
-                      }
-                    />
-                    <span className="prospeccao-queue-preview">
-                      <span className="prospeccao-queue-preview__dot" style={{ background: color }} />
-                      Prévia na fila
-                    </span>
-                  </div>
-                  <div className="prospeccao-queue-row__desc">
-                    <span className="prospeccao-queue-row__label">Descrição</span>
-                    <textarea
-                      className="textarea"
-                      rows={2}
-                      value={p.description ?? ""}
-                      placeholder="Quando este grupo aparece na fila…"
-                      onChange={(e) =>
-                        setPriorities((rows) =>
-                          rows.map((r) =>
-                            r.id === p.id ? { ...r, description: e.target.value || null } : r
-                          )
-                        )
-                      }
-                    />
-                  </div>
-                  <div className="prospeccao-queue-row__actions">
-                    <button type="button" className="btn btn-sm" onClick={() => void savePriority(p)}>
-                      Salvar
-                    </button>
+                    <div className="prospeccao-queue-row__actions">
+                      {canDeletePriority(p) ? (
+                        <>
+                          <button type="button" className="btn btn-sm" onClick={() => openEditPriority(p)}>
+                            Editar regra
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-danger"
+                            onClick={() => void deletePriority(p)}
+                          >
+                            Excluir
+                          </button>
+                        </>
+                      ) : fixed ? (
+                        <span className="prospeccao-badge prospeccao-badge--system">Fixo</span>
+                      ) : null}
+                      <button type="button" className="btn btn-sm btn-primary" onClick={() => void savePriority(p)}>
+                        Salvar
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -635,10 +781,105 @@ export function ProspeccaoStrategyAdmin() {
           </div>
 
           <div className="prospeccao-admin__footer-actions">
+            <button type="button" className="btn" onClick={openNewPriority}>
+              Nova prioridade
+            </button>
             <button type="button" className="btn btn-primary" onClick={() => void saveAllPriorities()}>
               Salvar todas as prioridades
             </button>
           </div>
+
+          <CadastroModal
+            open={priorityForm != null}
+            title={priorityModal === "new" ? "Nova prioridade na fila" : "Editar prioridade"}
+            onClose={() => {
+              setPriorityModal(null);
+              setPriorityForm(null);
+            }}
+          >
+            {priorityForm ? (
+              <>
+                <div className="field">
+                  <label className="label">Nome na fila</label>
+                  <input
+                    className="input"
+                    value={priorityForm.name}
+                    onChange={(e) => setPriorityForm((f) => (f ? { ...f, name: e.target.value } : f))}
+                  />
+                </div>
+                <div className="field">
+                  <label className="label">Critério</label>
+                  <select
+                    className="input select"
+                    value={priorityForm.rule_kind}
+                    onChange={(e) =>
+                      setPriorityForm((f) =>
+                        f ? { ...f, rule_kind: e.target.value as CreatableRuleKind } : f
+                      )
+                    }
+                  >
+                    {CREATABLE_RULE_KINDS.map((k) => (
+                      <option key={k} value={k}>
+                        {PROSPECCAO_RULE_KIND_LABELS[k]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {priorityForm.rule_kind === "dial_round_tier" ? (
+                  <div className="field">
+                    <label className="label">Rodada / ligação nº</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={priorityForm.round}
+                      onChange={(e) =>
+                        setPriorityForm((f) => (f ? { ...f, round: Number(e.target.value) } : f))
+                      }
+                    />
+                    <p className="muted" style={{ marginTop: "0.35rem", fontSize: "0.8125rem" }}>
+                      Conta quando o BDR percorreu todos os números ativos naquela rodada.
+                    </p>
+                  </div>
+                ) : null}
+                <div className="field">
+                  <label className="label">Cor</label>
+                  <input
+                    type="color"
+                    value={priorityForm.color}
+                    onChange={(e) => setPriorityForm((f) => (f ? { ...f, color: e.target.value } : f))}
+                  />
+                </div>
+                <div className="field">
+                  <label className="label">Descrição</label>
+                  <textarea
+                    className="textarea"
+                    rows={2}
+                    value={priorityForm.description}
+                    onChange={(e) =>
+                      setPriorityForm((f) => (f ? { ...f, description: e.target.value } : f))
+                    }
+                  />
+                </div>
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "0.5rem" }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setPriorityModal(null);
+                      setPriorityForm(null);
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button type="button" className="btn btn-primary" onClick={() => void savePriorityModal()}>
+                    Salvar
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </CadastroModal>
         </div>
       ) : null}
     </div>

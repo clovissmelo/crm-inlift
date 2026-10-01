@@ -1,17 +1,35 @@
-import type { ProspeccaoPrioridadeLabel } from "@/lib/prospeccao-priority";
+export function ProspeccaoPriorityBadge({
+  label,
+  color,
+  overdueAlert
+}: {
+  label: string | null;
+  color?: string | null;
+  overdueAlert?: boolean;
+}) {
+  const text = label?.trim() || "—";
+  const bg = color?.startsWith("#") ? color : null;
 
-export function ProspeccaoPriorityBadge({ label }: { label: ProspeccaoPrioridadeLabel | string | null }) {
-  if (label === "Reagendar") {
-    return <span className="badge badge-overdue">Reagendar</span>;
+  if (bg) {
+    return (
+      <span
+        className="prospeccao-queue-badge"
+        style={{
+          background: `${bg}22`,
+          color: bg,
+          borderColor: `${bg}55`
+        }}
+      >
+        {overdueAlert ? <span className="prospeccao-queue-badge__bang">!</span> : null}
+        {text}
+      </span>
+    );
   }
-  if (label === "Retorno") {
-    return <span className="badge badge-today">Retorno</span>;
-  }
-  if (label === "Acompanhamento") {
-    return <span className="badge badge-acompanhamento">Acompanhamento</span>;
-  }
-  if (label === "Primeiro contato") {
-    return <span className="badge badge-primeiro-contato">Primeiro contato</span>;
-  }
-  return <span className="badge badge-primeiro-contato">Primeiro contato</span>;
+
+  return (
+    <span className="prospeccao-queue-badge prospeccao-queue-badge--default">
+      {overdueAlert ? <span className="prospeccao-queue-badge__bang">!</span> : null}
+      {text}
+    </span>
+  );
 }

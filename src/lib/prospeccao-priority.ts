@@ -1,4 +1,14 @@
-/** Ordem fixa na lista e no filtro de prioridade */
+import type { ProspeccaoPriorityTypeRow } from "@/lib/call-strategy/priorities-config";
+import { sortPrioritiesForDisplay } from "@/lib/prospeccao-priority-queue-admin";
+
+/** Opções de filtro alinhadas ao admin (slug → nome). */
+export function buildProspeccaoPriorityFilterOptions(
+  types: ProspeccaoPriorityTypeRow[]
+): Array<{ slug: string; name: string }> {
+  return sortPrioritiesForDisplay(types).map((t) => ({ slug: t.slug, name: t.name }));
+}
+
+/** @deprecated use slugs dinâmicos do admin */
 export const PROSPECCAO_PRIORIDADE_FILTER_ORDER = [
   "reagendar",
   "retorno",

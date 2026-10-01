@@ -6,7 +6,12 @@ import { matchesPhoneFilter } from "@/lib/clients-query";
 import type { ClientFilters } from "@/lib/clients-query";
 import { CONTACT_PRIMARY_ORDER_SQL } from "@/lib/contacts";
 import { parseLeadQualification } from "@/lib/lead-qualification";
-import { listProspeccaoPriorityTypes, queuePriorityToSlug } from "@/lib/call-strategy/priorities-config";
+import { listProspeccaoPriorityTypes } from "@/lib/call-strategy/priorities-config";
+import {
+  compareResolvedQueuePriority,
+  resolveQueuePriorityForClient,
+  type ResolvedQueuePriority
+} from "@/lib/call-strategy/resolve-queue-priority";
 
 type RawRow = {
   id: number;
@@ -29,9 +34,11 @@ type RawRow = {
   has_verified: boolean;
   product_ids: number[] | null;
   has_approach: boolean;
-  queue_priority: number;
-  queue_label: string | null;
-  next_follow_up_at: string | null;
+  completed_dial_rounds: number;
+  dial_attempt_count: number;
+  phone_count: number;
+  pending_return_at: string | null;
+  return_overdue: boolean;
   prospeccao_phone_summary: string | null;
 };
 
@@ -101,31 +108,6 @@ function buildFilters(filters: ClientFilters, todayStart: string, todayEnd: stri
     `);
     params.companyId = filters.company_id;
   }
-  if (filters.prioridade === "reagendar") {
-    where.push(`
-      EXISTS (
-        SELECT 1 FROM follow_ups fu
-        WHERE fu.client_id = clients.id AND fu.status = 'pending' AND fu.scheduled_at < @todayStart
-      )
-    `);
-  } else if (filters.prioridade === "retorno") {
-    where.push(`
-      EXISTS (
-        SELECT 1 FROM follow_ups fu
-        WHERE fu.client_id = clients.id AND fu.status = 'pending' AND fu.scheduled_at >= @todayStart
-      )
-    `);
-  } else if (filters.prioridade === "acompanhamento") {
-    where.push(`
-      NOT EXISTS (SELECT 1 FROM follow_ups fu WHERE fu.client_id = clients.id AND fu.status = 'pending')
-      AND EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = clients.id)
-    `);
-  } else if (filters.prioridade === "primeiro_contato") {
-    where.push(`
-      NOT EXISTS (SELECT 1 FROM follow_ups fu WHERE fu.client_id = clients.id AND fu.status = 'pending')
-      AND NOT EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = clients.id)
-    `);
-  }
   if (filters.search) {
     where.push(`(clients.trade_name ILIKE @search OR clients.legal_name ILIKE @search OR clients.cnpj ILIKE @search)`);
     params.search = `%${filters.search}%`;
@@ -155,15 +137,23 @@ function buildFilters(filters: ClientFilters, todayStart: string, todayEnd: stri
 }
 
 export type ProspeccaoListItem = ClientListItem & {
-  queue_priority: number;
+  queue_slug: string;
   queue_label: string | null;
+  queue_color: string | null;
+  queue_overdue_alert: boolean;
+  queue_sort_order: number;
+  /** @deprecated use queue_sort_order */
+  queue_priority: number;
   prospeccao_phone_summary: string | null;
   primary_phone: string | null;
   primary_whatsapp: string | null;
   primary_email: string | null;
   primary_contact_name: string | null;
   primary_contact_id: number | null;
+  next_follow_up_at: string | null;
 };
+
+type EnrichedRow = RawRow & { resolved: ResolvedQueuePriority; next_follow_up_at: string | null };
 
 export async function queryProspeccaoQueue(filters: ClientFilters) {
   const todayStart = spDayStartUtcIso();
@@ -171,7 +161,6 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
   const nowIso = new Date().toISOString();
   const { where, params } = buildFilters(filters, todayStart, todayEnd, nowIso);
   const priorityTypes = await listProspeccaoPriorityTypes();
-  const sortOrderBySlug = new Map(priorityTypes.map((p) => [p.slug, p.sort_order]));
 
   const limit = filters.limit ?? 50;
   const offset = filters.offset ?? 0;
@@ -181,12 +170,7 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
       WITH pending_fu AS (
         SELECT DISTINCT ON (client_id)
           client_id,
-          scheduled_at,
-          CASE
-            WHEN scheduled_at < @todayStart THEN 0
-            WHEN scheduled_at <= @nowIso THEN 1
-            ELSE 99
-          END AS fu_priority
+          scheduled_at
         FROM follow_ups
         WHERE status = 'pending' AND scheduled_at <= @nowIso
         ORDER BY client_id, scheduled_at ASC
@@ -229,20 +213,15 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
         bool_or(contacts.verification_status = 'confirmed') AS has_verified,
         array_agg(DISTINCT cp.product_id) FILTER (WHERE cp.product_id IS NOT NULL) AS product_ids,
         EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = clients.id) AS has_approach,
-        COALESCE(
-          pending_fu.fu_priority,
-          CASE
-            WHEN EXISTS (SELECT 1 FROM approaches a2 WHERE a2.client_id = clients.id) THEN 2
-            ELSE 3
-          END
-        ) AS queue_priority,
-        CASE
-          WHEN pending_fu.fu_priority = 0 THEN 'Reagendar'
-          WHEN pending_fu.fu_priority = 1 THEN 'Retorno'
-          WHEN EXISTS (SELECT 1 FROM approaches a2 WHERE a2.client_id = clients.id) THEN 'Acompanhamento'
-          ELSE 'Primeiro contato'
-        END AS queue_label,
-        pending_fu.scheduled_at AS next_follow_up_at,
+        COALESCE(clients.prospeccao_completed_dial_rounds, 0) AS completed_dial_rounds,
+        (
+          SELECT COUNT(*)::int FROM phone_dial_attempts pda WHERE pda.client_id = clients.id
+        ) AS dial_attempt_count,
+        (
+          SELECT COUNT(*)::int FROM client_phones cph WHERE cph.client_id = clients.id
+        ) AS phone_count,
+        pending_fu.scheduled_at AS pending_return_at,
+        (pending_fu.scheduled_at IS NOT NULL AND pending_fu.scheduled_at < @todayStart) AS return_overdue,
         clients.prospeccao_phone_summary
       FROM clients
       LEFT JOIN users bdr ON bdr.id = clients.bdr_user_id
@@ -250,28 +229,62 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
       LEFT JOIN client_products cp ON cp.client_id = clients.id
       LEFT JOIN pending_fu ON pending_fu.client_id = clients.id
       WHERE ${where}
-      GROUP BY clients.id, bdr.name, pending_fu.fu_priority, pending_fu.scheduled_at, clients.prospeccao_phone_summary
-      ORDER BY queue_priority ASC, pending_fu.scheduled_at ASC NULLS LAST,
-        COALESCE(clients.trade_name, clients.legal_name, clients.id::text)
-      LIMIT ${limit} OFFSET ${offset}
+      GROUP BY clients.id, bdr.name, pending_fu.scheduled_at, clients.prospeccao_phone_summary,
+        clients.prospeccao_completed_dial_rounds
     `,
     params
   );
 
-  rows.sort((a, b) => {
-    const oa = sortOrderBySlug.get(queuePriorityToSlug(a.queue_priority)) ?? a.queue_priority * 100;
-    const ob = sortOrderBySlug.get(queuePriorityToSlug(b.queue_priority)) ?? b.queue_priority * 100;
-    if (oa !== ob) return oa - ob;
-    const ta = a.next_follow_up_at ? new Date(a.next_follow_up_at).getTime() : Number.MAX_SAFE_INTEGER;
-    const tb = b.next_follow_up_at ? new Date(b.next_follow_up_at).getTime() : Number.MAX_SAFE_INTEGER;
-    if (ta !== tb) return ta - tb;
-    const na = (a.trade_name ?? a.legal_name ?? String(a.id)).localeCompare(
-      b.trade_name ?? b.legal_name ?? String(b.id)
+  const enriched: EnrichedRow[] = rows.map((row) => {
+    const phoneKinds = classifyPhones(row.phones, row.whatsapps);
+    const resolved = resolveQueuePriorityForClient(
+      {
+        hasApproach: row.has_approach,
+        hasPhones: row.phone_count > 0 || phoneKinds.hasMobile || phoneKinds.hasLandline,
+        hasAnyDialAttempt: row.dial_attempt_count > 0,
+        completedDialRounds: row.completed_dial_rounds,
+        pendingReturnAt: row.pending_return_at,
+        returnOverdue: row.return_overdue
+      },
+      priorityTypes
     );
-    return na;
+    return {
+      ...row,
+      resolved,
+      next_follow_up_at: row.pending_return_at
+    };
   });
 
-  const items: ProspeccaoListItem[] = rows.map((row) => {
+  let filtered = enriched;
+  if (filters.prioridade) {
+    filtered = filtered.filter((r) => r.resolved.slug === filters.prioridade);
+  }
+  if (filters.phone_availability) {
+    filtered = filtered.filter((row) => {
+      const { hasMobile, hasLandline } = classifyPhones(row.phones, row.whatsapps);
+      return matchesPhoneFilter(
+        { has_mobile: hasMobile, has_landline: hasLandline } as ClientListItem,
+        filters.phone_availability
+      );
+    });
+  }
+
+  filtered.sort((a, b) => {
+    const cmp = compareResolvedQueuePriority(
+      a.resolved,
+      b.resolved,
+      a.next_follow_up_at,
+      b.next_follow_up_at
+    );
+    if (cmp !== 0) return cmp;
+    return (a.trade_name ?? a.legal_name ?? String(a.id)).localeCompare(
+      b.trade_name ?? b.legal_name ?? String(b.id)
+    );
+  });
+
+  const page = filtered.slice(offset, offset + limit);
+
+  const items: ProspeccaoListItem[] = page.map((row) => {
     const { hasMobile, hasLandline } = classifyPhones(row.phones, row.whatsapps);
     return {
       id: row.id,
@@ -289,27 +302,21 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
       has_verified_phone: row.has_verified,
       product_ids: row.product_ids ?? [],
       has_approach: row.has_approach,
-      queue_priority: row.queue_priority,
-      queue_label: row.queue_label,
+      queue_slug: row.resolved.slug,
+      queue_label: row.resolved.name,
+      queue_color: row.resolved.color,
+      queue_overdue_alert: row.resolved.overdueAlert,
+      queue_sort_order: row.resolved.effectiveSortOrder,
+      queue_priority: row.resolved.effectiveSortOrder,
       prospeccao_phone_summary: row.prospeccao_phone_summary,
       primary_phone: row.primary_phone,
       primary_whatsapp: row.primary_whatsapp,
       primary_email: row.primary_email,
       primary_contact_name: row.primary_contact_name,
-      primary_contact_id: row.primary_contact_id
+      primary_contact_id: row.primary_contact_id,
+      next_follow_up_at: row.next_follow_up_at
     };
   });
 
-  const filtered = items.filter((item) => matchesPhoneFilter(item, filters.phone_availability));
-
-  const countRow = await all<{ count: string }>(
-    `
-      SELECT COUNT(DISTINCT clients.id)::text AS count
-      FROM clients
-      WHERE ${where}
-    `,
-    params
-  );
-
-  return { items: filtered, total: Number(countRow[0]?.count ?? 0) };
+  return { items, total: filtered.length };
 }

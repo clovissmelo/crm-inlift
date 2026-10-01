@@ -6,10 +6,6 @@ import { ClientContactShortcuts } from "@/components/client-contact-shortcuts";
 import { ProspeccaoPriorityBadge } from "@/components/prospeccao-priority-badge";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
 import { PageIntro } from "@/components/page-intro";
-import {
-  PROSPECCAO_PRIORIDADE_FILTER_ORDER,
-  PROSPECCAO_PRIORIDADE_LABELS
-} from "@/lib/prospeccao-priority";
 import type { Company, Product, User } from "@/lib/types";
 import type { ProspeccaoListItem } from "@/lib/prospeccao-query";
 
@@ -18,13 +14,15 @@ export function ProspeccaoListView({
   initialTotal,
   products,
   bdrs,
-  companies
+  companies,
+  priorityFilters
 }: {
   initialItems: ProspeccaoListItem[];
   initialTotal: number;
   products: Product[];
   bdrs: User[];
   companies: Company[];
+  priorityFilters: Array<{ slug: string; name: string }>;
 }) {
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
@@ -90,9 +88,9 @@ export function ProspeccaoListView({
         />
         <FilterSelect label="Prioridade" value={filters.prioridade} onChange={(e) => updateFilter({ prioridade: e.target.value })}>
           <option value="">Todas</option>
-          {PROSPECCAO_PRIORIDADE_FILTER_ORDER.map((key) => (
-            <option key={key} value={key}>
-              {PROSPECCAO_PRIORIDADE_LABELS[key]}
+          {priorityFilters.map((p) => (
+            <option key={p.slug} value={p.slug}>
+              {p.name}
             </option>
           ))}
         </FilterSelect>
@@ -149,7 +147,11 @@ export function ProspeccaoListView({
               return (
                 <tr key={item.id}>
                   <td>
-                    <ProspeccaoPriorityBadge label={item.queue_label} />
+                    <ProspeccaoPriorityBadge
+                      label={item.queue_label}
+                      color={item.queue_color}
+                      overdueAlert={item.queue_overdue_alert}
+                    />
                   </td>
                   <td>
                     <Link href={`/clientes/${item.id}`}>{displayName}</Link>
