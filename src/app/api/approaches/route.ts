@@ -4,6 +4,9 @@ import { getContactOutcomeTypeById } from "@/lib/classifications/contact-commerc
 import { getTechnicalResultTypeById } from "@/lib/classifications/technical-result";
 import { associationOverrides, mergeRegistrationRules } from "@/lib/classifications/registration-rules";
 import { getActiveAssociationForPair } from "@/lib/classifications/result-associations";
+import { getAttendanceRuleByCommercialTypeId } from "@/lib/attendance/rules-repo";
+import { enforceRulesForAction } from "@/lib/attendance/operational-actions";
+import { exitProspeccaoForProduct } from "@/lib/client-product-prospeccao";
 import { validateThreeLayerApproach } from "@/lib/classifications/validate-approach-registration";
 import { moveOpportunityStage } from "@/lib/opportunity-pipeline";
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
@@ -68,7 +71,15 @@ export async function POST(request: Request) {
     technicalTypeId != null
       ? await getActiveAssociationForPair(technicalTypeId, data.result_type_id)
       : null;
-  const effectiveRules = mergeRegistrationRules(resultType, associationOverrides(associationRow));
+  const attendanceRule = await getAttendanceRuleByCommercialTypeId(data.result_type_id);
+  const enforced = attendanceRule
+    ? enforceRulesForAction(attendanceRule.operational_action)
+    : null;
+  const effectiveRules = enforced
+    ? { ...mergeRegistrationRules(resultType, associationOverrides(associationRow)), ...enforced }
+    : mergeRegistrationRules(resultType, associationOverrides(associationRow));
+  const pipelineStageId =
+    attendanceRule?.pipeline_stage_id ?? associationRow?.pipeline_stage_id ?? null;
 
   const layerErr = await validateThreeLayerApproach({
     channel: data.channel,
@@ -185,7 +196,17 @@ export async function POST(request: Request) {
         contactOutcomeTypeId: data.contact_outcome_type_id
       });
 
-      if (data.next_action.type === "close") {
+      if (enforced?.exit_prospeccao_product && data.product_id) {
+        const reason =
+          attendanceRule?.operational_action === "reuniao_agendada"
+            ? "reuniao_agendada"
+            : attendanceRule?.operational_action === "sem_interesse"
+              ? "sem_interesse"
+              : "commercial_close";
+        await exitProspeccaoForProduct(data.client_id, data.product_id, reason);
+      } else if (data.next_action.type === "close" && data.product_id) {
+        await exitProspeccaoForProduct(data.client_id, data.product_id, "commercial_close");
+      } else if (data.next_action.type === "close") {
         await exitProspeccaoCommercial(data.client_id, "commercial_close");
       }
     }
@@ -194,11 +215,7 @@ export async function POST(request: Request) {
       await markLeadContactPhoneVerified(data.client_id, data.contact_id);
     }
 
-    if (
-      registrationStatus === "final" &&
-      associationRow?.pipeline_stage_id &&
-      data.product_id
-    ) {
+    if (registrationStatus === "final" && pipelineStageId && data.product_id) {
       const opp = await get<{ id: number; row_version: number }>(
         `
           SELECT id, row_version FROM opportunities
@@ -211,10 +228,15 @@ export async function POST(request: Request) {
         try {
           await moveOpportunityStage({
             opportunity_id: opp.id,
-            to_stage_id: associationRow.pipeline_stage_id,
+            to_stage_id: pipelineStageId,
             user_id: user.id,
             expected_version: opp.row_version,
-            notes: "Movimentação automática pelo resultado do atendimento."
+            lost_reason_id:
+              data.next_action.type === "close" ? data.next_action.reason_id : undefined,
+            lost_notes: enforced?.move_pipeline_lost ? data.notes ?? null : undefined,
+            notes: enforced?.move_pipeline_lost
+              ? "Perda registrada pelo resultado do atendimento."
+              : "Movimentação automática pelo resultado do atendimento."
           });
         } catch {
           /* não bloqueia registro se funil não puder mover */

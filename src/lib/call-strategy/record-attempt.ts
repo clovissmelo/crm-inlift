@@ -106,7 +106,7 @@ export async function recordDialAttemptFromApproach(input: {
     phoneDialed
   });
   if (!clientPhoneId) {
-    await evaluateProspeccaoQueueAfterAttempt(input.clientId);
+    await evaluateProspeccaoQueueAfterAttempt(input.clientId, input.productId);
     return;
   }
 
@@ -141,5 +141,5 @@ export async function recordDialAttemptFromApproach(input: {
   );
 
   await applyOccurrenceToPhoneState(clientPhoneId, policy);
-  await evaluateProspeccaoQueueAfterAttempt(input.clientId);
+  await evaluateProspeccaoQueueAfterAttempt(input.clientId, input.productId);
 }

@@ -18,6 +18,10 @@ import {
   mergeRegistrationRules,
   type AssociationRulePayload
 } from "@/lib/classifications/registration-rules";
+import {
+  enforceRulesForAction,
+  type OperationalAction
+} from "@/lib/attendance/operational-actions";
 import type { TechnicalResultTypeRow } from "@/lib/classifications/technical-result-match";
 import { formatCallScriptLogForNotes, normalizeCallScriptLog } from "@/lib/call-script-log";
 import { ApproachNextStepField } from "@/components/approach-next-step-field";
@@ -63,6 +67,14 @@ type ResultType = {
   ask_decision_maker?: boolean;
   mark_phone_verified?: boolean;
   allowed_next_actions?: unknown;
+  requires_meeting?: boolean;
+};
+
+type AttendanceRuleLite = {
+  id: number;
+  answered: boolean;
+  operational_action: OperationalAction;
+  commercial_result_type_id: number | null;
 };
 
 type ClosureReason = { id: number; name: string; kind: "pause" | "close" };
@@ -163,6 +175,7 @@ export function Api4comCallResultForm({
   const [contactTypes, setContactTypes] = useState<ContactOutcomeOption[]>([]);
   const [compatMap, setCompatMap] = useState<Record<string, number[]>>({});
   const [associations, setAssociations] = useState<AssociationRulePayload[]>([]);
+  const [attendanceRules, setAttendanceRules] = useState<AttendanceRuleLite[]>([]);
   const [technicalTypeId, setTechnicalTypeId] = useState<number | null>(null);
   const [contactOutcomeId, setContactOutcomeId] = useState("");
   const [, setTechnicalSlug] = useState<string | null>(null);
@@ -224,12 +237,19 @@ export function Api4comCallResultForm({
     setError(null);
     setContextLoading(true);
     try {
-      const [ctxRes, classRes, basicRes, crRes] = await Promise.all([
+      const [ctxRes, classRes, basicRes, crRes, attRes] = await Promise.all([
         fetch(`/api/api4com/calls/${callId}/dial-context`),
         fetch("/api/approach-classifications"),
         fetch(`/api/api4com/calls/${callId}`),
-        fetch("/api/closure-reason-types")
+        fetch("/api/closure-reason-types"),
+        fetch("/api/attendance-rules")
       ]);
+      if (attRes.ok) {
+        const att = (await attRes.json()) as { items?: AttendanceRuleLite[] };
+        setAttendanceRules(att.items ?? []);
+      } else {
+        setAttendanceRules([]);
+      }
       if (crRes.ok) {
         const cr = (await crRes.json()) as { items?: ClosureReason[] };
         setClosureReasons(cr.items ?? []);
@@ -368,8 +388,52 @@ export function Api4comCallResultForm({
     );
   }, [associations, technicalTypeId, resultTypeId]);
 
+  const attendanceByCommercialId = useMemo(() => {
+    const m = new Map<number, AttendanceRuleLite>();
+    for (const r of attendanceRules) {
+      if (r.commercial_result_type_id != null) m.set(r.commercial_result_type_id, r);
+    }
+    return m;
+  }, [attendanceRules]);
+
+  const callWasAnswered = useMemo(() => {
+    if (call?.answered_at) return true;
+    const slug = call?.technical_slug;
+    if (slug === "answered") return true;
+    if (slug === "no_answer" || slug === "busy" || slug === "invalid_number" || slug === "call_failed") {
+      return false;
+    }
+    return (call?.duration_seconds ?? 0) > 0;
+  }, [call?.answered_at, call?.technical_slug, call?.duration_seconds]);
+
+  const bdrResultTypes = useMemo(() => {
+    if (attendanceRules.length === 0) return resultTypes;
+    const allowed = new Set(
+      attendanceRules
+        .filter((r) => r.answered && r.operational_action !== "auto_no_contact")
+        .map((r) => r.commercial_result_type_id)
+        .filter((id): id is number => id != null)
+    );
+    if (allowed.size === 0) return resultTypes;
+    return resultTypes.filter((r) => allowed.has(r.id));
+  }, [resultTypes, attendanceRules]);
+
   const selectedResult = useMemo(() => {
     if (!selectedResultBase) return undefined;
+    const rule = attendanceByCommercialId.get(selectedResultBase.id);
+    if (rule) {
+      const enforced = enforceRulesForAction(rule.operational_action);
+      return {
+        ...selectedResultBase,
+        collect_notes: enforced.collect_notes,
+        require_schedule_return: enforced.require_schedule_return,
+        require_final_registration: enforced.require_final_registration,
+        ask_decision_maker: enforced.ask_decision_maker,
+        mark_phone_verified: enforced.mark_phone_verified,
+        requires_meeting: enforced.requires_meeting,
+        allowed_next_actions: enforced.allowed_next_actions
+      };
+    }
     const merged = mergeRegistrationRules(selectedResultBase, associationOverrides(activeAssociation));
     return {
       ...selectedResultBase,
@@ -379,7 +443,7 @@ export function Api4comCallResultForm({
       ask_decision_maker: merged.ask_decision_maker,
       allowed_next_actions: merged.allowed_next_actions
     };
-  }, [selectedResultBase, activeAssociation]);
+  }, [selectedResultBase, activeAssociation, attendanceByCommercialId]);
 
   useEffect(() => {
     if (!contactOutcomeId || resultLockedByIntegration) return;
@@ -545,6 +609,10 @@ export function Api4comCallResultForm({
         const nextErr = validateNextActionChoice(selectedResult, nextType);
         if (nextErr) {
           setError(nextErr);
+          return;
+        }
+        if (selectedResult.requires_meeting && nextType !== "schedule_meeting") {
+          setError("Este resultado exige reunião agendada.");
           return;
         }
       }
@@ -778,7 +846,21 @@ export function Api4comCallResultForm({
         </div>
       ) : null}
 
-      {step === "result" && !contextLoading ? (
+      {step === "result" && !contextLoading && !callWasAnswered ? (
+        <div>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Ligação não atendida: o registro técnico e a tentativa sem contato são aplicados automaticamente. Não é
+            necessário preencher resultado comercial.
+          </p>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+            <button type="button" className="btn" onClick={onClose}>
+              Fechar
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {step === "result" && !contextLoading && callWasAnswered ? (
         <form onSubmit={submit}>
           {!call?.client_id ? (
             <div className="alert alert-error" style={{ marginBottom: 12 }}>
@@ -797,14 +879,18 @@ export function Api4comCallResultForm({
               if (!resultLockedByIntegration) setResultTypeId("");
             }}
             contactLocked={contactLocked}
-            commercialTypes={resultTypes.map((r) => ({
+            commercialTypes={bdrResultTypes.map((r) => {
+              const rule = attendanceByCommercialId.get(r.id);
+              const enforced = rule ? enforceRulesForAction(rule.operational_action) : null;
+              return {
               id: r.id,
               slug: r.slug,
               name: r.name,
               description: null,
-              collect_notes: r.collect_notes,
-              require_schedule_return: r.require_schedule_return
-            }))}
+              collect_notes: enforced?.collect_notes ?? r.collect_notes,
+              require_schedule_return: enforced?.require_schedule_return ?? r.require_schedule_return
+            };
+            })}
             compatIds={compatIds}
             allowedCommercialIds={allowedCommercialIds}
             commercialId={resultTypeId}

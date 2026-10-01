@@ -61,6 +61,7 @@ export type ClientListItem = {
   has_verified_phone: boolean;
   product_ids: number[];
   has_approach: boolean;
+  is_official_client?: boolean;
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {

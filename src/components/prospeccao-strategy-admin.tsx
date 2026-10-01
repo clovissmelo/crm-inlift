@@ -1,71 +1,89 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import type { CallStrategySettings, ResultRuleRow } from "@/lib/call-strategy/settings";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { CallStrategySettings } from "@/lib/call-strategy/settings";
 import type { ProspeccaoPriorityTypeRow } from "@/lib/call-strategy/priorities-config";
+import {
+  OPERATIONAL_ACTION_LABELS,
+  type OperationalAction
+} from "@/lib/attendance/operational-actions";
 
-function ReEvalPreviewButton() {
-  const [preview, setPreview] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  async function runPreview() {
-    setLoading(true);
-    setPreview(null);
-    const res = await fetch("/api/admin/call-strategy/re-evaluate");
-    if (res.ok) {
-      const j = (await res.json()) as {
-        preview: { phones_total: number; would_exhaust: number; samples: unknown[] };
-      };
-      setPreview(
-        `${j.preview.would_exhaust} telefone(s) passariam a esgotar/revisar entre ${j.preview.phones_total} analisados (prévia — nada foi alterado).`
-      );
-    }
-    setLoading(false);
-  }
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <button type="button" className="btn" disabled={loading} onClick={() => void runPreview()}>
-        {loading ? "Calculando…" : "Prévia de reavaliação de limites"}
-      </button>
-      {preview ? <p className="muted" style={{ marginTop: 8 }}>{preview}</p> : null}
-    </div>
-  );
-}
-
-const BUCKET_LABELS: Record<string, string> = {
-  no_answer: "Não atendeu / ocupado",
-  invalid: "Número inválido",
-  wrong_number: "Número errado (conversa)",
-  technical_fail: "Falha técnica",
-  conversation_success: "Conversa válida"
+type AttendanceRuleItem = {
+  id: number;
+  answered: boolean;
+  name: string;
+  slug: string;
+  operational_action: OperationalAction;
+  pipeline_stage_id: number | null;
+  commercial_result_type_id: number | null;
+  sort_order: number;
+  status: string;
+  is_system: boolean;
+  action_label: string;
 };
 
+type PipelineStage = { id: number; name: string };
+
+const ANSWERED_ACTIONS: OperationalAction[] = [
+  "sem_contato",
+  "pediu_retorno",
+  "demonstrou_interesse",
+  "sem_interesse",
+  "reuniao_agendada"
+];
+
+function attemptsHint(action: OperationalAction): string {
+  if (action === "auto_no_contact" || action === "sem_contato") return "Conta no limite sem contato";
+  if (action === "sem_interesse" || action === "reuniao_agendada") return "Saída da fila do produto";
+  if (action === "pediu_retorno") return "Retorno na fila quando vencer";
+  return "—";
+}
+
+function stageRequired(action: OperationalAction): boolean {
+  return action === "demonstrou_interesse" || action === "reuniao_agendada" || action === "sem_interesse";
+}
+
 export function ProspeccaoStrategyAdmin() {
-  const [tab, setTab] = useState<"priorities" | "strategy">("strategy");
-  const [settings, setSettings] = useState<CallStrategySettings | null>(null);
-  const [rules, setRules] = useState<ResultRuleRow[]>([]);
+  const [tab, setTab] = useState<"rules" | "queue">("rules");
+  const [rules, setRules] = useState<AttendanceRuleItem[]>([]);
   const [priorities, setPriorities] = useState<ProspeccaoPriorityTypeRow[]>([]);
+  const [settings, setSettings] = useState<CallStrategySettings | null>(null);
+  const [stages, setStages] = useState<PipelineStage[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editId, setEditId] = useState<number | "new" | null>(null);
+  const [form, setForm] = useState<{
+    answered: boolean;
+    name: string;
+    slug: string;
+    operational_action: OperationalAction;
+    pipeline_stage_id: number | null;
+    sort_order: number;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [sRes, rRes, pRes] = await Promise.all([
+    const [rRes, pRes, sRes, stRes] = await Promise.all([
+      fetch("/api/admin/attendance-rules"),
+      fetch("/api/admin/prospeccao-priorities"),
       fetch("/api/admin/call-strategy/settings"),
-      fetch("/api/admin/call-strategy/result-rules"),
-      fetch("/api/admin/prospeccao-priorities")
+      fetch("/api/pipeline-stages")
     ]);
-    if (sRes.ok) {
-      const j = (await sRes.json()) as { settings: CallStrategySettings };
-      setSettings(j.settings);
-    }
     if (rRes.ok) {
-      const j = (await rRes.json()) as { items: ResultRuleRow[] };
+      const j = (await rRes.json()) as { items: AttendanceRuleItem[] };
       setRules(j.items);
     }
     if (pRes.ok) {
       const j = (await pRes.json()) as { items: ProspeccaoPriorityTypeRow[] };
       setPriorities(j.items);
+    }
+    if (sRes.ok) {
+      const j = (await sRes.json()) as { settings: CallStrategySettings };
+      setSettings(j.settings);
+    }
+    if (stRes.ok) {
+      const j = (await stRes.json()) as { items: PipelineStage[] };
+      setStages(j.items ?? []);
     }
     setLoading(false);
   }, []);
@@ -74,20 +92,73 @@ export function ProspeccaoStrategyAdmin() {
     void load();
   }, [load]);
 
-  async function saveSettings() {
+  const stageName = useMemo(() => {
+    const m = new Map(stages.map((s) => [s.id, s.name]));
+    return (id: number | null) => (id ? m.get(id) ?? `#${id}` : "—");
+  }, [stages]);
+
+  function openEdit(rule: AttendanceRuleItem) {
+    if (rule.is_system && rule.operational_action === "auto_no_contact") return;
+    setEditId(rule.id);
+    setForm({
+      answered: rule.answered,
+      name: rule.name,
+      slug: rule.slug,
+      operational_action: rule.operational_action,
+      pipeline_stage_id: rule.pipeline_stage_id,
+      sort_order: rule.sort_order
+    });
+  }
+
+  function openNew() {
+    setEditId("new");
+    setForm({
+      answered: true,
+      name: "",
+      slug: "",
+      operational_action: "pediu_retorno",
+      pipeline_stage_id: null,
+      sort_order: 50
+    });
+  }
+
+  async function saveRule() {
+    if (!form) return;
+    setMsg(null);
+    const payload = { ...form };
+    const url =
+      editId === "new" ? "/api/admin/attendance-rules" : `/api/admin/attendance-rules/${editId}`;
+    const method = editId === "new" ? "POST" : "PATCH";
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const j = (await res.json()) as { error?: string };
+      setMsg(j.error ?? "Erro ao salvar regra");
+      return;
+    }
+    setEditId(null);
+    setForm(null);
+    await load();
+    setMsg("Regra salva.");
+  }
+
+  async function saveNoContactLimit() {
     if (!settings) return;
     setMsg(null);
     const res = await fetch("/api/admin/call-strategy/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(settings)
+      body: JSON.stringify({ max_no_contact_attempts: settings.max_no_contact_attempts })
     });
     if (!res.ok) {
       const j = (await res.json()) as { error?: string };
-      setMsg(j.error ?? "Erro ao salvar");
+      setMsg(j.error ?? "Erro ao salvar limite");
       return;
     }
-    setMsg("Configurações salvas.");
+    setMsg("Limite de tentativas sem contato salvo.");
   }
 
   async function savePriority(row: ProspeccaoPriorityTypeRow) {
@@ -105,20 +176,11 @@ export function ProspeccaoStrategyAdmin() {
     });
     if (!res.ok) {
       const j = (await res.json()) as { error?: string };
-      setMsg(j.error ?? "Erro ao salvar prioridade");
+      setMsg(j.error ?? "Erro ao salvar");
       return;
     }
     await load();
-    setMsg("Prioridade atualizada.");
-  }
-
-  async function toggleRuleConsumes(rule: ResultRuleRow) {
-    const res = await fetch("/api/admin/call-strategy/result-rules", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: rule.id, consumes_attempt: !rule.consumes_attempt })
-    });
-    if (res.ok) await load();
+    setMsg("Ordem da fila atualizada.");
   }
 
   if (loading) return <p className="muted">Carregando…</p>;
@@ -128,195 +190,287 @@ export function ProspeccaoStrategyAdmin() {
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <button
           type="button"
-          className={tab === "strategy" ? "btn btn-primary" : "btn"}
-          onClick={() => setTab("strategy")}
+          className={tab === "rules" ? "btn btn-primary" : "btn"}
+          onClick={() => setTab("rules")}
         >
-          Estratégia de ligações
+          Regras de atendimento
         </button>
         <button
           type="button"
-          className={tab === "priorities" ? "btn btn-primary" : "btn"}
-          onClick={() => setTab("priorities")}
+          className={tab === "queue" ? "btn btn-primary" : "btn"}
+          onClick={() => setTab("queue")}
         >
-          Prioridades operacionais
+          Ordem da fila
         </button>
       </div>
       {msg ? <p className="muted">{msg}</p> : null}
 
-      {tab === "strategy" && settings ? (
+      {tab === "rules" ? (
         <div>
-          <p className="muted" style={{ maxWidth: 640 }}>
-            Valores <strong>padrão</strong> quando a matriz de fluxo operacional não define limite/intervalo por linha.
-            Contagem e esgotamento por resultado são configurados em{" "}
-            <a href="/resultado-comercial">Resultado comercial → Matriz de fluxo operacional</a> (seção Tentativas e
-            esgotamento). Alterações de limite não removem leads automaticamente — use a reavaliação abaixo.
+          <p className="muted" style={{ maxWidth: 720 }}>
+            Cada regra define o resultado comercial e a ação operacional. Tentativas, verificação de número e saída da
+            fila são aplicadas automaticamente — não há combinações contraditórias de flags.
           </p>
-          <ReEvalPreviewButton />
-          <div className="panel" style={{ padding: 16, marginTop: 12, maxWidth: 480 }}>
-            <div className="field">
-              <label className="label">Máx. não atendeu/ocupado por número</label>
-              <input
-                className="input"
-                type="number"
-                min={1}
-                value={settings.max_no_answer_attempts}
-                onChange={(e) =>
-                  setSettings((s) => s && { ...s, max_no_answer_attempts: Number(e.target.value) })
-                }
-              />
+          {settings ? (
+            <div className="panel" style={{ padding: 12, marginTop: 12, maxWidth: 420 }}>
+              <div className="field">
+                <label className="label">Limite de tentativas sem contato (por número)</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  value={settings.max_no_contact_attempts ?? settings.max_no_answer_attempts}
+                  onChange={(e) =>
+                    setSettings((s) =>
+                      s ? { ...s, max_no_contact_attempts: Number(e.target.value) } : s
+                    )
+                  }
+                />
+              </div>
+              <button type="button" className="btn btn-primary" onClick={() => void saveNoContactLimit()}>
+                Salvar limite
+              </button>
             </div>
-            <div className="field">
-              <label className="label">Máx. inválido por número</label>
-              <input
-                className="input"
-                type="number"
-                min={1}
-                value={settings.max_invalid_attempts}
-                onChange={(e) =>
-                  setSettings((s) => s && { ...s, max_invalid_attempts: Number(e.target.value) })
-                }
-              />
-            </div>
-            <div className="field">
-              <label className="label">Máx. número errado por número</label>
-              <input
-                className="input"
-                type="number"
-                min={1}
-                value={settings.max_wrong_number_attempts}
-                onChange={(e) =>
-                  setSettings((s) => s && { ...s, max_wrong_number_attempts: Number(e.target.value) })
-                }
-              />
-            </div>
-            <div className="field">
-              <label className="label">Intervalo mínimo entre tentativas (minutos)</label>
-              <input
-                className="input"
-                type="number"
-                min={0}
-                value={settings.min_interval_minutes}
-                onChange={(e) =>
-                  setSettings((s) => s && { ...s, min_interval_minutes: Number(e.target.value) })
-                }
-              />
-            </div>
-            <div className="field">
-              <label className="label">Nova rodada de contatos (horas)</label>
-              <input
-                className="input"
-                type="number"
-                min={0}
-                value={settings.round_interval_hours}
-                onChange={(e) =>
-                  setSettings((s) => s && { ...s, round_interval_hours: Number(e.target.value) })
-                }
-              />
-            </div>
-            <button type="button" className="btn btn-primary" onClick={() => void saveSettings()}>
-              Salvar limites
-            </button>
-          </div>
+          ) : null}
 
-          <p className="muted">
-            Regras legadas de fallback: preferir a{" "}
-            <Link href="/resultado-comercial">matriz de fluxo operacional</Link>. Tabela abaixo só para compatibilidade.
-          </p>
-          <table className="table" style={{ marginTop: 8 }}>
+          <table className="table" style={{ marginTop: 16 }}>
             <thead>
               <tr>
-                <th>Bucket</th>
-                <th>Técnico</th>
-                <th>Comercial</th>
-                <th>Contato</th>
-                <th>Consome tentativa</th>
+                <th>Atendeu?</th>
+                <th>Resultado</th>
+                <th>Ação</th>
+                <th>Tentativas</th>
+                <th>Etapa do funil</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {rules.map((r) => (
                 <tr key={r.id}>
-                  <td>{BUCKET_LABELS[r.bucket] ?? r.bucket}</td>
-                  <td>{r.technical_slug ?? "—"}</td>
-                  <td>{r.commercial_slug ?? "—"}</td>
-                  <td>{r.contact_outcome_slug ?? "—"}</td>
+                  <td>{r.answered ? "Sim" : "Não"}</td>
+                  <td>{r.name}</td>
+                  <td>{r.action_label}</td>
+                  <td>{attemptsHint(r.operational_action)}</td>
+                  <td>{stageName(r.pipeline_stage_id)}</td>
                   <td>
-                    <button type="button" className="btn btn-sm" onClick={() => void toggleRuleConsumes(r)}>
-                      {r.consumes_attempt ? "Sim" : "Não"}
-                    </button>
+                    {r.is_system && r.operational_action === "auto_no_contact" ? (
+                      <span className="muted">Sistema</span>
+                    ) : (
+                      <button type="button" className="btn btn-sm" onClick={() => openEdit(r)}>
+                        Editar
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      ) : null}
+          <button type="button" className="btn" style={{ marginTop: 12 }} onClick={openNew}>
+            Nova regra
+          </button>
 
-      {tab === "priorities" ? (
-        <div>
-          <p className="muted" style={{ maxWidth: 640 }}>
-            Prioridades são calculadas automaticamente (retornos, abordagens). Ajuste nome, cor, descrição e ordem de
-            exibição. Retornos futuros não são sugeridos como ligação imediata.
-          </p>
-          {priorities.map((p) => (
-            <div key={p.id} className="panel" style={{ padding: 12, marginTop: 12, maxWidth: 560 }}>
+          {form ? (
+            <div className="panel" style={{ padding: 16, marginTop: 16, maxWidth: 520 }}>
               <div className="field">
-                <label className="label">Slug (fixo)</label>
-                <input className="input" value={p.slug} readOnly />
-              </div>
-              <div className="field">
-                <label className="label">Nome</label>
-                <input
+                <label className="label">Atendeu?</label>
+                <select
                   className="input"
-                  value={p.name}
+                  value={form.answered ? "yes" : "no"}
                   onChange={(e) =>
-                    setPriorities((rows) =>
-                      rows.map((r) => (r.id === p.id ? { ...r, name: e.target.value } : r))
+                    setForm((f) =>
+                      f
+                        ? {
+                            ...f,
+                            answered: e.target.value === "yes",
+                            operational_action:
+                              e.target.value === "yes" ? "pediu_retorno" : "auto_no_contact"
+                          }
+                        : f
                     )
                   }
+                >
+                  <option value="yes">Atendeu</option>
+                  <option value="no">Não atendeu</option>
+                </select>
+              </div>
+              <div className="field">
+                <label className="label">Nome do resultado</label>
+                <input
+                  className="input"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => (f ? { ...f, name: e.target.value } : f))}
                 />
               </div>
               <div className="field">
-                <label className="label">Cor</label>
+                <label className="label">Slug</label>
                 <input
                   className="input"
-                  value={p.color}
-                  onChange={(e) =>
-                    setPriorities((rows) =>
-                      rows.map((r) => (r.id === p.id ? { ...r, color: e.target.value } : r))
-                    )
-                  }
+                  value={form.slug}
+                  onChange={(e) => setForm((f) => (f ? { ...f, slug: e.target.value } : f))}
+                  disabled={editId !== "new"}
                 />
               </div>
+              {form.answered ? (
+                <div className="field">
+                  <label className="label">Ação operacional</label>
+                  <select
+                    className="input"
+                    value={form.operational_action}
+                    onChange={(e) =>
+                      setForm((f) =>
+                        f ? { ...f, operational_action: e.target.value as OperationalAction } : f
+                      )
+                    }
+                  >
+                    {ANSWERED_ACTIONS.map((a) => (
+                      <option key={a} value={a}>
+                        {OPERATIONAL_ACTION_LABELS[a]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <p className="muted">Não atendimento usa registro automático (sem formulário BDR).</p>
+              )}
+              {form.answered && stageRequired(form.operational_action) ? (
+                <div className="field">
+                  <label className="label">Etapa do funil</label>
+                  <select
+                    className="input"
+                    value={form.pipeline_stage_id ?? ""}
+                    onChange={(e) =>
+                      setForm((f) =>
+                        f
+                          ? {
+                              ...f,
+                              pipeline_stage_id: e.target.value ? Number(e.target.value) : null
+                            }
+                          : f
+                      )
+                    }
+                  >
+                    <option value="">—</option>
+                    {stages.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div className="field">
                 <label className="label">Ordem</label>
                 <input
                   className="input"
                   type="number"
-                  value={p.sort_order}
+                  value={form.sort_order}
                   onChange={(e) =>
-                    setPriorities((rows) =>
-                      rows.map((r) => (r.id === p.id ? { ...r, sort_order: Number(e.target.value) } : r))
-                    )
+                    setForm((f) => (f ? { ...f, sort_order: Number(e.target.value) } : f))
                   }
                 />
               </div>
-              <div className="field">
-                <label className="label">Descrição</label>
-                <textarea
-                  className="textarea"
-                  value={p.description ?? ""}
-                  onChange={(e) =>
-                    setPriorities((rows) =>
-                      rows.map((r) => (r.id === p.id ? { ...r, description: e.target.value } : r))
-                    )
-                  }
-                />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" className="btn btn-primary" onClick={() => void saveRule()}>
+                  Salvar
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    setEditId(null);
+                    setForm(null);
+                  }}
+                >
+                  Cancelar
+                </button>
               </div>
-              <button type="button" className="btn btn-primary" onClick={() => void savePriority(p)}>
-                Salvar
-              </button>
             </div>
-          ))}
+          ) : null}
+        </div>
+      ) : null}
+
+      {tab === "queue" ? (
+        <div>
+          <p className="muted" style={{ maxWidth: 640 }}>
+            A ordem abaixo controla a consulta da fila de prospecção. Retornos com data/hora futura só entram quando
+            vencerem.
+          </p>
+          <table className="table" style={{ marginTop: 12 }}>
+            <thead>
+              <tr>
+                <th>Ordem</th>
+                <th>Nome</th>
+                <th>Cor</th>
+                <th>Descrição</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {priorities
+                .slice()
+                .sort((a, b) => a.sort_order - b.sort_order)
+                .map((p) => (
+                  <tr key={p.id}>
+                    <td>
+                      <input
+                        className="input"
+                        type="number"
+                        style={{ width: 72 }}
+                        value={p.sort_order}
+                        onChange={(e) =>
+                          setPriorities((rows) =>
+                            rows.map((r) =>
+                              r.id === p.id ? { ...r, sort_order: Number(e.target.value) } : r
+                            )
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="input"
+                        value={p.name}
+                        onChange={(e) =>
+                          setPriorities((rows) =>
+                            rows.map((r) => (r.id === p.id ? { ...r, name: e.target.value } : r))
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="input"
+                        type="color"
+                        value={p.color.startsWith("#") ? p.color : "#64748b"}
+                        onChange={(e) =>
+                          setPriorities((rows) =>
+                            rows.map((r) => (r.id === p.id ? { ...r, color: e.target.value } : r))
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="input"
+                        value={p.description ?? ""}
+                        onChange={(e) =>
+                          setPriorities((rows) =>
+                            rows.map((r) =>
+                              r.id === p.id ? { ...r, description: e.target.value } : r
+                            )
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <button type="button" className="btn btn-sm" onClick={() => void savePriority(p)}>
+                        Salvar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
         </div>
       ) : null}
     </div>

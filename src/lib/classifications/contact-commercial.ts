@@ -31,6 +31,17 @@ export async function getContactOutcomeTypeById(id: number) {
   );
 }
 
+export async function getContactOutcomeTypeBySlug(slug: string) {
+  return get<ContactOutcomeTypeRow>(
+    `
+      SELECT id, slug, name, description, sort_order, status, requires_conversation
+      FROM contact_outcome_types WHERE slug = @slug AND status = 'active'
+      LIMIT 1
+    `,
+    { slug }
+  );
+}
+
 export async function listCompatibleCommercialIds(contactOutcomeTypeId: number): Promise<number[]> {
   const rows = await all<{ commercial_result_type_id: number }>(
     `

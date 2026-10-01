@@ -62,8 +62,11 @@ async function loadLimitsByKind(): Promise<Partial<Record<OccurrenceKind, number
     const lim = a.dial_occurrence_limit ?? (await getGlobalLimitForKind(kind));
     limits[kind] = limits[kind] != null ? Math.min(limits[kind]!, lim) : lim;
   }
-  for (const kind of ["no_answer", "invalid", "wrong_number"] as OccurrenceKind[]) {
+  for (const kind of ["no_contact", "invalid", "wrong_number"] as OccurrenceKind[]) {
     if (limits[kind] == null) limits[kind] = await getGlobalLimitForKind(kind);
+  }
+  if (limits.no_contact == null) {
+    limits.no_contact = await getGlobalLimitForKind("no_contact");
   }
   return limits;
 }
@@ -144,6 +147,7 @@ export async function buildClientDialStrategySummary(input: {
     const last = lastMap.get(p.id);
     const eligible = isPhoneEligibleNow(p, settings, now) && p.status !== "exhausted";
     const counterState: PhoneCounterState = {
+      cycle_no_contact_count: p.cycle_no_contact_count,
       cycle_no_answer_count: p.cycle_no_answer_count,
       cycle_invalid_count: p.cycle_invalid_count,
       cycle_wrong_number_count: p.cycle_wrong_number_count,
@@ -155,7 +159,7 @@ export async function buildClientDialStrategySummary(input: {
     const primaryKind =
       (p.last_occurrence_kind as OccurrenceKind | null) ??
       (last?.attempt_bucket as OccurrenceKind | null) ??
-      "no_answer";
+      "no_contact";
     const primaryCount = readCountForKind(counterState, primaryKind);
     const primaryLimit = limitsByKind[primaryKind] ?? 3;
     const counter_line =

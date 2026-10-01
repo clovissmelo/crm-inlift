@@ -12,11 +12,17 @@ export {
   OCCURRENCE_KIND_LABELS
 } from "@/lib/call-strategy/occurrence-policy-shared";
 
-const DEFAULT_LIMITS: Record<string, keyof Awaited<ReturnType<typeof getCallStrategySettings>>> = {
-  no_answer: "max_no_answer_attempts",
+const DEFAULT_LIMITS: Partial<Record<OccurrenceKind, keyof Awaited<ReturnType<typeof getCallStrategySettings>>>> = {
+  no_contact: "max_no_contact_attempts",
+  no_answer: "max_no_contact_attempts",
   invalid: "max_invalid_attempts",
   wrong_number: "max_wrong_number_attempts"
 };
+
+function normalizeCountingKind(kind: OccurrenceKind | null): OccurrenceKind | null {
+  if (kind === "no_answer") return "no_contact";
+  return kind;
+}
 
 export async function resolveDialOccurrencePolicy(input: {
   technicalTypeId: number | null;
@@ -39,14 +45,10 @@ export async function resolveDialOccurrencePolicy(input: {
     };
   }
 
-  let association =
+  const association =
     input.technicalTypeId != null
       ? await getActiveAssociationForPair(input.technicalTypeId, input.commercialTypeId)
       : null;
-
-  if (!association && input.technicalTypeId == null) {
-    association = null;
-  }
 
   let kind: OccurrenceKind | null =
     (association?.dial_occurrence_kind as OccurrenceKind | null) ?? null;
@@ -59,10 +61,15 @@ export async function resolveDialOccurrencePolicy(input: {
   } else if (!kind && input.technicalSlug === "invalid_number") {
     kind = "invalid";
   } else if (!kind && (input.technicalSlug === "no_answer" || input.technicalSlug === "busy")) {
-    kind = "no_answer";
+    kind = "no_contact";
   } else if (!kind && input.technicalSlug === "answered") {
-    if (input.contactOutcomeSlug === "nenhum_contato") kind = "no_answer";
-    else kind = "conversation_success";
+    if (input.contactOutcomeSlug === "nenhum_contato" || input.commercialSlug === "sem_contato") {
+      kind = "no_contact";
+    } else {
+      kind = "conversation_success";
+    }
+  } else if (kind === "no_answer") {
+    kind = "no_contact";
   }
 
   let counts =
@@ -79,6 +86,16 @@ export async function resolveDialOccurrencePolicy(input: {
     counts = Boolean(association.dial_counts_for_exhaustion);
   }
 
+  if (!counts && kind === "no_contact") {
+    counts = true;
+  }
+
+  if (!counts && kind === "invalid" && input.technicalSlug === "invalid_number") {
+    counts = true;
+  }
+
+  kind = normalizeCountingKind(kind);
+
   if (!counts) {
     return {
       counts: false,
@@ -92,14 +109,17 @@ export async function resolveDialOccurrencePolicy(input: {
 
   const limitKey = kind ? DEFAULT_LIMITS[kind] : undefined;
   const globalLimit =
-    limitKey && kind
-      ? (settings[limitKey as keyof typeof settings] as number)
-      : 3;
+    limitKey && kind ? (settings[limitKey as keyof typeof settings] as number) : 3;
+
+  const effectiveLimit =
+    kind === "no_contact"
+      ? (association?.dial_occurrence_limit ?? settings.max_no_contact_attempts ?? globalLimit)
+      : (association?.dial_occurrence_limit ?? globalLimit);
 
   return {
     counts: true,
     kind,
-    limit: association?.dial_occurrence_limit ?? globalLimit,
+    limit: effectiveLimit,
     minIntervalMinutes: association?.dial_min_interval_minutes ?? fallbackInterval,
     limitAction:
       (association?.dial_limit_action as DialOccurrencePolicy["limitAction"]) ?? "exhaust_phone",

@@ -592,6 +592,16 @@ export async function moveOpportunityStage(input: {
     throw new Error("CONFLICT_VERSION");
   }
 
+  if (outcome === "won" && opp.client_id) {
+    await run(
+      `
+        UPDATE clients SET is_official_client = true, updated_at = @now
+        WHERE id = @clientId AND COALESCE(is_official_client, false) = false
+      `,
+      { clientId: opp.client_id, now }
+    );
+  }
+
   await run(
     `
       INSERT INTO opportunity_stage_logs (opportunity_id, from_stage_id, to_stage_id, user_id, notes, created_at)

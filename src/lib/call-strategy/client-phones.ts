@@ -12,6 +12,7 @@ export type ClientPhoneRow = {
   primary_contact_id: number | null;
   sort_order: number;
   status: string;
+  cycle_no_contact_count: number;
   cycle_no_answer_count: number;
   cycle_invalid_count: number;
   cycle_wrong_number_count: number;
@@ -115,6 +116,7 @@ export async function listClientPhonesWithState(clientId: number): Promise<Clien
         cp.id, cp.client_id, cp.phone_digits, cp.display_phone, cp.origin,
         cp.primary_contact_id, cp.sort_order,
         COALESCE(st.status, 'available') AS status,
+        COALESCE(st.cycle_no_contact_count, st.cycle_no_answer_count, 0) AS cycle_no_contact_count,
         COALESCE(st.cycle_no_answer_count, 0) AS cycle_no_answer_count,
         COALESCE(st.cycle_invalid_count, 0) AS cycle_invalid_count,
         COALESCE(st.cycle_wrong_number_count, 0) AS cycle_wrong_number_count,
@@ -142,12 +144,8 @@ export function isPhoneEligibleNow(
 }
 
 export function phoneAttemptLabel(phone: ClientPhoneRow, settings: CallStrategySettings): string {
-  const max = Math.max(
-    settings.max_no_answer_attempts,
-    settings.max_invalid_attempts,
-    settings.max_wrong_number_attempts
-  );
-  const used = Math.max(phone.cycle_no_answer_count, phone.cycle_invalid_count, phone.cycle_wrong_number_count);
+  const max = settings.max_no_contact_attempts ?? settings.max_no_answer_attempts;
+  const used = Math.max(phone.cycle_no_contact_count, phone.cycle_invalid_count, phone.cycle_wrong_number_count);
   return `Tentativa ${Math.min(used + 1, max)} de ${max}`;
 }
 
@@ -156,7 +154,8 @@ export async function refreshClientPhoneSummary(clientId: number): Promise<strin
   if (phones.length === 0) return "Sem telefone";
   let tried = 0;
   for (const p of phones) {
-    const totalAttempts = p.cycle_no_answer_count + p.cycle_invalid_count + p.cycle_wrong_number_count;
+    const totalAttempts =
+      p.cycle_no_contact_count + p.cycle_invalid_count + p.cycle_wrong_number_count;
     if (totalAttempts > 0) tried += 1;
   }
   const summary = `${tried} de ${phones.length} número${phones.length === 1 ? "" : "s"} tentados`;

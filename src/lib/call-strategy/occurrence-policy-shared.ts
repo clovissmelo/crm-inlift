@@ -1,6 +1,7 @@
 /** Tipos e formatação usados no client — sem dependências de servidor. */
 
 export type OccurrenceKind =
+  | "no_contact"
   | "no_answer"
   | "invalid"
   | "wrong_number"
@@ -17,6 +18,7 @@ export type DialOccurrencePolicy = {
 };
 
 export const OCCURRENCE_KIND_LABELS: Record<OccurrenceKind, string> = {
+  no_contact: "Sem contato",
   no_answer: "Não atendeu",
   invalid: "Número inválido",
   wrong_number: "Número errado",

@@ -25,6 +25,7 @@ export async function previewReEvaluateDialLimits(): Promise<ReEvalPreview> {
   const rows = await all<{
     client_phone_id: number;
     client_id: number;
+    cycle_no_contact_count: number;
     cycle_no_answer_count: number;
     cycle_invalid_count: number;
     cycle_wrong_number_count: number;
@@ -32,6 +33,7 @@ export async function previewReEvaluateDialLimits(): Promise<ReEvalPreview> {
   }>(
     `
       SELECT cp.id AS client_phone_id, cp.client_id,
+        COALESCE(st.cycle_no_contact_count, st.cycle_no_answer_count, 0) AS cycle_no_contact_count,
         COALESCE(st.cycle_no_answer_count, 0) AS cycle_no_answer_count,
         COALESCE(st.cycle_invalid_count, 0) AS cycle_invalid_count,
         COALESCE(st.cycle_wrong_number_count, 0) AS cycle_wrong_number_count,
@@ -47,7 +49,7 @@ export async function previewReEvaluateDialLimits(): Promise<ReEvalPreview> {
   const samples: ReEvalPreview["samples"] = [];
 
   for (const row of rows) {
-    for (const kind of ["no_answer", "invalid", "wrong_number"] as OccurrenceKind[]) {
+    for (const kind of ["no_contact", "invalid", "wrong_number"] as OccurrenceKind[]) {
       const limit = limitsByKind[kind] ?? (await getGlobalLimitForKind(kind));
       const count = readCountForKind(row, kind);
       if (count >= limit && limit > 0) {

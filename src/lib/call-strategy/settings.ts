@@ -1,6 +1,7 @@
 import { get, nowIso, run } from "@/lib/db";
 
 export type CallStrategySettings = {
+  max_no_contact_attempts: number;
   max_no_answer_attempts: number;
   max_invalid_attempts: number;
   max_wrong_number_attempts: number;
@@ -17,6 +18,7 @@ export type AttemptBucket =
   | "unknown";
 
 const DEFAULTS: CallStrategySettings = {
+  max_no_contact_attempts: 3,
   max_no_answer_attempts: 3,
   max_invalid_attempts: 3,
   max_wrong_number_attempts: 3,
@@ -27,7 +29,7 @@ const DEFAULTS: CallStrategySettings = {
 export async function getCallStrategySettings(): Promise<CallStrategySettings> {
   const row = await get<CallStrategySettings>(
     `
-      SELECT max_no_answer_attempts, max_invalid_attempts, max_wrong_number_attempts,
+      SELECT max_no_contact_attempts, max_no_answer_attempts, max_invalid_attempts, max_wrong_number_attempts,
         min_interval_minutes, round_interval_hours
       FROM call_strategy_settings WHERE id = 1
     `
@@ -41,12 +43,13 @@ export async function updateCallStrategySettings(input: Partial<CallStrategySett
   await run(
     `
       INSERT INTO call_strategy_settings (
-        id, max_no_answer_attempts, max_invalid_attempts, max_wrong_number_attempts,
+        id, max_no_contact_attempts, max_no_answer_attempts, max_invalid_attempts, max_wrong_number_attempts,
         min_interval_minutes, round_interval_hours, updated_at
       ) VALUES (
-        1, @maxNoAnswer, @maxInvalid, @maxWrong, @minInterval, @roundHours, @now
+        1, @maxNoContact, @maxNoAnswer, @maxInvalid, @maxWrong, @minInterval, @roundHours, @now
       )
       ON CONFLICT (id) DO UPDATE SET
+        max_no_contact_attempts = EXCLUDED.max_no_contact_attempts,
         max_no_answer_attempts = EXCLUDED.max_no_answer_attempts,
         max_invalid_attempts = EXCLUDED.max_invalid_attempts,
         max_wrong_number_attempts = EXCLUDED.max_wrong_number_attempts,
@@ -55,6 +58,7 @@ export async function updateCallStrategySettings(input: Partial<CallStrategySett
         updated_at = EXCLUDED.updated_at
     `,
     {
+      maxNoContact: next.max_no_contact_attempts,
       maxNoAnswer: next.max_no_answer_attempts,
       maxInvalid: next.max_invalid_attempts,
       maxWrong: next.max_wrong_number_attempts,

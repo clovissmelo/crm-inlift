@@ -58,5 +58,10 @@ export async function persistCallTechnicalResult(callId: number) {
     );
   }
 
+  if (!row.approach_id && matched && !matched.answered) {
+    const { tryServerAutoRegisterNoContact } = await import("@/lib/attendance/auto-register-no-contact");
+    await tryServerAutoRegisterNoContact(callId);
+  }
+
   return matched;
 }

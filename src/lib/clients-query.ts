@@ -27,6 +27,7 @@ export type ClientFilters = {
   limit?: number;
   offset?: number;
   ids?: number[];
+  official_client?: "yes" | "no" | "";
 };
 
 function buildClientFilterSql(filters: ClientFilters) {
@@ -93,6 +94,11 @@ function buildClientFilterSql(filters: ClientFilters) {
     );
     params.search = `%${filters.search}%`;
   }
+  if (filters.official_client === "yes") {
+    where.push("COALESCE(clients.is_official_client, false) = true");
+  } else if (filters.official_client === "no") {
+    where.push("COALESCE(clients.is_official_client, false) = false");
+  }
   if (filters.ids?.length) {
     const safeIds = filters.ids.filter((id) => Number.isInteger(id)).join(",");
     if (safeIds) where.push(`clients.id IN (${safeIds})`);
@@ -117,6 +123,7 @@ type RawClientRow = {
   has_verified: boolean;
   product_ids: number[] | null;
   has_approach: boolean;
+  is_official_client: boolean;
 };
 
 function classifyPhones(phonesRaw: string | null, whatsappsRaw: string | null) {
@@ -150,7 +157,8 @@ function mapRow(row: RawClientRow): ClientListItem {
     has_landline: hasLandline,
     has_verified_phone: row.has_verified,
     product_ids: row.product_ids ?? [],
-    has_approach: row.has_approach
+    has_approach: row.has_approach,
+    is_official_client: row.is_official_client
   };
 }
 
@@ -179,6 +187,7 @@ export async function queryClients(filters: ClientFilters) {
         clients.uf,
         clients.bdr_user_id,
         clients.lead_qualification,
+        COALESCE(clients.is_official_client, false) AS is_official_client,
         bdr.name AS bdr_name,
         string_agg(DISTINCT contacts.phone, ',') AS phones,
         string_agg(DISTINCT contacts.whatsapp, ',') AS whatsapps,

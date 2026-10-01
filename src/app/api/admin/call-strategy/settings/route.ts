@@ -4,6 +4,7 @@ import { getCallStrategySettings, updateCallStrategySettings } from "@/lib/call-
 import { z } from "zod";
 
 const patchSchema = z.object({
+  max_no_contact_attempts: z.number().int().min(1).max(20).optional(),
   max_no_answer_attempts: z.number().int().min(1).max(20).optional(),
   max_invalid_attempts: z.number().int().min(1).max(20).optional(),
   max_wrong_number_attempts: z.number().int().min(1).max(20).optional(),

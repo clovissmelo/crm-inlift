@@ -1,33 +1,54 @@
-import { nowIso, run } from "@/lib/db";
-import {
-  listClientPhonesWithState,
-  refreshClientPhoneSummary,
-  isPhoneEligibleNow
-} from "@/lib/call-strategy/client-phones";
-import { getCallStrategySettings } from "@/lib/call-strategy/settings";
+import { all, get, nowIso, run } from "@/lib/db";
+import { listClientPhonesWithState, refreshClientPhoneSummary } from "@/lib/call-strategy/client-phones";
+import { ensureClientProductProspeccao, listActiveProductIdsInQueue } from "@/lib/client-product-prospeccao";
 
-export async function evaluateProspeccaoQueueAfterAttempt(clientId: number): Promise<void> {
-  await refreshClientPhoneSummary(clientId);
+async function phonesExhaustedForClient(clientId: number): Promise<boolean> {
   const phones = await listClientPhonesWithState(clientId);
-  if (phones.length === 0) return;
+  if (phones.length === 0) return false;
+  return phones.every((p) => p.status === "exhausted");
+}
 
-  const settings = await getCallStrategySettings();
-  const now = Date.now();
-  let anyUsable = false;
-  let allExhausted = true;
+/** Esgotamento operacional: só retira da fila do produto quando não há número discável. */
+export async function evaluateProspeccaoQueueAfterAttempt(
+  clientId: number,
+  productId?: number | null
+): Promise<void> {
+  await refreshClientPhoneSummary(clientId);
+  const exhausted = await phonesExhaustedForClient(clientId);
 
-  for (const p of phones) {
-    if (p.status !== "exhausted") {
-      allExhausted = false;
-      if (isPhoneEligibleNow(p, settings, now)) anyUsable = true;
-      if (p.status === "waiting" && p.next_eligible_at && new Date(p.next_eligible_at).getTime() <= now) {
-        anyUsable = true;
-      }
-      if (p.status === "available") anyUsable = true;
+  if (productId != null) {
+    await ensureClientProductProspeccao(clientId, productId);
+    if (exhausted) {
+      await run(
+        `
+          UPDATE client_product_prospeccao SET
+            in_prospeccao_queue = false,
+            exit_reason = 'phones_exhausted',
+            exited_at = @now,
+            updated_at = @now
+          WHERE client_id = @clientId AND product_id = @productId AND in_prospeccao_queue = true
+        `,
+        { clientId, productId, now: nowIso() }
+      );
+    } else {
+      await run(
+        `
+          UPDATE client_product_prospeccao SET
+            in_prospeccao_queue = true,
+            exit_reason = NULL,
+            exited_at = NULL,
+            updated_at = @now
+          WHERE client_id = @clientId AND product_id = @productId AND exit_reason = 'phones_exhausted'
+        `,
+        { clientId, productId, now: nowIso() }
+      );
     }
   }
 
-  if (allExhausted) {
+  const activeProducts = await listActiveProductIdsInQueue(clientId);
+  const legacyInQueue = activeProducts.length > 0 || (productId == null && !exhausted);
+
+  if (exhausted && activeProducts.length === 0) {
     await run(
       `
         UPDATE clients SET
@@ -42,7 +63,7 @@ export async function evaluateProspeccaoQueueAfterAttempt(clientId: number): Pro
     return;
   }
 
-  if (anyUsable) {
+  if (legacyInQueue) {
     await run(
       `
         UPDATE clients SET
@@ -58,11 +79,9 @@ export async function evaluateProspeccaoQueueAfterAttempt(clientId: number): Pro
 }
 
 export async function tryReenterProspeccaoAfterNewPhone(clientId: number): Promise<void> {
-  const client = await import("@/lib/db").then((m) =>
-    m.get<{ in_prospeccao_queue: boolean; prospeccao_exit_reason: string | null }>(
-      "SELECT in_prospeccao_queue, prospeccao_exit_reason FROM clients WHERE id = @id",
-      { id: clientId }
-    )
+  const client = await get<{ in_prospeccao_queue: boolean; prospeccao_exit_reason: string | null }>(
+    "SELECT in_prospeccao_queue, prospeccao_exit_reason FROM clients WHERE id = @id",
+    { id: clientId }
   );
   if (!client || client.in_prospeccao_queue) return;
   if (client.prospeccao_exit_reason !== "phones_exhausted") return;
@@ -82,10 +101,45 @@ export async function tryReenterProspeccaoAfterNewPhone(clientId: number): Promi
     `,
     { id: clientId, now: nowIso() }
   );
+
+  const productRows = await all<{ product_id: number }>(
+    `
+      SELECT product_id FROM client_product_prospeccao
+      WHERE client_id = @clientId AND exit_reason = 'phones_exhausted'
+    `,
+    { clientId }
+  );
+  for (const row of productRows) {
+    await run(
+      `
+        UPDATE client_product_prospeccao SET
+          in_prospeccao_queue = true,
+          exit_reason = NULL,
+          exited_at = NULL,
+          updated_at = @now
+        WHERE client_id = @clientId AND product_id = @productId
+      `,
+      { clientId, productId: row.product_id, now: nowIso() }
+    );
+  }
+
   await refreshClientPhoneSummary(clientId);
 }
 
+/** Encerramento comercial legado (cliente inteiro) — preferir exitProspeccaoForProduct. */
 export async function exitProspeccaoCommercial(clientId: number, reason: string): Promise<void> {
+  const now = nowIso();
+  await run(
+    `
+      UPDATE client_product_prospeccao SET
+        in_prospeccao_queue = false,
+        exit_reason = @reason,
+        exited_at = @now,
+        updated_at = @now
+      WHERE client_id = @clientId AND in_prospeccao_queue = true
+    `,
+    { clientId, reason, now }
+  );
   await run(
     `
       UPDATE clients SET
@@ -95,6 +149,6 @@ export async function exitProspeccaoCommercial(clientId: number, reason: string)
         updated_at = @now
       WHERE id = @id
     `,
-    { id: clientId, reason, now: nowIso() }
+    { id: clientId, reason, now }
   );
 }

@@ -6,6 +6,7 @@ import { matchesPhoneFilter } from "@/lib/clients-query";
 import type { ClientFilters } from "@/lib/clients-query";
 import { CONTACT_PRIMARY_ORDER_SQL } from "@/lib/contacts";
 import { parseLeadQualification } from "@/lib/lead-qualification";
+import { listProspeccaoPriorityTypes, queuePriorityToSlug } from "@/lib/call-strategy/priorities-config";
 
 type RawRow = {
   id: number;
@@ -48,9 +49,28 @@ function classifyPhones(phonesRaw: string | null, whatsappsRaw: string | null) {
   return { hasMobile, hasLandline };
 }
 
-function buildFilters(filters: ClientFilters, todayStart: string, todayEnd: string) {
-  const where: string[] = ["1=1", "clients.in_prospeccao_queue = true"];
-  const params: Record<string, string | number> = { todayStart, todayEnd };
+function buildFilters(filters: ClientFilters, todayStart: string, todayEnd: string, nowIso: string) {
+  const where: string[] = [
+    "1=1",
+    `(
+      clients.in_prospeccao_queue = true
+      OR EXISTS (
+        SELECT 1 FROM client_product_prospeccao cpp
+        WHERE cpp.client_id = clients.id AND cpp.in_prospeccao_queue = true
+      )
+    )`,
+    `NOT (
+      EXISTS (
+        SELECT 1 FROM follow_ups fu
+        WHERE fu.client_id = clients.id AND fu.status = 'pending' AND fu.scheduled_at > @nowIso
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM follow_ups fu2
+        WHERE fu2.client_id = clients.id AND fu2.status = 'pending' AND fu2.scheduled_at <= @nowIso
+      )
+    )`
+  ];
+  const params: Record<string, string | number> = { todayStart, todayEnd, nowIso };
   if (filters.city) {
     where.push("lower(clients.city) = lower(@city)");
     params.city = filters.city;
@@ -148,7 +168,10 @@ export type ProspeccaoListItem = ClientListItem & {
 export async function queryProspeccaoQueue(filters: ClientFilters) {
   const todayStart = spDayStartUtcIso();
   const todayEnd = spDayEndUtcIso();
-  const { where, params } = buildFilters(filters, todayStart, todayEnd);
+  const nowIso = new Date().toISOString();
+  const { where, params } = buildFilters(filters, todayStart, todayEnd, nowIso);
+  const priorityTypes = await listProspeccaoPriorityTypes();
+  const sortOrderBySlug = new Map(priorityTypes.map((p) => [p.slug, p.sort_order]));
 
   const limit = filters.limit ?? 50;
   const offset = filters.offset ?? 0;
@@ -161,10 +184,11 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
           scheduled_at,
           CASE
             WHEN scheduled_at < @todayStart THEN 0
-            ELSE 1
+            WHEN scheduled_at <= @nowIso THEN 1
+            ELSE 99
           END AS fu_priority
         FROM follow_ups
-        WHERE status = 'pending'
+        WHERE status = 'pending' AND scheduled_at <= @nowIso
         ORDER BY client_id, scheduled_at ASC
       )
       SELECT
@@ -233,6 +257,19 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
     `,
     params
   );
+
+  rows.sort((a, b) => {
+    const oa = sortOrderBySlug.get(queuePriorityToSlug(a.queue_priority)) ?? a.queue_priority * 100;
+    const ob = sortOrderBySlug.get(queuePriorityToSlug(b.queue_priority)) ?? b.queue_priority * 100;
+    if (oa !== ob) return oa - ob;
+    const ta = a.next_follow_up_at ? new Date(a.next_follow_up_at).getTime() : Number.MAX_SAFE_INTEGER;
+    const tb = b.next_follow_up_at ? new Date(b.next_follow_up_at).getTime() : Number.MAX_SAFE_INTEGER;
+    if (ta !== tb) return ta - tb;
+    const na = (a.trade_name ?? a.legal_name ?? String(a.id)).localeCompare(
+      b.trade_name ?? b.legal_name ?? String(b.id)
+    );
+    return na;
+  });
 
   const items: ProspeccaoListItem[] = rows.map((row) => {
     const { hasMobile, hasLandline } = classifyPhones(row.phones, row.whatsapps);

@@ -32,7 +32,8 @@ export function ClientListView({ initialItems, initialTotal, products, bdrs, def
     phone_availability: "",
     search: "",
     without_approach: defaultFilters?.without_approach ? "1" : "",
-    lead_qualification: ""
+    lead_qualification: "",
+    official_client: ""
   });
   const [offset, setOffset] = useState(0);
   const limit = 50;
@@ -105,6 +106,15 @@ export function ClientListView({ initialItems, initialTotal, products, bdrs, def
             </option>
           ))}
         </FilterSelect>
+        <FilterSelect
+          label="Cliente oficial"
+          value={filters.official_client}
+          onChange={(e) => setFilters((f) => ({ ...f, official_client: e.target.value }))}
+        >
+          <option value="">Todos</option>
+          <option value="yes">Oficial</option>
+          <option value="no">Não oficial</option>
+        </FilterSelect>
       </FilterBar>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
@@ -130,6 +140,11 @@ export function ClientListView({ initialItems, initialTotal, products, bdrs, def
                 <tr key={item.id}>
                   <td>
                     <Link href={`/clientes/${item.id}`}>{item.trade_name || item.legal_name || `#${item.id}`}</Link>
+                    {item.is_official_client ? (
+                      <span className="badge" style={{ marginLeft: 8 }} title="Cliente oficial">
+                        Oficial
+                      </span>
+                    ) : null}
                     {item.has_verified_phone ? (
                       <span className="badge badge-verified" style={{ marginLeft: 8 }}>
                         Verificado
