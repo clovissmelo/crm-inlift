@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { usePathname } from "next/navigation";
 import { CallSessionSidePanel, type CallSessionPanelMode } from "@/components/call-session-side-panel";
 import { type ActiveCallForScript } from "@/components/call-script-guide-panel";
+import { normalizeApi4comExtension } from "@/lib/api4com/phone";
 import { tryAutoRegisterApi4comCall } from "@/lib/api4com/auto-register-call";
 import { pickCallScriptBody } from "@/lib/pick-call-script";
 import type { Product, User } from "@/lib/types";
@@ -39,7 +40,7 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
   const onProspeccaoPage = isProspeccaoPath(pathname);
   const isAdmin = user.roles.includes("admin");
   const canDial = user.roles.includes("bdr") || isAdmin;
-  const hasOwnExtension = Boolean(user.api4com_extension?.trim());
+  const hasOwnExtension = Boolean(normalizeApi4comExtension(user.api4com_extension ?? ""));
   const [products, setProducts] = useState<Product[]>([]);
   const [pending, setPending] = useState<PendingCall[]>([]);
   const autoOpenedRef = useRef<Set<number>>(new Set());

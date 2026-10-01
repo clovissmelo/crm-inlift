@@ -15,6 +15,8 @@ type SessionUserRow = {
   phone: string | null;
   photo_path: string | null;
   status: "active" | "inactive";
+  api4com_extension: string | null;
+  api4com_api_token: string | null;
   created_at: string;
   last_access_at: string | null;
   expires_at: string;
@@ -34,6 +36,8 @@ function rowToUser(row: Omit<SessionUserRow, "expires_at">, roles: UserRole[]): 
     photo_path: row.photo_path,
     status: row.status,
     roles,
+    api4com_extension: row.api4com_extension,
+    has_api4com_api_token: Boolean(row.api4com_api_token?.trim()),
     created_at: row.created_at,
     last_access_at: row.last_access_at
   };
@@ -79,6 +83,8 @@ async function getSessionUser(): Promise<User | null> {
         users.phone,
         users.photo_path,
         users.status,
+        users.api4com_extension,
+        users.api4com_api_token,
         users.created_at,
         users.last_access_at,
         sessions.expires_at
