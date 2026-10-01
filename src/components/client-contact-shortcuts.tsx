@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Phone, Mail, MessageCircle } from "lucide-react";
+import { API4COM_NO_EXTENSION_MESSAGE, type Api4comDialIdentity } from "@/lib/api4com/dial-identity-shared";
 import { VerificationStatusIcon } from "@/components/contact-verification-ui";
 import type { ContactVerification } from "@/lib/types";
 import { WhatsAppTemplateModal } from "@/components/whatsapp-template-modal";
@@ -96,6 +98,11 @@ export function ClientContactShortcuts({
   const [waOpen, setWaOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [identityPickerOpen, setIdentityPickerOpen] = useState(false);
+  const [noExtensionOpen, setNoExtensionOpen] = useState(false);
+  const [dialIdentities, setDialIdentities] = useState<Api4comDialIdentity[]>([]);
+  const [identityLoading, setIdentityLoading] = useState(false);
+  const [dialAsUserId, setDialAsUserId] = useState<number | null>(null);
   const [dialFeedbackOpen, setDialFeedbackOpen] = useState(false);
   const [dialing, setDialing] = useState(false);
   const [dialError, setDialError] = useState<string | null>(null);
@@ -110,19 +117,29 @@ export function ClientContactShortcuts({
   );
   const useApi4com = Boolean(api4com?.canDial && clientId && options.length);
 
-  async function startCall(option: ContactDialOption, fromPicker: boolean) {
-    if (!clientId) return;
+  function resolvedDialAsUserId(): number | null {
+    if (!api4com) return null;
+    if (api4com.hasOwnExtension) return api4com.userId;
+    return dialAsUserId;
+  }
+
+  async function startCall(option: ContactDialOption, fromPicker: boolean, asUserId?: number | null) {
+    if (!clientId || !api4com) return;
+    const dialAs = asUserId ?? resolvedDialAsUserId();
+    if (!dialAs) return;
     setDialing(true);
     setDialError(null);
+    const payload: Record<string, unknown> = {
+      client_id: clientId,
+      contact_id: option.contactId ?? contactId ?? null,
+      product_id: productId ?? null,
+      phone: option.phone
+    };
+    if (dialAs !== api4com.userId) payload.dial_as_user_id = dialAs;
     const res = await fetch("/api/api4com/calls", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id: clientId,
-        contact_id: option.contactId ?? contactId ?? null,
-        product_id: productId ?? null,
-        phone: option.phone
-      })
+      body: JSON.stringify(payload)
     });
     let data: unknown = null;
     try {
@@ -146,20 +163,69 @@ export function ClientContactShortcuts({
     setDialError(null);
   }
 
+  function closeIdentityPicker() {
+    setIdentityPickerOpen(false);
+    setDialError(null);
+  }
+
+  function closeNoExtension() {
+    setNoExtensionOpen(false);
+  }
+
   function closeDialFeedback() {
     setDialFeedbackOpen(false);
     setDialError(null);
   }
 
-  function onCallClick() {
-    if (!useApi4com) return;
+  function proceedToPhonePicker(asUserId: number) {
+    setDialAsUserId(asUserId);
     setDialError(null);
-    setDialFeedbackOpen(false);
     if (options.length === 1) {
-      void startCall(options[0]!, false);
+      void startCall(options[0]!, false, asUserId);
       return;
     }
     setPickerOpen(true);
+  }
+
+  async function openAdminIdentityPicker() {
+    setIdentityLoading(true);
+    setDialError(null);
+    setIdentityPickerOpen(true);
+    try {
+      const res = await fetch("/api/api4com/dial-identities");
+      const data = (await res.json()) as { items?: Api4comDialIdentity[]; error?: string };
+      if (!res.ok) {
+        setDialError(data.error ?? "Não foi possível carregar usuários com ramal.");
+        setDialIdentities([]);
+        return;
+      }
+      setDialIdentities(data.items ?? []);
+    } catch {
+      setDialError("Não foi possível carregar usuários com ramal.");
+      setDialIdentities([]);
+    } finally {
+      setIdentityLoading(false);
+    }
+  }
+
+  function onCallClick() {
+    if (!useApi4com || !api4com) return;
+    setDialError(null);
+    setDialFeedbackOpen(false);
+    if (api4com.hasOwnExtension) {
+      proceedToPhonePicker(api4com.userId);
+      return;
+    }
+    if (api4com.isAdmin) {
+      void openAdminIdentityPicker();
+      return;
+    }
+    setNoExtensionOpen(true);
+  }
+
+  function onIdentityPicked(identity: Api4comDialIdentity) {
+    setIdentityPickerOpen(false);
+    proceedToPhonePicker(identity.id);
   }
 
   const tel =
@@ -239,8 +305,57 @@ export function ClientContactShortcuts({
           }}
         />
       ) : null}
+      <CadastroModal open={noExtensionOpen} title="Ramal não configurado" onClose={closeNoExtension}>
+        <p style={{ whiteSpace: "pre-line", margin: 0 }}>{API4COM_NO_EXTENSION_MESSAGE}</p>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: "0.75rem", flexWrap: "wrap" }}>
+          <Link href="/perfil" className="btn btn-primary" onClick={closeNoExtension}>
+            Ir para Meu perfil
+          </Link>
+          <button type="button" className="btn" onClick={closeNoExtension}>
+            Fechar
+          </button>
+        </div>
+      </CadastroModal>
+      <CadastroModal
+        open={identityPickerOpen}
+        title="Ligar como"
+        onClose={closeIdentityPicker}
+        panelClassName="dial-picker-panel"
+      >
+        <div className="dial-picker-modal">
+          {dialError ? <div className="alert alert-error">{dialError}</div> : null}
+          <p className="muted" style={{ marginTop: 0 }}>
+            Você não tem ramal cadastrado. Escolha um usuário com ramal para testar ligações via API4COM.
+          </p>
+          {identityLoading ? <p className="muted">Carregando…</p> : null}
+          {!identityLoading && dialIdentities.length === 0 && !dialError ? (
+            <div className="alert alert-error">
+              Nenhum usuário ativo com ramal cadastrado. Cadastre ramais em Admin → Usuários ou peça à BDR configurar
+              em Meu perfil.
+            </div>
+          ) : null}
+          <ul className="dial-picker-list">
+            {dialIdentities.map((u) => (
+              <li key={u.id}>
+                <button type="button" className="dial-picker-option" disabled={dialing} onClick={() => onIdentityPicked(u)}>
+                  <span className="dial-picker-option-body">
+                    <span className="dial-picker-number">{u.name}</span>
+                    <span className="dial-picker-meta">
+                      Ramal {u.api4com_extension.trim()} · {u.email}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </CadastroModal>
       <CadastroModal open={dialFeedbackOpen} title="Não foi possível ligar" onClose={closeDialFeedback}>
-        {dialError ? <div className="alert alert-error">{dialError}</div> : null}
+        {dialError ? (
+          <div className="alert alert-error" style={{ whiteSpace: "pre-line" }}>
+            {dialError}
+          </div>
+        ) : null}
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.75rem" }}>
           <button type="button" className="btn btn-primary" onClick={closeDialFeedback}>
             Fechar
@@ -270,7 +385,7 @@ export function ClientContactShortcuts({
                     type="button"
                     className={`dial-picker-option${isBad ? " dial-picker-option--bad" : ""}`}
                     disabled={dialing}
-                    onClick={() => void startCall(o, true)}
+                    onClick={() => void startCall(o, true, resolvedDialAsUserId())}
                   >
                     <VerificationStatusIcon status={status} size={22} />
                     <span className="dial-picker-option-body">

@@ -2,6 +2,7 @@ import { get, all, nowIso, run } from "@/lib/db";
 import { api4comStartCall } from "@/lib/api4com/client";
 import { getApi4comConfig } from "@/lib/api4com/config";
 import { resolveApi4comApiTokenForUser } from "@/lib/api4com/user-token";
+import { API4COM_NO_EXTENSION_MESSAGE } from "@/lib/api4com/dial-identity-shared";
 import { normalizeApi4comCalledNumber, normalizeApi4comExtension } from "@/lib/api4com/phone";
 import { normalizeCallScriptLog, type CallScriptLogEntry } from "@/lib/call-script-log";
 
@@ -174,15 +175,21 @@ export async function findRecentDuplicateCall(userId: number, clientId: number |
 
 export async function initiateApi4comCall(input: {
   userId: number;
+  /** Ramal/token API4COM (padrão: o próprio usuário). Admin pode informar outro usuário para testes. */
+  dialIdentityUserId?: number;
   clientId?: number | null;
   contactId?: number | null;
   productId?: number | null;
   phone: string;
   dialSessionRootId?: number | null;
 }) {
-  const extension = await getUserExtension(input.userId);
+  const dialIdentityUserId = input.dialIdentityUserId ?? input.userId;
+  const extension = await getUserExtension(dialIdentityUserId);
   if (!extension) {
-    throw new Error("Configure seu ramal API4COM no perfil antes de ligar.");
+    if (dialIdentityUserId === input.userId) {
+      throw new Error(API4COM_NO_EXTENSION_MESSAGE);
+    }
+    throw new Error("O usuário selecionado não possui ramal configurado.");
   }
 
   const called = normalizeApi4comCalledNumber(input.phone);
@@ -251,8 +258,11 @@ export async function initiateApi4comCall(input: {
   if (input.clientId) metadata.client_id = String(input.clientId);
   if (input.contactId) metadata.contact_id = String(input.contactId);
   if (input.productId) metadata.product_id = String(input.productId);
+  if (dialIdentityUserId !== input.userId) {
+    metadata.dial_identity_user_id = String(dialIdentityUserId);
+  }
 
-  const apiToken = await resolveApi4comApiTokenForUser(input.userId);
+  const apiToken = await resolveApi4comApiTokenForUser(dialIdentityUserId);
   if (!apiToken) {
     throw new Error(
       "Token API4COM não configurado. BDR: cadastre em Meu perfil; admin: Variáveis ou cadastro do usuário."

@@ -1,4 +1,5 @@
 import { initiateApi4comCall } from "@/lib/api4com/calls";
+import { assertDialIdentityAllowed } from "@/lib/api4com/dial-identity";
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { api4comStartCallSchema } from "@/lib/validators";
 
@@ -15,8 +16,15 @@ export async function POST(request: Request) {
   }
 
   try {
+    const dialAsUserId = parsed.data.dial_as_user_id ?? user.id;
+    await assertDialIdentityAllowed({
+      sessionUserId: user.id,
+      isAdmin: user.roles.includes("admin"),
+      dialIdentityUserId: dialAsUserId
+    });
     const result = await initiateApi4comCall({
       userId: user.id,
+      dialIdentityUserId: dialAsUserId,
       clientId: parsed.data.client_id,
       contactId: parsed.data.contact_id,
       productId: parsed.data.product_id,

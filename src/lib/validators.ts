@@ -60,7 +60,8 @@ export const api4comStartCallSchema = z.object({
   contact_id: z.number().int().positive().optional().nullable(),
   product_id: z.number().int().positive().optional().nullable(),
   phone: z.string().trim().min(8, "Informe o telefone"),
-  dial_session_root_id: z.number().int().positive().optional().nullable()
+  dial_session_root_id: z.number().int().positive().optional().nullable(),
+  dial_as_user_id: z.number().int().positive().optional().nullable()
 });
 
 export const companySchema = z.object({

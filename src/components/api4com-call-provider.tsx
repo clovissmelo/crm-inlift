@@ -23,6 +23,9 @@ type PendingCall = {
 
 type Api4comSession = {
   canDial: boolean;
+  hasOwnExtension: boolean;
+  isAdmin: boolean;
+  userId: number;
 };
 
 const Api4comContext = createContext<Api4comSession | null>(null);
@@ -34,7 +37,9 @@ export function useApi4comSession() {
 export function Api4comCallProvider({ user, children }: { user: User; children: React.ReactNode }) {
   const pathname = usePathname();
   const onProspeccaoPage = isProspeccaoPath(pathname);
-  const canDial = user.roles.includes("bdr");
+  const isAdmin = user.roles.includes("admin");
+  const canDial = user.roles.includes("bdr") || isAdmin;
+  const hasOwnExtension = Boolean(user.api4com_extension?.trim());
   const [products, setProducts] = useState<Product[]>([]);
   const [pending, setPending] = useState<PendingCall[]>([]);
   const autoOpenedRef = useRef<Set<number>>(new Set());
@@ -151,7 +156,7 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
     canDial && onProspeccaoPage && pendingCount > 0 && panelMode !== "result" && !activeCall;
 
   return (
-    <Api4comContext.Provider value={{ canDial }}>
+    <Api4comContext.Provider value={{ canDial, hasOwnExtension, isAdmin, userId: user.id }}>
       {showPendingHint ? (
         <div
           className="alert alert-info"
