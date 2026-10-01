@@ -30,6 +30,7 @@ export type PhoneDialContextItem = {
   total: number;
   status: string;
   attempt_label: string;
+  cycle_no_contact_count: number;
   cycle_no_answer_count: number;
   cycle_invalid_count: number;
   cycle_wrong_number_count: number;
@@ -176,6 +177,7 @@ export async function buildClientDialStrategySummary(input: {
       total,
       status: p.status,
       attempt_label: phoneAttemptLabel(p, settings),
+      cycle_no_contact_count: p.cycle_no_contact_count,
       cycle_no_answer_count: p.cycle_no_answer_count,
       cycle_invalid_count: p.cycle_invalid_count,
       cycle_wrong_number_count: p.cycle_wrong_number_count,
@@ -214,7 +216,8 @@ export async function buildClientDialStrategySummary(input: {
   else if (!anyEligible && waitingNext) lead_status = "aguardando_intervalo";
 
   const tried = phones.filter(
-    (p) => p.cycle_no_answer_count + p.cycle_invalid_count + p.cycle_wrong_number_count > 0
+    (p) =>
+      p.cycle_no_contact_count + p.cycle_invalid_count + p.cycle_wrong_number_count > 0
   ).length;
   const phone_summary = `${tried} de ${total} número${total === 1 ? "" : "s"} tentados`;
 

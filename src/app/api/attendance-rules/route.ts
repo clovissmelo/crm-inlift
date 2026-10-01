@@ -1,12 +1,14 @@
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { listAttendanceRules } from "@/lib/attendance/rules-repo";
+import { getCallStrategySettings } from "@/lib/call-strategy/settings";
 
 /** Regras ativas para registro BDR (somente leitura). */
 export async function GET() {
   const user = await requireApiUser();
   if (!user) return jsonUnauthorized();
-  const items = await listAttendanceRules(true);
+  const [items, settings] = await Promise.all([listAttendanceRules(true), getCallStrategySettings()]);
   return Response.json({
+    max_no_contact_attempts: settings.max_no_contact_attempts,
     items: items.map((r) => ({
       id: r.id,
       answered: r.answered,

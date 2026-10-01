@@ -13,15 +13,14 @@ import {
   type CommercialOption,
   type ContactOutcomeOption
 } from "@/components/call-three-layer-registration-fields";
+import type { OperationalAction } from "@/lib/attendance/operational-actions";
 import {
-  associationOverrides,
-  mergeRegistrationRules,
-  type AssociationRulePayload
-} from "@/lib/classifications/registration-rules";
-import {
-  enforceRulesForAction,
-  type OperationalAction
-} from "@/lib/attendance/operational-actions";
+  filterCommercialByContactCompat,
+  listAnsweredCommercialOptions,
+  resolveAllowedCommercialIds,
+  resolveEffectiveBdrRules
+} from "@/lib/attendance/bdr-registration";
+import { CallDialContextBanner } from "@/components/call-dial-context-banner";
 import type { TechnicalResultTypeRow } from "@/lib/classifications/technical-result-match";
 import { formatCallScriptLogForNotes, normalizeCallScriptLog } from "@/lib/call-script-log";
 import { ApproachNextStepField } from "@/components/approach-next-step-field";
@@ -73,6 +72,7 @@ type ResultType = {
 type AttendanceRuleLite = {
   id: number;
   answered: boolean;
+  name: string;
   operational_action: OperationalAction;
   commercial_result_type_id: number | null;
 };
@@ -174,9 +174,8 @@ export function Api4comCallResultForm({
   const [, setTechnicalTypes] = useState<TechnicalResultTypeRow[]>([]);
   const [contactTypes, setContactTypes] = useState<ContactOutcomeOption[]>([]);
   const [compatMap, setCompatMap] = useState<Record<string, number[]>>({});
-  const [associations, setAssociations] = useState<AssociationRulePayload[]>([]);
   const [attendanceRules, setAttendanceRules] = useState<AttendanceRuleLite[]>([]);
-  const [technicalTypeId, setTechnicalTypeId] = useState<number | null>(null);
+  const [maxNoContact, setMaxNoContact] = useState(3);
   const [contactOutcomeId, setContactOutcomeId] = useState("");
   const [, setTechnicalSlug] = useState<string | null>(null);
   const [technicalLabel, setTechnicalLabel] = useState("");
@@ -212,7 +211,6 @@ export function Api4comCallResultForm({
       (ctxData.call.technical_display_name
         ? { display_name: ctxData.call.technical_display_name, slug: slug ?? "" }
         : null);
-    setTechnicalTypeId(techRow && "id" in techRow ? techRow.id : null);
     setTechnicalLabel(
       ctxData.call.technical_display_name ??
         (techRow && "display_name" in techRow ? techRow.display_name : "") ??
@@ -245,8 +243,12 @@ export function Api4comCallResultForm({
         fetch("/api/attendance-rules")
       ]);
       if (attRes.ok) {
-        const att = (await attRes.json()) as { items?: AttendanceRuleLite[] };
+        const att = (await attRes.json()) as {
+          items?: AttendanceRuleLite[];
+          max_no_contact_attempts?: number;
+        };
         setAttendanceRules(att.items ?? []);
+        if (att.max_no_contact_attempts) setMaxNoContact(att.max_no_contact_attempts);
       } else {
         setAttendanceRules([]);
       }
@@ -260,7 +262,6 @@ export function Api4comCallResultForm({
         contact?: ContactOutcomeOption[];
         commercial?: CommercialOption[];
         contact_commercial_compat?: Record<string, number[]>;
-        result_registration_associations?: AssociationRulePayload[];
         error?: string;
       };
       const techTypes = classRes.ok ? (classJson.technical ?? []) : [];
@@ -295,7 +296,6 @@ export function Api4comCallResultForm({
       setTechnicalTypes(techTypes);
       setContactTypes(contacts);
       setCompatMap(classJson.contact_commercial_compat ?? {});
-      setAssociations(classJson.result_registration_associations ?? []);
       setResultTypes(activeResults);
 
       const ctxJson = (await ctxRes.json()) as DialContext & { error?: string };
@@ -369,32 +369,16 @@ export function Api4comCallResultForm({
   const selectedContact = contactTypes.find((c) => String(c.id) === contactOutcomeId);
   const compatIds = contactOutcomeId ? compatMap[contactOutcomeId] ?? null : null;
 
-  const allowedCommercialIds = useMemo(() => {
-    if (technicalTypeId == null || associations.length === 0) return null;
-    return associations
-      .filter((a) => a.call_technical_result_type_id === technicalTypeId && a.status === "active")
-      .map((a) => a.commercial_result_type_id);
-  }, [associations, technicalTypeId]);
-
-  const activeAssociation = useMemo(() => {
-    if (!technicalTypeId || !resultTypeId) return null;
-    return (
-      associations.find(
-        (a) =>
-          a.status === "active" &&
-          a.call_technical_result_type_id === technicalTypeId &&
-          a.commercial_result_type_id === Number(resultTypeId)
-      ) ?? null
-    );
-  }, [associations, technicalTypeId, resultTypeId]);
-
-  const attendanceByCommercialId = useMemo(() => {
-    const m = new Map<number, AttendanceRuleLite>();
-    for (const r of attendanceRules) {
-      if (r.commercial_result_type_id != null) m.set(r.commercial_result_type_id, r);
-    }
-    return m;
-  }, [attendanceRules]);
+  const allowedCommercialIds = useMemo(
+    () =>
+      resolveAllowedCommercialIds(
+        attendanceRules,
+        resultTypes.map((r) => ({ id: r.id, slug: r.slug, name: r.name })),
+        contactOutcomeId || null,
+        compatMap
+      ),
+    [attendanceRules, resultTypes, contactOutcomeId, compatMap]
+  );
 
   const callWasAnswered = useMemo(() => {
     if (call?.answered_at) return true;
@@ -407,43 +391,38 @@ export function Api4comCallResultForm({
   }, [call?.answered_at, call?.technical_slug, call?.duration_seconds]);
 
   const bdrResultTypes = useMemo(() => {
-    if (attendanceRules.length === 0) return resultTypes;
-    const allowed = new Set(
-      attendanceRules
-        .filter((r) => r.answered && r.operational_action !== "auto_no_contact")
-        .map((r) => r.commercial_result_type_id)
-        .filter((id): id is number => id != null)
+    const base = listAnsweredCommercialOptions(
+      attendanceRules,
+      resultTypes.map((r) => ({ id: r.id, slug: r.slug, name: r.name }))
     );
-    if (allowed.size === 0) return resultTypes;
-    return resultTypes.filter((r) => allowed.has(r.id));
+    if (attendanceRules.length === 0) return resultTypes;
+    return resultTypes.filter((r) => base.some((b) => b.id === r.id));
   }, [resultTypes, attendanceRules]);
+
+  const commercialOptionsForContact = useMemo(
+    () =>
+      filterCommercialByContactCompat(
+        bdrResultTypes.map((r) => ({ id: r.id, slug: r.slug, name: r.name })),
+        contactOutcomeId,
+        compatMap
+      ),
+    [bdrResultTypes, contactOutcomeId, compatMap]
+  );
 
   const selectedResult = useMemo(() => {
     if (!selectedResultBase) return undefined;
-    const rule = attendanceByCommercialId.get(selectedResultBase.id);
-    if (rule) {
-      const enforced = enforceRulesForAction(rule.operational_action);
-      return {
-        ...selectedResultBase,
-        collect_notes: enforced.collect_notes,
-        require_schedule_return: enforced.require_schedule_return,
-        require_final_registration: enforced.require_final_registration,
-        ask_decision_maker: enforced.ask_decision_maker,
-        mark_phone_verified: enforced.mark_phone_verified,
-        requires_meeting: enforced.requires_meeting,
-        allowed_next_actions: enforced.allowed_next_actions
-      };
-    }
-    const merged = mergeRegistrationRules(selectedResultBase, associationOverrides(activeAssociation));
+    const effective = resolveEffectiveBdrRules(selectedResultBase, attendanceRules);
     return {
       ...selectedResultBase,
-      collect_notes: merged.collect_notes,
-      require_schedule_return: merged.require_schedule_return,
-      require_final_registration: merged.require_final_registration,
-      ask_decision_maker: merged.ask_decision_maker,
-      allowed_next_actions: merged.allowed_next_actions
+      collect_notes: effective.collect_notes,
+      require_schedule_return: effective.require_schedule_return,
+      require_final_registration: effective.require_final_registration,
+      ask_decision_maker: effective.ask_decision_maker,
+      mark_phone_verified: effective.mark_phone_verified,
+      requires_meeting: effective.requires_meeting,
+      allowed_next_actions: effective.allowed_next_actions
     };
-  }, [selectedResultBase, activeAssociation, attendanceByCommercialId]);
+  }, [selectedResultBase, attendanceRules]);
 
   useEffect(() => {
     if (!contactOutcomeId || resultLockedByIntegration) return;
@@ -862,6 +841,7 @@ export function Api4comCallResultForm({
 
       {step === "result" && !contextLoading && callWasAnswered ? (
         <form onSubmit={submit}>
+          {callId ? <CallDialContextBanner callId={callId} maxNoContact={maxNoContact} compact /> : null}
           {!call?.client_id ? (
             <div className="alert alert-error" style={{ marginBottom: 12 }}>
               Esta ligação não está vinculada a um cliente no CRM. Você pode dispensar o registro pendente ou fechar e
@@ -879,17 +859,17 @@ export function Api4comCallResultForm({
               if (!resultLockedByIntegration) setResultTypeId("");
             }}
             contactLocked={contactLocked}
-            commercialTypes={bdrResultTypes.map((r) => {
-              const rule = attendanceByCommercialId.get(r.id);
-              const enforced = rule ? enforceRulesForAction(rule.operational_action) : null;
+            commercialTypes={commercialOptionsForContact.map((r) => {
+              const full = bdrResultTypes.find((x) => x.id === r.id)!;
+              const effective = resolveEffectiveBdrRules(full, attendanceRules);
               return {
-              id: r.id,
-              slug: r.slug,
-              name: r.name,
-              description: null,
-              collect_notes: enforced?.collect_notes ?? r.collect_notes,
-              require_schedule_return: enforced?.require_schedule_return ?? r.require_schedule_return
-            };
+                id: r.id,
+                slug: r.slug,
+                name: r.name,
+                description: null,
+                collect_notes: effective.collect_notes,
+                require_schedule_return: effective.require_schedule_return
+              };
             })}
             compatIds={compatIds}
             allowedCommercialIds={allowedCommercialIds}

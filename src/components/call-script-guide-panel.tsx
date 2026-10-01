@@ -9,6 +9,7 @@ import {
   type ScriptFlow,
   type ScriptFlowStep
 } from "@/lib/script-flow";
+import { CallDialContextBanner } from "@/components/call-dial-context-banner";
 import "./call-script-guide.css";
 
 export type ActiveCallForScript = {
@@ -145,6 +146,7 @@ export function CallScriptGuidePanel({
         </header>
 
         <div className="call-script-panel-body">
+          <CallDialContextBanner callId={call.id} compact />
           {!flow || !step ? (
             <p className="muted">
               {!scriptBody

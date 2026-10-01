@@ -16,20 +16,25 @@ export async function evaluateProspeccaoQueueAfterAttempt(
   await refreshClientPhoneSummary(clientId);
   const exhausted = await phonesExhaustedForClient(clientId);
 
+  if (exhausted) {
+    await run(
+      `
+        UPDATE client_product_prospeccao SET
+          in_prospeccao_queue = false,
+          exit_reason = 'phones_exhausted',
+          exited_at = @now,
+          updated_at = @now
+        WHERE client_id = @clientId AND in_prospeccao_queue = true
+          AND (exit_reason IS NULL OR exit_reason = 'phones_exhausted')
+      `,
+      { clientId, now: nowIso() }
+    );
+  }
+
   if (productId != null) {
     await ensureClientProductProspeccao(clientId, productId);
     if (exhausted) {
-      await run(
-        `
-          UPDATE client_product_prospeccao SET
-            in_prospeccao_queue = false,
-            exit_reason = 'phones_exhausted',
-            exited_at = @now,
-            updated_at = @now
-          WHERE client_id = @clientId AND product_id = @productId AND in_prospeccao_queue = true
-        `,
-        { clientId, productId, now: nowIso() }
-      );
+      /* já sincronizado acima para todos os produtos ainda na fila */
     } else {
       await run(
         `

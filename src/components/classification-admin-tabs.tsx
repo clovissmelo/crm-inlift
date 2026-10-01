@@ -1,25 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { ResultAssociationMatrixAdmin } from "@/components/result-association-matrix-admin";
+import Link from "next/link";
 import { ResultadoComercialAdmin } from "@/components/resultado-comercial-admin";
-import "@/components/result-association-admin.css";
 
 export function ClassificationAdminTabs({ canDelete }: { canDelete?: boolean }) {
-  const [tab, setTab] = useState<"matrix" | "commercial">("matrix");
-
   return (
     <div>
-      <div className="classification-admin-tabs" style={{ display: "flex", gap: 8, marginBottom: "1rem", flexWrap: "wrap" }}>
-        <button type="button" className={`btn${tab === "matrix" ? " btn-primary" : ""}`} onClick={() => setTab("matrix")}>
-          Matriz de fluxo operacional
-        </button>
-        <button type="button" className={`btn${tab === "commercial" ? " btn-primary" : ""}`} onClick={() => setTab("commercial")}>
-          Resultados Comerciais
-        </button>
-      </div>
-      {tab === "matrix" ? <ResultAssociationMatrixAdmin /> : null}
-      {tab === "commercial" ? <ResultadoComercialAdmin canDelete={canDelete} commercialOnly /> : null}
+      <p className="muted" style={{ maxWidth: 720, marginBottom: "1rem" }}>
+        Catálogo de nomes e slugs dos resultados comerciais. Regras operacionais (tentativas, próximo passo, funil e
+        saída da fila) são configuradas em{" "}
+        <Link href="/admin/prospeccao">Admin → Prospecção → Regras de atendimento</Link>. A matriz técnica legada não é
+        mais editável aqui — o mapeamento API4COM permanece na integração.
+      </p>
+      <ResultadoComercialAdmin canDelete={canDelete} commercialOnly />
     </div>
   );
 }

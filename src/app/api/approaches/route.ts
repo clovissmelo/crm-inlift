@@ -75,9 +75,7 @@ export async function POST(request: Request) {
   const enforced = attendanceRule
     ? enforceRulesForAction(attendanceRule.operational_action)
     : null;
-  const effectiveRules = enforced
-    ? { ...mergeRegistrationRules(resultType, associationOverrides(associationRow)), ...enforced }
-    : mergeRegistrationRules(resultType, associationOverrides(associationRow));
+  const effectiveRules = enforced ?? mergeRegistrationRules(resultType, associationOverrides(associationRow));
   const pipelineStageId =
     attendanceRule?.pipeline_stage_id ?? associationRow?.pipeline_stage_id ?? null;
 
