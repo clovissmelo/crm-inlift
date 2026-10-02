@@ -64,12 +64,18 @@ export function parseSociosPessoaFisicaFromQsa(qsa: unknown): SocioPessoaFisica[
   return out;
 }
 
+const BRASIL_API_FETCH_HEADERS: HeadersInit = {
+  Accept: "application/json",
+  // Brasil API responde 403 sem User-Agent (fetch Node/Vercel usa UA genérico bloqueado).
+  "User-Agent": "CRM-Inlift/1.0 (cnpj-enrichment; +https://crm-inlift.vercel.app)"
+};
+
 export async function enrichFromReceita(cnpj: string, simulation: boolean): Promise<Partial<EnrichmentResult>> {
   if (simulation) return {};
   const url = BRASIL_API_CNPJ.replace("{cnpj}", cnpj);
   try {
     const res = await fetch(url, {
-      headers: { Accept: "application/json" },
+      headers: BRASIL_API_FETCH_HEADERS,
       signal: AbortSignal.timeout(20000)
     });
     if (!res.ok) return {};
