@@ -2,6 +2,7 @@ import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { formatLeadGenActivityEntry, runPhaseActivityLine } from "@/lib/lead-generation/activity-feed";
 import { drainLeadGenerationTicks } from "@/lib/lead-generation/drain-ticks";
+import { computeRunProgressPct } from "@/lib/lead-generation/run-progress";
 import {
   deleteLeadGenerationRun,
   getLeadGenerationRun,
@@ -22,19 +23,31 @@ export async function GET(_request: Request, { params }: Params) {
   const id = Number((await params).id);
   if (!Number.isFinite(id)) return Response.json({ error: "ID inválido" }, { status: 400 });
 
+  const url = new URL(_request.url);
+  const refreshOnly = url.searchParams.get("refresh") === "1";
+
   let run = await getLeadGenerationRun(id);
   if (!run) return Response.json({ error: "Execução não encontrada" }, { status: 404 });
 
-  if (["queued", "running"].includes(run.status)) {
+  if (!refreshOnly && ["queued", "running"].includes(run.status)) {
     await drainLeadGenerationTicks({ runId: id, maxTicks: 5, maxMs: 22_000 });
     run = (await getLeadGenerationRun(id))!;
   }
 
-  if (["completed", "partial", "failed", "cancelled"].includes(run.status)) {
-    run = { ...run, counts_json: await recomputeRunCountsFromItems(id) };
+  if (["queued", "running", "paused", "completed", "partial", "failed", "cancelled"].includes(run.status)) {
+    const counts_json = await recomputeRunCountsFromItems(id);
+    run = {
+      ...run,
+      counts_json,
+      progress_pct: computeRunProgressPct({
+        phase: run.phase,
+        status: run.status,
+        max_stations: run.max_stations,
+        counts_json
+      })
+    };
   }
 
-  const url = new URL(_request.url);
   const tab = url.searchParams.get("tab");
   const wantFeed = url.searchParams.get("feed") === "1";
   let items: Record<string, unknown>[] | undefined;

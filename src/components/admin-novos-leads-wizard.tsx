@@ -383,6 +383,22 @@ export function AdminNovosLeadsWizard() {
     [applyRunRow]
   );
 
+  const refreshRunProgress = useCallback(
+    async (id: number, withFeed = false, pollGeneration = pollGenerationRef.current) => {
+      if (id <= 0 || pollGeneration !== pollGenerationRef.current) return;
+      const q = withFeed ? "?feed=1&refresh=1" : "?refresh=1";
+      const res = await fetch(`/api/admin/lead-generation/runs/${id}${q}`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        run: RunDetail;
+        activity?: LeadGenActivityLine[];
+        phase_line?: string | null;
+      };
+      applyPollPayload(data, withFeed, pollGeneration);
+    },
+    [applyPollPayload]
+  );
+
   const pollRunProgress = useCallback(
     async (id: number, withFeed = false, pollGeneration = pollGenerationRef.current) => {
       if (id <= 0) return;
@@ -393,15 +409,7 @@ export function AdminNovosLeadsWizard() {
           : runsRef.current.find((r) => r.id === id);
 
       if (!runNeedsLeadGenDrain(snap)) {
-        const q = withFeed ? "?feed=1" : "";
-        const res = await fetch(`/api/admin/lead-generation/runs/${id}${q}`);
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          run: RunDetail;
-          activity?: LeadGenActivityLine[];
-          phase_line?: string | null;
-        };
-        applyPollPayload(data, withFeed, pollGeneration);
+        await refreshRunProgress(id, withFeed, pollGeneration);
         return;
       }
 
@@ -420,7 +428,7 @@ export function AdminNovosLeadsWizard() {
         setTickBusy(false);
       }
     },
-    [applyPollPayload]
+    [applyPollPayload, refreshRunProgress]
   );
 
   const tickActiveRun = useCallback(
@@ -481,10 +489,15 @@ export function AdminNovosLeadsWizard() {
     const withFeed = execOverlayOpen || backgroundRunNotice;
 
     async function tickOnce() {
-      if (cancelled || tickInFlightRef.current || document.visibilityState === "hidden") return;
+      if (cancelled || document.visibilityState === "hidden") return;
+      const gen = pollGenerationRef.current;
+      if (tickInFlightRef.current) {
+        await refreshRunProgress(runIdToPoll!, withFeed, gen);
+        return;
+      }
       tickInFlightRef.current = true;
       try {
-        await pollRunProgress(runIdToPoll!, withFeed);
+        await pollRunProgress(runIdToPoll!, withFeed, gen);
       } finally {
         tickInFlightRef.current = false;
       }
@@ -515,7 +528,7 @@ export function AdminNovosLeadsWizard() {
       window.clearInterval(t);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [onNovosLeadsPage, runIdToPoll, execOverlayOpen, backgroundRunNotice, pollRunProgress]);
+  }, [onNovosLeadsPage, runIdToPoll, execOverlayOpen, backgroundRunNotice, pollRunProgress, refreshRunProgress]);
 
   const selectedRunStatus = useMemo(() => {
     if (activeRunId == null) return null;
