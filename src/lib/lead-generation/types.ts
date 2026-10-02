@@ -50,6 +50,9 @@ export type LeadGenCounts = {
   no_progress_ticks?: number;
   /** Chamadas à API Google nesta execução (inclui tentativas sem lead novo). */
   google_api_attempts?: number;
+  /** Derivados do banco (refresh / recompute). */
+  pending?: number;
+  processing?: number;
 };
 
 export function emptyCounts(): LeadGenCounts {

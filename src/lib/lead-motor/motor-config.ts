@@ -16,6 +16,9 @@ export const REQUEST_TIMEOUT_MS = 25000;
 
 export const ITEMS_PER_CRON_TICK = 3;
 
+/** Itens em `processing` sem atualização — reenfileira após timeout (tick Vercel interrompido). */
+export const ITEM_PROCESSING_STALE_MS = 90_000;
+
 /** Cidades ANP carregadas por tick (acelera RS/PR inteiro). */
 export const ANP_CITIES_PER_TICK = 6;
 

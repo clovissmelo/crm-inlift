@@ -4,6 +4,13 @@ import type { LeadGenCounts } from "@/lib/lead-generation/types";
 
 const ANP_WEIGHT = 35;
 
+/** ANP concluída (ou não aplicável) — evita tratar `cities_total=0` como 100% ANP. */
+export function anpLoadComplete(counts: LeadGenCounts | Record<string, number>): boolean {
+  const citiesTotal = counts.cities_total ?? 0;
+  if (citiesTotal <= 0) return false;
+  return (counts.cities_loaded ?? 0) >= citiesTotal;
+}
+
 export function computeRunProgressPct(input: {
   phase: string;
   status?: string;
@@ -21,13 +28,8 @@ export function computeRunProgressPct(input: {
   const processed = counts.processed ?? 0;
   const itemsTotal = counts.items_total ?? 0;
 
-  const citiesComplete = citiesTotal > 0 && citiesLoaded >= citiesTotal;
-  const anpRatio =
-    citiesTotal > 0
-      ? Math.min(1, citiesLoaded / citiesTotal)
-      : input.phase === "anp_load"
-        ? 0.02
-        : 1;
+  const citiesComplete = anpLoadComplete(counts);
+  const anpRatio = citiesTotal > 0 ? Math.min(1, citiesLoaded / citiesTotal) : 0.02;
 
   let goalRatio = Math.min(1, created / maxStations);
   if (goalRatio === 0 && itemsTotal > 0 && processed > 0 && input.phase !== "anp_load") {
@@ -61,8 +63,11 @@ export function runProgressDetail(input: {
   const citiesLoaded = counts.cities_loaded ?? 0;
   const created = counts.created ?? 0;
 
-  if (input.phase === "anp_load" && citiesTotal === 0) {
+  if ((input.phase === "anp_load" || input.phase === "processing") && citiesTotal === 0) {
     return "Preparando cidades…";
+  }
+  if (input.phase === "processing" && !anpLoadComplete(counts)) {
+    return `Retomando ANP ${citiesLoaded}/${citiesTotal} cidades`;
   }
   if (input.phase === "anp_load" && citiesTotal > 0 && citiesLoaded < citiesTotal) {
     return `ANP ${citiesLoaded}/${citiesTotal} cidades`;

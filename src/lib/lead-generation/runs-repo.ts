@@ -371,6 +371,9 @@ export async function recomputeRunCountsFromItems(runId: number): Promise<LeadGe
   counts.no_google_match = byStatus.no_google_match ?? 0;
   counts.errors = byStatus.error ?? 0;
   counts.skipped_invalid_cnpj = byStatus.skipped_invalid_cnpj ?? 0;
+  counts.pending = byStatus.pending ?? 0;
+  counts.processing = byStatus.processing ?? 0;
+  counts.anp_found = Math.max(counts.anp_found ?? 0, counts.items_total ?? 0);
   return counts;
 }
 
@@ -383,6 +386,28 @@ export async function fetchPendingItemIds(runId: number, limit: number) {
       LIMIT @limit
     `,
     { runId, limit }
+  );
+}
+
+/** Pendentes + itens travados em `processing` (timeout de servidor). */
+export async function fetchRunnableItemIds(
+  runId: number,
+  limit: number,
+  staleAfterMs: number
+) {
+  const cutoff = new Date(Date.now() - staleAfterMs).toISOString();
+  return all<{ id: number }>(
+    `
+      SELECT id FROM lead_generation_items
+      WHERE run_id = @runId
+        AND (
+          status = 'pending'
+          OR (status = 'processing' AND updated_at < @cutoff)
+        )
+      ORDER BY CASE WHEN status = 'pending' THEN 0 ELSE 1 END, id
+      LIMIT @limit
+    `,
+    { runId, limit, cutoff }
   );
 }
 

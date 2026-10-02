@@ -1,4 +1,8 @@
-import { ANP_CITIES_PER_TICK, ITEMS_PER_CRON_TICK } from "@/lib/lead-motor/motor-config";
+import {
+  ANP_CITIES_PER_TICK,
+  ITEM_PROCESSING_STALE_MS,
+  ITEMS_PER_CRON_TICK
+} from "@/lib/lead-motor/motor-config";
 import type { AnpStation } from "@/lib/lead-motor/anp";
 import { fetchAnpMunicipality, filterStations, mapAnpRecord } from "@/lib/lead-motor/anp";
 import { buildGoogleSearchQuery, findPlaceId, getPlaceDetails } from "@/lib/lead-motor/google-places";
@@ -29,7 +33,7 @@ import {
 } from "@/lib/lead-generation/quota";
 import {
   countItemsByStatus,
-  fetchPendingItemIds,
+  fetchRunnableItemIds,
   getGoogleCache,
   getItem,
   getLeadGenerationRun,
@@ -39,8 +43,8 @@ import {
   updateRun,
   upsertGoogleCache
 } from "@/lib/lead-generation/runs-repo";
-import { computeRunProgressPct } from "@/lib/lead-generation/run-progress";
-import type { LeadGenCounts } from "@/lib/lead-generation/types";
+import { anpLoadComplete, computeRunProgressPct } from "@/lib/lead-generation/run-progress";
+import { emptyCounts, type LeadGenCounts } from "@/lib/lead-generation/types";
 import { createClientFromLead, findExistingClientIdByCnpj } from "@/lib/lead-motor/persist-client";
 import { getGooglePlacesApiKey } from "@/lib/google-places-settings";
 import { run, nowIso } from "@/lib/db";
@@ -195,6 +199,8 @@ async function recomputeCounts(runId: number, runRow: { counts_json: LeadGenCoun
   counts.skipped_invalid_cnpj = byStatus.skipped_invalid_cnpj ?? 0;
   const pending = byStatus.pending ?? 0;
   const processing = byStatus.processing ?? 0;
+  counts.pending = pending;
+  counts.processing = processing;
   let pct = 0;
   if (counts.items_total > 0) {
     const done = counts.items_total - pending - processing;
@@ -493,9 +499,11 @@ async function tickAnpLoad(runId: number) {
   }
 
   const buffer =
-    runRow.max_stations <= 20
-      ? Math.max(5, runRow.max_stations * 3)
-      : Math.max(15, runRow.max_stations * 8);
+    runRow.max_stations <= 3
+      ? Math.max(1, runRow.max_stations)
+      : runRow.max_stations <= 20
+        ? Math.max(5, runRow.max_stations * 3)
+        : Math.max(15, runRow.max_stations * 8);
   if (pending >= buffer) {
     await updateRun(runId, {
       phase: "processing",
@@ -536,9 +544,31 @@ async function processOneItem(
   runRow: NonNullable<Awaited<ReturnType<typeof getLeadGenerationRun>>>
 ) {
   const item = await getItem(itemId);
-  if (!item || String(item.status) !== "pending") return;
+  if (!item) return;
+  const itemStatus = String(item.status);
+  if (itemStatus !== "pending" && itemStatus !== "processing") return;
 
-  await updateItem(itemId, { status: "processing" });
+  if (itemStatus === "pending") {
+    await updateItem(itemId, { status: "processing" });
+  }
+
+  try {
+    await processOneItemBody(runId, itemId, runRow, item);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erro inesperado ao processar posto";
+    const cur = await getItem(itemId);
+    if (cur && String(cur.status) === "processing") {
+      await updateItem(itemId, { status: "error", error_message: msg });
+    }
+  }
+}
+
+async function processOneItemBody(
+  runId: number,
+  itemId: number,
+  runRow: NonNullable<Awaited<ReturnType<typeof getLeadGenerationRun>>>,
+  item: Record<string, unknown>
+) {
   const station = parseStationFromItem(item);
   const snapshot = runRow.flow_snapshot_json;
   const stepLog: StepRunResult[] = [];
@@ -797,11 +827,18 @@ async function whenProcessingQueueEmpty(
   runId: number,
   runRow: NonNullable<Awaited<ReturnType<typeof getLeadGenerationRun>>>
 ) {
-  let { counts } = await recomputeCounts(runId, runRow);
+  const recomp = await recomputeCounts(runId, runRow);
+  let { counts } = recomp;
+  const { pending, processing } = recomp;
   counts = bumpProgressTracking(counts, runRow.phase);
+
+  if (pending === 0 && processing > 0) {
+    await updateRun(runId, { counts_json: counts });
+    return;
+  }
   const created = counts.created ?? 0;
   const target = runRow.max_stations;
-  const citiesDone = (counts.cities_loaded ?? 0) >= (counts.cities_total ?? 0);
+  const citiesDone = anpLoadComplete(counts);
   const itemsTotal = counts.items_total ?? 0;
   const anpFound = counts.anp_found ?? 0;
 
@@ -855,6 +892,12 @@ async function tickProcessing(runId: number) {
   const runRow = await getLeadGenerationRun(runId);
   if (!runRow) return;
 
+  if (!anpLoadComplete(runRow.counts_json ?? emptyCounts())) {
+    await updateRun(runId, { phase: "anp_load", error_message: null });
+    await tickAnpLoad(runId);
+    return;
+  }
+
   await syncGoogleSuccessCounter(runId, runRow);
 
   if (await targetCreatedReached(runId, runRow.max_stations)) {
@@ -864,7 +907,7 @@ async function tickProcessing(runId: number) {
     return;
   }
 
-  const ids = await fetchPendingItemIds(runId, ITEMS_PER_CRON_TICK);
+  const ids = await fetchRunnableItemIds(runId, ITEMS_PER_CRON_TICK, ITEM_PROCESSING_STALE_MS);
   if (ids.length === 0) {
     await whenProcessingQueueEmpty(runId, runRow);
     return;
@@ -963,9 +1006,16 @@ export async function bootstrapLeadGenRunAnpMetadata(runId: number): Promise<voi
     if (!runRow) return;
   }
 
-  if (runRow.phase !== "anp_load") return;
-
   const pairs = cityPairsForInitialSource(runInitialSource(runRow), runRow.uf, runRow.filters_json);
+  if (runRow.phase !== "anp_load" && runRow.phase !== "processing") return;
+  if (runRow.phase === "processing" && anpLoadComplete(runRow.counts_json ?? emptyCounts())) return;
+
+  if (runRow.phase === "processing") {
+    await updateRun(runId, { phase: "anp_load", error_message: null });
+    runRow = (await getLeadGenerationRun(runId))!;
+    if (!runRow) return;
+  }
+
   const counts = { ...runRow.counts_json };
   if (pairs.length > 0 && (counts.cities_total ?? 0) !== pairs.length) {
     counts.cities_total = pairs.length;

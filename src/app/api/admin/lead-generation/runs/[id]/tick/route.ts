@@ -2,6 +2,7 @@ import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { drainLeadGenerationTicks } from "@/lib/lead-generation/drain-ticks";
 import { bootstrapLeadGenRunAnpMetadata } from "@/lib/lead-generation/run-processor";
+import { anpLoadComplete, computeRunProgressPct } from "@/lib/lead-generation/run-progress";
 import { formatLeadGenActivityEntry, runPhaseActivityLine } from "@/lib/lead-generation/activity-feed";
 import {
   finalizeCancelledRun,
@@ -38,7 +39,10 @@ export async function POST(request: Request, { params }: Params) {
 
   await touchRunActivity(id);
 
-  if (["queued", "running"].includes(before.status) && before.phase === "anp_load") {
+  if (
+    ["queued", "running"].includes(before.status) &&
+    (before.phase === "anp_load" || (before.phase === "processing" && !anpLoadComplete(before.counts_json)))
+  ) {
     await bootstrapLeadGenRunAnpMetadata(id);
   }
 
@@ -47,21 +51,30 @@ export async function POST(request: Request, { params }: Params) {
     (before.status === "paused" && before.phase === "finalizing");
 
   if (mayDrain) {
+    const processing = before.phase === "processing";
     await drainLeadGenerationTicks({
       runId: id,
-      maxTicks: before.phase === "finalizing" ? 2 : 4,
-      maxMs: before.phase === "finalizing" ? 12_000 : 38_000
+      maxTicks: before.phase === "finalizing" ? 2 : processing ? 6 : 4,
+      maxMs: before.phase === "finalizing" ? 12_000 : processing ? 48_000 : 38_000
     });
   } else if (before.status === "paused") {
     return Response.json(await leadGenTickResponse(id, before, wantFeed));
   }
 
   let run = await getLeadGenerationRun(id);
-  if (run && ["completed", "partial", "failed", "cancelled"].includes(run.status)) {
-    run = { ...run, counts_json: await recomputeRunCountsFromItems(id) };
-  }
-
   if (!run) return Response.json({ error: "Execução não encontrada" }, { status: 404 });
+
+  const counts_json = await recomputeRunCountsFromItems(id);
+  run = {
+    ...run,
+    counts_json,
+    progress_pct: computeRunProgressPct({
+      phase: run.phase,
+      status: run.status,
+      max_stations: run.max_stations,
+      counts_json
+    })
+  };
 
   return Response.json(await leadGenTickResponse(id, run, wantFeed));
 }

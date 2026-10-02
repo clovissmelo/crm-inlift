@@ -1,5 +1,6 @@
 "use client";
 
+import { anpLoadComplete, computeRunProgressPct } from "@/lib/lead-generation/run-progress";
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 
@@ -57,8 +58,9 @@ function buildTechnicalSteps(run: RunLike): TechStep[] {
   const motorDone = run.status !== "queued";
   const motorState: StepState = run.status === "queued" ? "active" : motorDone ? "done" : "pending";
 
+  const anpIncompleteInProcessing = run.phase === "processing" && !anpLoadComplete(c);
   let anpState: StepState = "pending";
-  if (run.phase === "anp_load") anpState = paused ? "error" : "active";
+  if (run.phase === "anp_load" || anpIncompleteInProcessing) anpState = paused ? "error" : "active";
   else if (anpDone || run.phase !== "anp_load") anpState = "done";
 
   let queueState: StepState = "pending";
@@ -67,7 +69,7 @@ function buildTechnicalSteps(run: RunLike): TechStep[] {
 
   let googleState: StepState = "pending";
   if (googleAttempts > 0 || created > 0) googleState = processed < itemsTotal && run.phase === "processing" ? "active" : "done";
-  else if (run.phase === "processing" && itemsTotal > 0) googleState = "active";
+  else if (run.phase === "processing" && itemsTotal > 0 && !anpIncompleteInProcessing) googleState = "active";
 
   let metaState: StepState = "pending";
   if (created >= run.max_stations) metaState = "done";
@@ -221,8 +223,17 @@ export function LeadGenExecutionTechPanel({
               <dd>{PHASE_PT[run.phase] ?? run.phase}</dd>
             </div>
             <div>
-              <dt>Progresso (servidor)</dt>
-              <dd>{run.progress_pct}%</dd>
+              <dt>Progresso (servidor / barra)</dt>
+              <dd>
+                {run.progress_pct}% · barra:{" "}
+                {computeRunProgressPct({
+                  phase: run.phase,
+                  status: run.status,
+                  max_stations: run.max_stations,
+                  counts_json: c
+                })}
+                %
+              </dd>
             </div>
             <div>
               <dt>Atualizado no servidor</dt>
@@ -235,8 +246,14 @@ export function LeadGenExecutionTechPanel({
             <div>
               <dt>Pendentes / processando</dt>
               <dd>
-                fila: {Math.max(0, (c.items_total ?? 0) - (c.processed ?? 0))} · ticks sem progresso:{" "}
+                {c.pending ?? "—"} pendente(s) · {c.processing ?? 0} em processamento · ticks sem progresso:{" "}
                 {c.no_progress_ticks ?? 0}
+                {(c.processing ?? 0) > 0 && (c.processed ?? 0) === 0 ? (
+                  <span className="lead-gen-tech-stuck-hint">
+                    {" "}
+                    (posto preso no servidor — reenfileira após ~90s ou use Forçar ciclo)
+                  </span>
+                ) : null}
               </dd>
             </div>
             <div>
