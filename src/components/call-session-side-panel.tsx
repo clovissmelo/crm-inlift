@@ -14,6 +14,7 @@ type Props = {
   onExpand: () => void;
   activeCall: ActiveCallForScript | null;
   scriptBody: string | null;
+  scriptReady?: boolean;
   onLogUpdated: (log: import("@/lib/call-script-log").CallScriptLogEntry[]) => void;
   resultCallId: number | null;
   products: Product[];
@@ -29,6 +30,7 @@ export function CallSessionSidePanel({
   onExpand,
   activeCall,
   scriptBody,
+  scriptReady = true,
   onLogUpdated,
   resultCallId,
   products,
@@ -41,6 +43,7 @@ export function CallSessionSidePanel({
       <CallScriptGuidePanel
         call={activeCall}
         scriptBody={scriptBody}
+        scriptReady={scriptReady}
         collapsed={collapsed}
         onCollapse={onCollapse}
         onExpand={onExpand}

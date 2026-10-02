@@ -13,6 +13,10 @@ import type { AnpStation } from "@/lib/lead-motor/anp";
 import { fetchAnpMunicipality, filterStations, mapAnpRecord } from "@/lib/lead-motor/anp";
 import { buildGoogleSearchQuery, findPlaceId, getPlaceDetails } from "@/lib/lead-motor/google-places";
 import { validateGoogleMatch } from "@/lib/lead-motor/google-validate";
+import {
+  GOOGLE_CONTACT_SKIP_MESSAGE,
+  googleHasLeadContactSignals
+} from "@/lib/lead-generation/google-lead-gate";
 import { enrichFromReceita, mergeEnrichment } from "@/lib/lead-motor/enrichment";
 import { isValidCnpjDigits } from "@/lib/lead-motor/utils";
 import { cityPairsForInitialSource } from "@/lib/lead-generation/discovery-cities";
@@ -913,6 +917,23 @@ async function processOneItemBody(
       google_place_id: googleSnap?.place_id ?? presetPlaceId,
       enrichment_json: appendStepLog({ ...enrichment, google: googleSnap }, stepLog),
       error_message: "CNPJ não identificado com confiança — revisão manual"
+    });
+    return;
+  }
+
+  const googleContactRequired =
+    !runRow.simulation && (doGoogleSearch || doGoogleDetails) && Boolean(stepEnabled(snapshot, "create_crm_client"));
+  if (googleContactRequired && !googleHasLeadContactSignals(googleSnap)) {
+    stepLog.push({
+      step_key: "create_crm_client",
+      status: "skipped",
+      message: GOOGLE_CONTACT_SKIP_MESSAGE
+    });
+    await updateItem(itemId, {
+      status: "no_google_match",
+      google_place_id: googleSnap?.place_id ?? presetPlaceId,
+      error_message: GOOGLE_CONTACT_SKIP_MESSAGE,
+      enrichment_json: appendStepLog({ ...enrichment, google: googleSnap }, stepLog)
     });
     return;
   }

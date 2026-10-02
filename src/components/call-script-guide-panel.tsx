@@ -26,6 +26,8 @@ export type ActiveCallForScript = {
 type Props = {
   call: ActiveCallForScript;
   scriptBody: string | null;
+  /** Evita handoff antes do fetch do script (null ≠ “sem script”). */
+  scriptReady?: boolean;
   onCollapse?: () => void;
   collapsed?: boolean;
   onExpand?: () => void;
@@ -52,6 +54,7 @@ function stepIdFromLog(log: CallScriptLogEntry[], flow: ScriptFlow): string {
 export function CallScriptGuidePanel({
   call,
   scriptBody,
+  scriptReady = true,
   collapsed,
   onCollapse,
   onExpand,
@@ -59,6 +62,7 @@ export function CallScriptGuidePanel({
   onScriptFlowComplete
 }: Props) {
   const handoffSentRef = useRef(false);
+  const [handoffPending, setHandoffPending] = useState(false);
   const flow = useMemo(() => (scriptBody ? parseCallScriptBody(scriptBody) : null), [scriptBody]);
   const savedLog = useMemo(() => normalizeCallScriptLog(call.script_flow_log), [call.script_flow_log]);
   const [stepId, setStepId] = useState<string | null>(null);
@@ -66,6 +70,7 @@ export function CallScriptGuidePanel({
 
   useEffect(() => {
     handoffSentRef.current = false;
+    setHandoffPending(false);
   }, [call.id]);
 
   useEffect(() => {
@@ -78,20 +83,25 @@ export function CallScriptGuidePanel({
   }, [flow, call.id, scriptBody, savedLog.length]);
 
   useEffect(() => {
-    if (!flow || !scriptBody) return;
-    if (stepId === null) {
+    if (!scriptReady) return;
+    if (!scriptBody || !flow) {
       maybeOpenRegistrationHandoff();
       return;
     }
+  }, [scriptReady, scriptBody, flow, call.id]);
+
+  useEffect(() => {
+    if (!scriptReady || !flow || !scriptBody || stepId === null) return;
     const current = flow.steps[stepId];
     if (!current || current.type === "branch") return;
     const hasNext = Boolean(current.next && flow.steps[current.next]);
     if (!hasNext) maybeOpenRegistrationHandoff();
-  }, [flow, stepId, scriptBody]);
+  }, [scriptReady, flow, stepId, scriptBody, call.id]);
 
   function maybeOpenRegistrationHandoff() {
     if (handoffSentRef.current) return;
     handoffSentRef.current = true;
+    setHandoffPending(true);
     onScriptFlowComplete?.();
   }
 
@@ -150,6 +160,7 @@ export function CallScriptGuidePanel({
   function restartFlow() {
     if (!flow) return;
     handoffSentRef.current = false;
+    setHandoffPending(false);
     void persistLog({
       step_id: stepId ?? flow.start,
       step_title: step?.title ?? "Roteiro",
@@ -216,7 +227,7 @@ export function CallScriptGuidePanel({
                 </div>
               ) : (
                 <p className="muted" style={{ fontSize: "0.875rem", margin: 0 }}>
-                  Abrindo complemento de registro…
+                  {handoffPending ? "Abrindo complemento de registro…" : "Concluindo roteiro…"}
                 </p>
               )}
             </>

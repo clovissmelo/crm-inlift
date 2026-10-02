@@ -3,7 +3,7 @@ import {
   formatParticipatesInBrandNetwork,
   parseLeadMotorNotes,
   resolveClientFuelDisplay
-} from "../src/lib/client-fuel-display.ts";
+} from "../src/lib/client-fuel-display";
 
 const sample =
   "Origem: geração de leads #20\nGoogle Place ID: ChIJg5td0RxB1ZMR5JQ95u3KMv0\nProdutos ANP: ETANOL HIDRATADO COMUM (1 bicos); GASOLINA C COMUM (2 bicos)";

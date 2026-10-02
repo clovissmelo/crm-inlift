@@ -1,6 +1,7 @@
 import { get, run, nowIso } from "@/lib/db";
 import { CONTACT_ORIGIN } from "@/lib/contact-origin";
 import type { EnrichmentResult } from "@/lib/lead-motor/enrichment";
+import { resolveNomeFantasia } from "@/lib/lead-motor/trade-name";
 import type { AnpStation } from "@/lib/lead-motor/anp";
 
 /** Apenas INSERT — nunca altera cliente existente. */
@@ -36,7 +37,10 @@ export async function createClientFromLead(input: {
     {
       cnpj: station.cnpj,
       legalName: station.razao_social || null,
-      tradeName: enrichment.nome_fantasia || station.razao_social || null,
+      tradeName:
+        enrichment.nome_fantasia ||
+        resolveNomeFantasia({ razaoSocial: station.razao_social }) ||
+        null,
       segment: "Posto de combustível",
       city: station.cidade,
       uf: station.uf,

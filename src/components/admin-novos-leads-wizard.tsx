@@ -938,16 +938,19 @@ export function AdminNovosLeadsWizard() {
               ))}
             </select>
           </div>
-          <div className="field">
-            <label className="label">Produto (opcional)</label>
-            <select className="input" value={productId} onChange={(e) => setProductId(e.target.value ? Number(e.target.value) : "")}>
-              <option value="">—</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+          <div className="lead-gen-meta-product-flow">
+            <div className="field">
+              <label className="label">Produto (opcional)</label>
+              <select className="input" value={productId} onChange={(e) => setProductId(e.target.value ? Number(e.target.value) : "")}>
+                <option value="">—</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {productId !== "" && flowPreview ? <LeadGenFlowField preview={flowPreview} /> : null}
           </div>
           <div className="field">
             <label className="label">BDR responsável</label>
@@ -960,7 +963,6 @@ export function AdminNovosLeadsWizard() {
               ))}
             </select>
           </div>
-          {productId !== "" && flowPreview ? <LeadGenFlowField preview={flowPreview} /> : null}
         </div>
 
         <div className="lead-gen-form-section">

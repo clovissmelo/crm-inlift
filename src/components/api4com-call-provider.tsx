@@ -47,6 +47,7 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
 
   const [activeCall, setActiveCall] = useState<ActiveCallForScript | null>(null);
   const [callScriptBody, setCallScriptBody] = useState<string | null>(null);
+  const [callScriptReady, setCallScriptReady] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [resultCallId, setResultCallId] = useState<number | null>(null);
 
@@ -96,10 +97,12 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
   useEffect(() => {
     if (!activeCall) {
       setCallScriptBody(null);
+      setCallScriptReady(false);
       return;
     }
     setResultCallId((prev) => (prev === activeCall.id ? prev : null));
     setPanelCollapsed(false);
+    setCallScriptReady(false);
     const params = new URLSearchParams({ type: "call" });
     if (activeCall.product_id) params.set("product_id", String(activeCall.product_id));
     void fetch(`/api/message-scripts?${params}`)
@@ -111,7 +114,8 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
           setCallScriptBody(pickCallScriptBody(d.items ?? [], activeCall.product_id));
         }
       )
-      .catch(() => setCallScriptBody(null));
+      .catch(() => setCallScriptBody(null))
+      .finally(() => setCallScriptReady(true));
   }, [activeCall?.id, activeCall?.product_id]);
 
   useEffect(() => {
@@ -168,22 +172,24 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
 
   const handleScriptFlowComplete = useCallback(() => {
     if (!activeCall) return;
+    const callId = activeCall.id;
+    setResultCallId(callId);
+    setPanelCollapsed(false);
     void (async () => {
       try {
-        const settleRes = await fetch(`/api/api4com/calls/${activeCall.id}/auto-settle`, { method: "POST" });
+        const settleRes = await fetch(`/api/api4com/calls/${callId}/auto-settle`, { method: "POST" });
         if (settleRes.ok) {
-          const data = (await settleRes.json()) as { requires_complement?: boolean };
-          if (!data.requires_complement) {
+          const data = (await settleRes.json()) as { requires_complement?: boolean; registered?: boolean };
+          if (data.registered || !data.requires_complement) {
+            autoOpenedRef.current.add(callId);
+            setResultCallId(null);
             setPanelCollapsed(true);
             void refreshPending();
-            return;
           }
         }
       } catch {
-        /* segue para complemento */
+        /* mantém complemento aberto para preenchimento manual */
       }
-      setResultCallId(activeCall.id);
-      setPanelCollapsed(false);
     })();
   }, [activeCall, refreshPending]);
   const showSidePanel = canDial && panelMode != null && (panelMode === "script" || onProspeccaoPage);
@@ -244,6 +250,7 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
           onExpand={() => setPanelCollapsed(false)}
           activeCall={activeCall}
           scriptBody={callScriptBody}
+          scriptReady={callScriptReady}
           onLogUpdated={(log) => setActiveCall((c) => (c ? { ...c, script_flow_log: log } : c))}
           resultCallId={resultCallId}
           products={products}

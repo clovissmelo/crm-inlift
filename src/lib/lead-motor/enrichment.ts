@@ -1,5 +1,6 @@
 import { BRASIL_API_CNPJ } from "@/lib/lead-motor/motor-config";
 import type { AnpStation } from "@/lib/lead-motor/anp";
+import { resolveNomeFantasia } from "@/lib/lead-motor/trade-name";
 import { normalizePhoneDigits, safeStr } from "@/lib/lead-motor/utils";
 
 export type PhoneCandidate = {
@@ -126,7 +127,10 @@ export function mergeEnrichment(
   });
 
   return {
-    nome_fantasia: receita.nome_fantasia || station.nome_fantasia,
+    nome_fantasia: resolveNomeFantasia({
+      receitaNomeFantasia: receita.nome_fantasia,
+      razaoSocial: station.razao_social
+    }),
     email: receita.email ?? "",
     website: google?.website || receita.website || "",
     socio_principal: receita.socio_principal ?? receita.socios_pessoa_fisica?.[0]?.name ?? "",
