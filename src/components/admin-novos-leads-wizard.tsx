@@ -642,7 +642,13 @@ export function AdminNovosLeadsWizard() {
         segment
       },
       counts_json: {
-        cities_total: Math.max(1, citySelection.municipalities.length),
+        cities_total: Math.max(
+          1,
+          allCities
+            ? (anpPreviewData?.cities_total ?? anpPreviewData?.cities?.length ?? 0)
+            : citySelection.municipalities.length,
+          citySelection.municipalities.length
+        ),
         cities_loaded: 0
       },
       error_message: null,
@@ -655,7 +661,7 @@ export function AdminNovosLeadsWizard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(leadGenSelectionPayload())
     });
-    const data = (await res.json()) as { id?: number; error?: string };
+    const data = (await res.json()) as { id?: number; error?: string; run?: RunDetail };
     setStarting(false);
     if (!res.ok) {
       setError(data.error ?? "Falha ao iniciar");
@@ -667,7 +673,11 @@ export function AdminNovosLeadsWizard() {
     if (data.id) {
       const newId = data.id;
       setActiveRunId(newId);
-      setActiveRun((prev) => (prev ? { ...prev, id: newId } : null));
+      if (data.run) {
+        applyRunRow(data.run);
+      } else {
+        setActiveRun((prev) => (prev ? { ...prev, id: newId } : null));
+      }
       setPhaseLine(null);
       void loadMeta();
     }

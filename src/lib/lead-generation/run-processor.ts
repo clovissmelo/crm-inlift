@@ -952,6 +952,35 @@ async function tickFinalizing(runId: number) {
   });
 }
 
+/** Atualiza metadados ANP e status antes de chamadas lentas (primeiro tick / poll). */
+export async function bootstrapLeadGenRunAnpMetadata(runId: number): Promise<void> {
+  let runRow = await getLeadGenerationRun(runId);
+  if (!runRow || !["queued", "running"].includes(runRow.status)) return;
+
+  if (runRow.status === "queued") {
+    await updateRun(runId, { status: "running", started_at: nowIso() });
+    runRow = await getLeadGenerationRun(runId);
+    if (!runRow) return;
+  }
+
+  if (runRow.phase !== "anp_load") return;
+
+  const pairs = cityPairsForInitialSource(runInitialSource(runRow), runRow.uf, runRow.filters_json);
+  const counts = { ...runRow.counts_json };
+  if (pairs.length > 0 && (counts.cities_total ?? 0) !== pairs.length) {
+    counts.cities_total = pairs.length;
+    await updateRun(runId, {
+      counts_json: counts,
+      progress_pct: computeRunProgressPct({
+        phase: runRow.phase,
+        status: "running",
+        max_stations: runRow.max_stations,
+        counts_json: counts
+      })
+    });
+  }
+}
+
 export async function processLeadGenerationTick(
   preferredRunId?: number
 ): Promise<{ processedRunId: number | null; action: string }> {
@@ -973,6 +1002,9 @@ export async function processLeadGenerationTick(
     await updateRun(runId, { status: "cancelled", phase: "done", completed_at: nowIso() });
     return { processedRunId: runId, action: "cancelled" };
   }
+
+  await bootstrapLeadGenRunAnpMetadata(runId);
+  runRow = (await getLeadGenerationRun(runId))!;
 
   const meta = await syncRunProgressMetadata(runId, runRow);
   if (meta.paused) {
@@ -1001,11 +1033,6 @@ export async function processLeadGenerationTick(
     if (tracked.no_progress_ticks !== liveCounts.no_progress_ticks) {
       await updateRun(runId, { counts_json: tracked });
     }
-  }
-
-  if (runRow.status === "queued") {
-    await updateRun(runId, { status: "running", started_at: nowIso() });
-    runRow = (await getLeadGenerationRun(runId))!;
   }
 
   if (runRow.phase === "finalizing") {

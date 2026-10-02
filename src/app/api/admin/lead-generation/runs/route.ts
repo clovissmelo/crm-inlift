@@ -4,7 +4,7 @@ import { resolveCityPairsFromMunicipalities } from "@/lib/lead-generation/city-r
 import { buildFlowSnapshot, getDefaultFlowForSegment, getLeadGenerationFlow } from "@/lib/lead-generation/flows-repo";
 import { getUfGeoFromIbge } from "@/lib/lead-generation/ibge-localidades";
 import { persistRunMunicipalities } from "@/lib/lead-generation/municipality-runs";
-import { createLeadGenerationRun, listLeadGenerationRuns } from "@/lib/lead-generation/runs-repo";
+import { createLeadGenerationRun, getLeadGenerationRun, listLeadGenerationRuns } from "@/lib/lead-generation/runs-repo";
 import { getProduct } from "@/lib/products";
 import { getGooglePlacesApiKey, getGooglePlacesLimit } from "@/lib/google-places-settings";
 import { getDailyGoogleUsage } from "@/lib/lead-generation/quota";
@@ -220,9 +220,12 @@ export async function POST(request: Request) {
   // Progresso fica a cargo do POST /runs/[id]/tick (polling na UI). Drain longo aqui
   // deixava "Iniciando…" por ~55s sem abrir o overlay de progresso.
 
+  const run = await getLeadGenerationRun(id);
+
   return Response.json({
     id,
     status: "queued",
+    run,
     skipped_municipalities: skipped.length,
     flow: { id: flow.id, name: flow.name, snapshot: flowSnapshot }
   });

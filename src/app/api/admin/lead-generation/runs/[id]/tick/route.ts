@@ -1,6 +1,7 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { drainLeadGenerationTicks } from "@/lib/lead-generation/drain-ticks";
+import { bootstrapLeadGenRunAnpMetadata } from "@/lib/lead-generation/run-processor";
 import { formatLeadGenActivityEntry, runPhaseActivityLine } from "@/lib/lead-generation/activity-feed";
 import {
   finalizeCancelledRun,
@@ -36,6 +37,10 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   await touchRunActivity(id);
+
+  if (["queued", "running"].includes(before.status) && before.phase === "anp_load") {
+    await bootstrapLeadGenRunAnpMetadata(id);
+  }
 
   const mayDrain =
     ["queued", "running"].includes(before.status) ||
