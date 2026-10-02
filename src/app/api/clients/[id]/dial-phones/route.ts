@@ -19,13 +19,19 @@ export async function GET(_request: Request, { params }: Params) {
     commercial_slug: string | null;
     user_id: number;
     approach_id: number | null;
+    user_name: string | null;
+    phone_display: string | null;
   }>(
     `
-      SELECT id, client_phone_id, created_at, attempt_bucket, consumes_cycle,
-        technical_slug, commercial_slug, user_id, approach_id
-      FROM phone_dial_attempts
-      WHERE client_id = @clientId
-      ORDER BY created_at DESC
+      SELECT pda.id, pda.client_phone_id, pda.created_at, pda.attempt_bucket, pda.consumes_cycle,
+        pda.technical_slug, pda.commercial_slug, pda.user_id, pda.approach_id,
+        u.name AS user_name,
+        COALESCE(cp.display_phone, cp.phone_digits) AS phone_display
+      FROM phone_dial_attempts pda
+      LEFT JOIN users u ON u.id = pda.user_id
+      LEFT JOIN client_phones cp ON cp.id = pda.client_phone_id
+      WHERE pda.client_id = @clientId
+      ORDER BY pda.created_at DESC
       LIMIT 200
     `,
     { clientId }

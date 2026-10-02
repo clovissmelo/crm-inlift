@@ -8,14 +8,60 @@ export type PhoneCandidate = {
   contact_name: string | null;
 };
 
+/** Sócio pessoa física (CPF) da QSA Receita / Brasil API. */
+export type SocioPessoaFisica = {
+  name: string;
+};
+
 export type EnrichmentResult = {
   nome_fantasia: string;
   email: string;
   website: string;
+  /** Primeiro sócio PF (compatível com fluxos que usam um nome padrão em telefones). */
   socio_principal: string;
+  socios_pessoa_fisica: SocioPessoaFisica[];
   phones: PhoneCandidate[];
   sources: string[];
 };
+
+const SOCIO_PF_IDENTIFICADOR = 2;
+
+function normalizeContactNameKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+/** identificador_de_socio: 1 = PJ, 2 = PF, 3 = estrangeiro (Brasil API / Receita). */
+export function isQsaSocioPessoaFisica(item: Record<string, unknown>): boolean {
+  const id = item.identificador_de_socio;
+  if (id === SOCIO_PF_IDENTIFICADOR || id === "2") return true;
+  if (id === 1 || id === "1" || id === 3 || id === "3") return false;
+  const doc = safeStr(item.cnpj_cpf_do_socio ?? item.cpf_cnpj_socio);
+  if (!doc) return false;
+  if (doc.includes("*")) {
+    const digits = doc.replace(/\D/g, "");
+    return digits.length <= 11;
+  }
+  const digits = doc.replace(/\D/g, "");
+  return digits.length > 0 && digits.length <= 11;
+}
+
+export function parseSociosPessoaFisicaFromQsa(qsa: unknown): SocioPessoaFisica[] {
+  if (!Array.isArray(qsa)) return [];
+  const out: SocioPessoaFisica[] = [];
+  const seen = new Set<string>();
+  for (const raw of qsa) {
+    if (!raw || typeof raw !== "object") continue;
+    const item = raw as Record<string, unknown>;
+    if (!isQsaSocioPessoaFisica(item)) continue;
+    const name = safeStr(item.nome_socio);
+    if (!name) continue;
+    const key = normalizeContactNameKey(name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ name });
+  }
+  return out;
+}
 
 export async function enrichFromReceita(cnpj: string, simulation: boolean): Promise<Partial<EnrichmentResult>> {
   if (simulation) return {};
@@ -36,21 +82,13 @@ export async function enrichFromReceita(cnpj: string, simulation: boolean): Prom
       const digits = normalizePhoneDigits(raw);
       if (digits) phones.push({ digits, origin: "Receita Federal", contact_name: null });
     }
-    const socios: string[] = [];
-    const qsa = data.qsa;
-    if (Array.isArray(qsa)) {
-      for (const item of qsa) {
-        if (item && typeof item === "object") {
-          const nome = safeStr((item as Record<string, unknown>).nome_socio);
-          if (nome) socios.push(nome);
-        }
-      }
-    }
+    const sociosPf = parseSociosPessoaFisicaFromQsa(data.qsa);
     return {
       nome_fantasia: safeStr(data.nome_fantasia),
       email: safeStr(data.email),
       website: "",
-      socio_principal: socios[0] ?? "",
+      socio_principal: sociosPf[0]?.name ?? "",
+      socios_pessoa_fisica: sociosPf,
       phones,
       sources: ["Receita Federal"]
     };
@@ -91,7 +129,8 @@ export function mergeEnrichment(
     nome_fantasia: receita.nome_fantasia || station.nome_fantasia,
     email: receita.email ?? "",
     website: google?.website || receita.website || "",
-    socio_principal: receita.socio_principal ?? "",
+    socio_principal: receita.socio_principal ?? receita.socios_pessoa_fisica?.[0]?.name ?? "",
+    socios_pessoa_fisica: receita.socios_pessoa_fisica ?? [],
     phones: uniquePhones,
     sources: [...sources]
   };

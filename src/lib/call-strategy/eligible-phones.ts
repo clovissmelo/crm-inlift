@@ -45,6 +45,7 @@ export type PhoneDialContextItem = {
   counter_lines: string[];
   needs_review: boolean;
   pending_registration_calls: number;
+  attempts_at_limit: boolean;
 };
 
 export type ClientDialStrategySummary = {
@@ -161,13 +162,11 @@ export async function buildClientDialStrategySummary(input: {
       last_occurrence_kind: p.last_occurrence_kind
     };
     const counter_lines = buildCounterLines(counterState, limitsByKind);
-    if (pendingRegistration > 0) {
-      counter_lines.push(
-        pendingRegistration === 1
-          ? "1 ligação feita aguardando registro no CRM"
-          : `${pendingRegistration} ligações feitas aguardando registro no CRM`
-      );
-    }
+    const maxNoContact = settings.max_no_contact_attempts ?? settings.max_no_answer_attempts;
+    const usedAttempts =
+      Math.max(p.cycle_no_contact_count, p.cycle_invalid_count, p.cycle_wrong_number_count) +
+      Math.max(0, pendingRegistration);
+    const attempts_at_limit = p.status === "exhausted" || usedAttempts >= maxNoContact;
     const primaryKind =
       (p.last_occurrence_kind as OccurrenceKind | null) ??
       (last?.attempt_bucket as OccurrenceKind | null) ??
@@ -201,7 +200,8 @@ export async function buildClientDialStrategySummary(input: {
       counter_line,
       counter_lines,
       needs_review: p.needs_review,
-      pending_registration_calls: pendingRegistration
+      pending_registration_calls: pendingRegistration,
+      attempts_at_limit
     };
   });
 

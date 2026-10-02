@@ -937,11 +937,6 @@ export function AdminNovosLeadsWizard() {
                 </option>
               ))}
             </select>
-            {segmentLockedByProduct ? (
-              <span className="muted" style={{ fontSize: "0.78rem" }}>
-                Definido pelo produto
-              </span>
-            ) : null}
           </div>
           <div className="field">
             <label className="label">Produto (opcional)</label>
@@ -965,13 +960,8 @@ export function AdminNovosLeadsWizard() {
               ))}
             </select>
           </div>
+          {productId !== "" && flowPreview ? <LeadGenFlowField preview={flowPreview} /> : null}
         </div>
-
-        {productId !== "" && flowPreview ? (
-          <div className="lead-gen-form-row lead-gen-form-row--flow">
-            <LeadGenFlowField preview={flowPreview} />
-          </div>
-        ) : null}
 
         <div className="lead-gen-form-section">
           <span className="label">Região</span>

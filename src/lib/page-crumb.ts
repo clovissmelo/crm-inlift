@@ -23,7 +23,7 @@ export function pageCrumbSegments(pathname: string): string[] {
     return segments;
   }
   if (pathname.startsWith("/funil")) {
-    segments.push("funil comercial");
+    segments.push("funil de vendas");
     return segments;
   }
   if (pathname.startsWith("/negocios-convertidos")) {

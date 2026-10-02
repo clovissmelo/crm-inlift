@@ -1,4 +1,5 @@
 import { all } from "@/lib/db";
+import { formatCallScriptLogInline, normalizeCallScriptLog } from "@/lib/call-script-log";
 import { formatSpDateTime } from "@/lib/datetime";
 import { MEETING_STATUS_LABELS, type MeetingStatus } from "@/lib/meeting-constants";
 
@@ -36,11 +37,15 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     commercial_name: string | null;
     contacted_person_name: string | null;
     bdr_name: string | null;
+    script_flow_log: unknown;
+    product_name: string | null;
   }>(
     `
       SELECT c.id, c.status, c.created_at, c.ended_at, c.started_at, c.duration_seconds, c.phone_dialed,
         c.hangup_cause_label, c.technical_provider_code, c.technical_provider_label, c.error_message,
+        c.script_flow_log,
         u.name AS user_name, c.approach_id,
+        p.name AS product_name,
         COALESCE(a.commercial_result_name_snapshot, rt.name) AS result_name,
         a.notes AS approach_notes,
         COALESCE(a.technical_result_name_snapshot, tr.display_name) AS technical_name,
@@ -54,6 +59,7 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       LEFT JOIN users bu ON bu.id = a.user_id
       LEFT JOIN approach_result_types rt ON rt.id = a.result_type_id
       LEFT JOIN call_technical_result_types tr ON tr.id = c.technical_result_type_id
+      LEFT JOIN products p ON p.id = c.product_id
       WHERE c.client_id = @clientId
         AND c.status IN ('initiating', 'ringing', 'in_progress', 'completed', 'failed')
       ORDER BY COALESCE(c.ended_at, c.started_at, c.created_at) DESC
@@ -79,6 +85,8 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       title = "Ligação (em andamento)";
     } else if (call.approach_id) title = "Ligação registrada";
 
+    const scriptLine = formatCallScriptLogInline(normalizeCallScriptLog(call.script_flow_log));
+
     let bdrParts: string[];
     if (call.status === "failed") {
       bdrParts = call.error_message ? [call.error_message] : ["Discagem não concluída"];
@@ -95,13 +103,65 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       bdrParts = ["Classificação BDR pendente"];
     }
 
+    const detailParts = [
+      call.product_name,
+      ...techParts,
+      scriptLine,
+      ...bdrParts
+    ].filter(Boolean) as string[];
+
     items.push({
       id: `api4com-${call.id}`,
       kind: "api4com_call",
       title,
-      detail: [...techParts, ...bdrParts].join(" · ") || null,
+      detail: detailParts.join(" · ") || null,
       occurred_at: when,
-      user_name: call.bdr_name ?? call.user_name
+      user_name: call.user_name ?? call.bdr_name
+    });
+  }
+
+  const dialAttempts = await all<{
+    id: number;
+    created_at: string;
+    attempt_bucket: string;
+    technical_slug: string | null;
+    commercial_slug: string | null;
+    user_name: string | null;
+    phone_display: string | null;
+    api4com_call_id: number | null;
+  }>(
+    `
+      SELECT pda.id, pda.created_at, pda.attempt_bucket, pda.technical_slug, pda.commercial_slug,
+        u.name AS user_name, COALESCE(cp.display_phone, cp.phone_digits) AS phone_display,
+        pda.api4com_call_id
+      FROM phone_dial_attempts pda
+      LEFT JOIN users u ON u.id = pda.user_id
+      LEFT JOIN client_phones cp ON cp.id = pda.client_phone_id
+      WHERE pda.client_id = @clientId
+      ORDER BY pda.created_at DESC
+      LIMIT 300
+    `,
+    { clientId }
+  );
+
+  const apiCallIds = new Set(apiCalls.map((c) => c.id));
+  for (const att of dialAttempts) {
+    if (att.api4com_call_id != null && apiCallIds.has(att.api4com_call_id)) continue;
+    const detail = [
+      att.phone_display ? `Número: ${att.phone_display}` : null,
+      att.technical_slug ? `Técnico: ${att.technical_slug}` : null,
+      att.commercial_slug ? `Comercial: ${att.commercial_slug}` : null,
+      att.attempt_bucket ? `Bucket: ${att.attempt_bucket}` : null
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    items.push({
+      id: `dial-attempt-${att.id}`,
+      kind: "dial_attempt",
+      title: "Tentativa de ligação (estratégia)",
+      detail: detail || null,
+      occurred_at: att.created_at,
+      user_name: att.user_name
     });
   }
 

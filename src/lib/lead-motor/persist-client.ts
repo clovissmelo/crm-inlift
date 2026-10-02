@@ -18,21 +18,18 @@ export async function createClientFromLead(input: {
   google_place_id: string | null;
 }): Promise<number> {
   const { station, enrichment, bdr_user_id, product_id, run_id, google_place_id } = input;
-  const notes = [
-    `Origem: geração de leads #${run_id}`,
-    google_place_id ? `Google Place ID: ${google_place_id}` : null,
-    station.produtos_anp ? `Produtos ANP: ${station.produtos_anp}` : null
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const fuelBrand = station.bandeira?.trim() || station.distribuidora?.trim() || null;
+  const anpProductsSummary = station.produtos_anp?.trim() || null;
 
   const result = await run(
     `
       INSERT INTO clients (
         cnpj, legal_name, trade_name, segment, city, uf, address, website, notes,
+        lead_generation_run_id, google_place_id, anp_fuel_brand, anp_white_flag, anp_products_summary,
         bdr_user_id, lead_qualification, in_prospeccao_queue, created_at, updated_at
       ) VALUES (
-        @cnpj, @legalName, @tradeName, @segment, @city, @uf, @address, @website, @notes,
+        @cnpj, @legalName, @tradeName, @segment, @city, @uf, @address, @website, NULL,
+        @runId, @googlePlaceId, @fuelBrand, @whiteFlag, @anpProducts,
         @bdrUserId, 'cold', true, @now, @now
       )
     `,
@@ -45,7 +42,11 @@ export async function createClientFromLead(input: {
       uf: station.uf,
       address: station.endereco || null,
       website: enrichment.website || null,
-      notes,
+      runId: run_id,
+      googlePlaceId: google_place_id,
+      fuelBrand,
+      whiteFlag: station.bandeira_branca,
+      anpProducts: anpProductsSummary,
       bdrUserId: bdr_user_id,
       now: nowIso()
     }
@@ -66,23 +67,54 @@ export async function createClientFromLead(input: {
     }
   }
 
-  const contactRows: Array<{ name: string; phone: string | null; origin: string }> = [];
-  if (enrichment.socio_principal) {
+  type ContactDraft = {
+    name: string;
+    phone: string | null;
+    job_title: string | null;
+    origin: string;
+  };
+
+  const contactRows: ContactDraft[] = [];
+  const nameKey = (n: string) => n.trim().toLowerCase();
+
+  for (const socio of enrichment.socios_pessoa_fisica ?? []) {
+    const name = socio.name.trim();
+    if (!name) continue;
+    if (contactRows.some((c) => nameKey(c.name) === nameKey(name) && c.job_title === "Sócio")) continue;
     contactRows.push({
-      name: enrichment.socio_principal,
+      name,
       phone: null,
+      job_title: "Sócio",
       origin: "Receita Federal"
     });
   }
+
+  const defaultPhoneName = enrichment.socio_principal || "Contato";
   for (const p of enrichment.phones) {
+    const attachName = enrichment.socio_principal || defaultPhoneName;
+    const socioRow = contactRows.find(
+      (c) => c.job_title === "Sócio" && nameKey(c.name) === nameKey(attachName) && !c.phone
+    );
+    if (socioRow) {
+      socioRow.phone = p.digits;
+      continue;
+    }
+    if (contactRows.some((c) => c.phone === p.digits)) continue;
     contactRows.push({
-      name: enrichment.socio_principal || "Contato",
+      name: defaultPhoneName,
       phone: p.digits,
+      job_title: null,
       origin: p.origin
     });
   }
+
   if (contactRows.length === 0) {
-    contactRows.push({ name: station.razao_social || "Recepção", phone: null, origin: CONTACT_ORIGIN.manual });
+    contactRows.push({
+      name: station.razao_social || "Recepção",
+      phone: null,
+      job_title: null,
+      origin: CONTACT_ORIGIN.manual
+    });
   }
 
   let primarySet = false;
@@ -98,14 +130,15 @@ export async function createClientFromLead(input: {
     await run(
       `
         INSERT INTO contacts (
-          client_id, name, phone, verification_status, origin, is_primary_phone, created_at, updated_at
+          client_id, name, job_title, phone, verification_status, origin, is_primary_phone, created_at, updated_at
         ) VALUES (
-          @clientId, @name, @phone, 'unverified', @origin, @isPrimary, @now, @now
+          @clientId, @name, @jobTitle, @phone, 'unverified', @origin, @isPrimary, @now, @now
         )
       `,
       {
         clientId,
         name: c.name.slice(0, 200),
+        jobTitle: c.job_title,
         phone: c.phone,
         origin: originLabel,
         isPrimary: !primarySet && Boolean(c.phone),

@@ -20,6 +20,10 @@ export function ClientDialPhonesPanel({ clientId }: { clientId: number }) {
       created_at: string;
       attempt_bucket: string;
       consumes_cycle: boolean;
+      user_name: string | null;
+      phone_display: string | null;
+      technical_slug: string | null;
+      commercial_slug: string | null;
     }>
   >([]);
   const [loading, setLoading] = useState(true);
@@ -117,7 +121,11 @@ export function ClientDialPhonesPanel({ clientId }: { clientId: number }) {
           <ul style={{ fontSize: "0.8125rem", paddingLeft: 18 }}>
             {history.slice(0, 30).map((h) => (
               <li key={h.id}>
-                {formatSpDateTime(h.created_at)} · telefone #{h.client_phone_id} · {h.attempt_bucket}
+                {formatSpDateTime(h.created_at)}
+                {h.user_name ? ` · ${h.user_name}` : ""}
+                {h.phone_display ? ` · ${formatPhoneDisplay(h.phone_display)}` : ` · telefone #${h.client_phone_id}`}
+                {" · "}
+                {h.attempt_bucket}
                 {h.consumes_cycle ? "" : " (não consome ciclo)"}
               </li>
             ))}

@@ -44,7 +44,9 @@ export function LeadGenFlowField({ preview }: Props) {
     <div className="field lead-gen-flow-field">
       <span className="label">Fluxo de geração</span>
       <div className="lead-gen-flow-field-row">
-        <input className="input lead-gen-flow-readonly" readOnly tabIndex={-1} value={preview.name} aria-readonly />
+        <span className="lead-gen-flow-name" title={preview.name}>
+          {preview.name}
+        </span>
         <span className="lead-gen-flow-help-wrap">
           <button type="button" className="lead-gen-flow-help-btn" aria-label="Ver etapas do fluxo">
             ?

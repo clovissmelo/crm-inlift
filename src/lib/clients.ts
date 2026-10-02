@@ -24,6 +24,15 @@ export function serializeClientForDetailPage(client: Record<string, unknown>) {
     website: (client.website as string | null) ?? null,
     instagram: (client.instagram as string | null) ?? null,
     notes: (client.notes as string | null) ?? null,
+    lead_generation_run_id:
+      client.lead_generation_run_id != null ? Number(client.lead_generation_run_id) : null,
+    google_place_id: (client.google_place_id as string | null) ?? null,
+    anp_fuel_brand: (client.anp_fuel_brand as string | null) ?? null,
+    anp_white_flag:
+      client.anp_white_flag === null || client.anp_white_flag === undefined
+        ? null
+        : Boolean(client.anp_white_flag),
+    anp_products_summary: (client.anp_products_summary as string | null) ?? null,
     bdr_user_id: client.bdr_user_id != null ? Number(client.bdr_user_id) : null,
     lead_qualification: (client.lead_qualification as string | null) ?? null,
     in_prospeccao_queue: client.in_prospeccao_queue !== false

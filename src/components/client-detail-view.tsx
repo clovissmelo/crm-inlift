@@ -17,6 +17,10 @@ import { LeadQualificationPicker } from "@/components/lead-qualification-picker"
 import { parseLeadQualification, type LeadQualification } from "@/lib/lead-qualification";
 import { CONTACT_ORIGIN, formatContactOrigin } from "@/lib/contact-origin";
 import type { ContactLastCallAttempt } from "@/lib/contact-last-call";
+import {
+  formatParticipatesInBrandNetwork,
+  resolveClientFuelDisplay
+} from "@/lib/client-fuel-display";
 import { VERIFICATION_LABELS, type ContactVerification, type Product, type User } from "@/lib/types";
 
 export type ClientContact = {
@@ -102,6 +106,11 @@ type Client = {
   website: string | null;
   instagram: string | null;
   notes: string | null;
+  lead_generation_run_id?: number | null;
+  google_place_id?: string | null;
+  anp_fuel_brand?: string | null;
+  anp_white_flag?: boolean | null;
+  anp_products_summary?: string | null;
   bdr_user_id: number | null;
   lead_qualification?: string | null;
   in_prospeccao_queue?: boolean;
@@ -207,6 +216,8 @@ export function ClientDetailView({
     product_ids: linkedProducts.map((p) => p.product_id),
     lead_qualification: parseLeadQualification(initialClient.lead_qualification) as LeadQualification
   });
+
+  const fuelDisplay = useMemo(() => resolveClientFuelDisplay(initialClient), [initialClient]);
 
   const clientDisplayName = initialClient.trade_name || initialClient.legal_name || "Cliente";
   const primaryContact = pickPrimaryContact(contacts);
@@ -940,7 +951,22 @@ export function ClientDetailView({
                 Associar produto
               </button>
             </InfoLine>
-            {hasText(initialClient.notes) ? <InfoLine label="Observações">{initialClient.notes}</InfoLine> : null}
+            {hasText(fuelDisplay.fuelBrand) ? <InfoLine label="Bandeira">{fuelDisplay.fuelBrand}</InfoLine> : null}
+            {formatParticipatesInBrandNetwork(fuelDisplay.participatesInBrandNetwork) ? (
+              <InfoLine label="Participa de grupo">
+                {formatParticipatesInBrandNetwork(fuelDisplay.participatesInBrandNetwork)}
+              </InfoLine>
+            ) : null}
+            {fuelDisplay.anpProducts.length > 0 ? (
+              <InfoLine label="Produtos ANP">
+                <ul style={{ margin: "0.25rem 0 0", paddingLeft: "1.25rem" }}>
+                  {fuelDisplay.anpProducts.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </InfoLine>
+            ) : null}
+            {hasText(fuelDisplay.userNotes) ? <InfoLine label="Observações">{fuelDisplay.userNotes}</InfoLine> : null}
           </div>
         ) : (
           <form onSubmit={saveClient} style={{ marginTop: "0.75rem" }}>

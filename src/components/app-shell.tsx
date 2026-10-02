@@ -18,6 +18,7 @@ import {
   Menu,
   PhoneCall,
   Package,
+  Settings,
   Shield,
   Sparkles,
   Target,
@@ -33,34 +34,58 @@ import type { User } from "@/lib/types";
 
 type NavItem = { href: Route; label: string; icon: typeof LayoutDashboard };
 
-const navMain: NavItem[] = [
+type NavSection = {
+  title?: string;
+  items: NavItem[];
+};
+
+const navTop: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/funil", label: "Funil", icon: Funnel },
   { href: "/prospeccao", label: "Leads para contato", icon: PhoneCall },
-  { href: "/agendamentos", label: "Agendamentos", icon: Calendar },
-  { href: "/negocios-convertidos", label: "Negócios convertidos", icon: Trophy },
-  { href: "/clientes", label: "Clientes", icon: List },
-  { href: "/abordagens", label: "Abordagens", icon: Target },
-  { href: "/resultado-comercial", label: "Resultado comercial", icon: ListChecks }
+  { href: "/funil", label: "Funil de vendas", icon: Funnel },
+  { href: "/agendamentos", label: "Agendamentos", icon: Calendar }
 ];
 
-function navGestaoItems(admin: boolean): NavItem[] {
-  const items: NavItem[] = [];
+function buildNavSections(admin: boolean): NavSection[] {
+  const clientesLeads: NavItem[] = [];
   if (admin) {
-    items.push({ href: "/admin/novos-leads", label: "Novos leads", icon: Sparkles });
+    clientesLeads.push({ href: "/admin/novos-leads", label: "Novos leads", icon: Sparkles });
   }
-  items.push({ href: "/organizacao-leads", label: "Organizar leads", icon: Filter });
+  clientesLeads.push(
+    { href: "/organizacao-leads", label: "Organizar leads", icon: Filter },
+    { href: "/clientes", label: "Clientes", icon: List }
+  );
+
+  const configuracao: NavItem[] = [{ href: "/abordagens", label: "Abordagem", icon: Target }];
   if (admin) {
-    items.push({ href: "/admin/etapas-funil", label: "Etapas do funil", icon: GitBranch });
+    configuracao.push({ href: "/admin/prospeccao", label: "Prospecção", icon: Settings });
   }
-  items.push(
+  configuracao.push({ href: "/resultado-comercial", label: "Resultado Comercial", icon: ListChecks });
+  if (admin) {
+    configuracao.push({ href: "/admin/etapas-funil", label: "Etapas do Funil", icon: GitBranch });
+  }
+
+  const cadastros: NavItem[] = [];
+  cadastros.push(
+    { href: "/negocios-convertidos", label: "Negócios convertidos", icon: Trophy },
     { href: "/empresas", label: "Nossas empresas", icon: Building2 },
-    { href: "/produtos", label: "Produtos", icon: Package }
+    { href: "/produtos", label: "Nossos produtos", icon: Package }
   );
   if (admin) {
-    items.push({ href: "/admin/usuarios", label: "Usuários", icon: Users });
+    cadastros.push(
+      { href: "/admin/usuarios", label: "Usuários", icon: Users },
+      { href: "/admin", label: "Admin", icon: Shield }
+    );
   }
-  return items;
+
+  const sections: NavSection[] = [
+    { items: navTop },
+    { title: "Clientes e leads", items: clientesLeads },
+    { title: "Configuração", items: configuracao },
+    { title: "Cadastros", items: cadastros }
+  ];
+
+  return sections.filter((s) => s.items.length > 0);
 }
 
 function isAdminHubPath(pathname: string) {
@@ -100,7 +125,7 @@ export function AppShell({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const crumbParts = pageCrumbSegments(pathname);
   const userIsAdmin = isAdmin(user);
-  const gestaoNav = navGestaoItems(userIsAdmin);
+  const navSections = buildNavSections(userIsAdmin);
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -134,22 +159,26 @@ export function AppShell({
           </button>
         </div>
         <nav id="app-sidebar-nav" className="nav-list">
-          {navMain.map((item) => (
-            <NavLinkItem key={item.href} item={item} pathname={pathname} />
+          {navSections.map((section) => (
+            <div key={section.title ?? "top"}>
+              {section.title ? <p className="nav-section-label">{section.title}</p> : null}
+              {section.items.map((item) => {
+                if (item.href === "/admin") {
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={clsx("nav-link", isAdminHubPath(pathname) && "active")}
+                    >
+                      <Shield size={18} aria-hidden />
+                      <span className="nav-link-label">{item.label}</span>
+                    </Link>
+                  );
+                }
+                return <NavLinkItem key={item.href} item={item} pathname={pathname} />;
+              })}
+            </div>
           ))}
-          <p className="nav-section-label">Gestão</p>
-          {gestaoNav.map((item) => (
-            <NavLinkItem key={item.href} item={item} pathname={pathname} />
-          ))}
-          {userIsAdmin ? (
-            <Link
-              href="/admin"
-              className={clsx("nav-link", isAdminHubPath(pathname) && "active")}
-            >
-              <Shield size={18} aria-hidden />
-              <span className="nav-link-label">Admin</span>
-            </Link>
-          ) : null}
         </nav>
         <div className="sidebar-footer muted">
           <div className="sidebar-footer-brand">

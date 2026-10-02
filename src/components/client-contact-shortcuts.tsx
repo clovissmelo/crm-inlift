@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Phone, Mail, MessageCircle } from "lucide-react";
+import { Check, Phone, Mail, MessageCircle } from "lucide-react";
 import { API4COM_NO_EXTENSION_MESSAGE, type Api4comDialIdentity } from "@/lib/api4com/dial-identity-shared";
 import { VerificationStatusIcon } from "@/components/contact-verification-ui";
 import type { ContactVerification } from "@/lib/types";
@@ -34,6 +34,7 @@ export type ContactDialOption = {
   nextEligibleAt?: string | null;
   needsReview?: boolean;
   pendingRegistrationCalls?: number;
+  attemptsAtLimit?: boolean;
 };
 
 function contactOptionsFromDialStrategy(phones: PhoneDialContextItem[]): ContactDialOption[] {
@@ -55,12 +56,14 @@ function contactOptionsFromDialStrategy(phones: PhoneDialContextItem[]): Contact
       cycleNoContactCount: p.cycle_no_contact_count,
       nextEligibleAt: p.next_eligible_at,
       needsReview: p.needs_review,
-      pendingRegistrationCalls: p.pending_registration_calls
+      pendingRegistrationCalls: p.pending_registration_calls,
+      attemptsAtLimit: p.attempts_at_limit
     }));
 }
 
 function dialOptionCounterSummary(o: ContactDialOption): string | null {
-  if (o.counterLines?.length) return o.counterLines.join(" · ");
+  const lines = o.counterLines?.filter((line) => !/aguardando registro/i.test(line));
+  if (lines?.length) return lines.join(" · ");
   if (o.counterLine) return o.counterLine;
   if (o.position != null && o.total != null) {
     const tries =
@@ -451,7 +454,7 @@ export function ClientContactShortcuts({
             <p className="dial-picker-head-text">
               <strong>Qual número ligar?</strong>
               <br />
-              Escolha abaixo. Os contadores ajudam a acompanhar tentativas por telefone neste lead.
+              Escolha abaixo. Os telefones precisam ter a quantidade mínima de tentativas por telefone.
             </p>
           </div>
           {pickerLoading ? <p className="muted">Carregando telefones e contadores…</p> : null}
@@ -491,6 +494,11 @@ export function ClientContactShortcuts({
                         <span className="dial-picker-meta dial-picker-meta--counters">{counterSummary}</span>
                       ) : null}
                     </span>
+                    {o.attemptsAtLimit ? (
+                      <span className="dial-picker-option-check" aria-label="Limite de tentativas atingido">
+                        <Check size={20} strokeWidth={2.5} />
+                      </span>
+                    ) : null}
                   </button>
                 </li>
               );

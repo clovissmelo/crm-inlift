@@ -77,6 +77,18 @@ export function CallScriptGuidePanel({
     setStepId(stepIdFromLog(savedLog, flow));
   }, [flow, call.id, scriptBody, savedLog.length]);
 
+  useEffect(() => {
+    if (!flow || !scriptBody) return;
+    if (stepId === null) {
+      maybeOpenRegistrationHandoff();
+      return;
+    }
+    const current = flow.steps[stepId];
+    if (!current || current.type === "branch") return;
+    const hasNext = Boolean(current.next && flow.steps[current.next]);
+    if (!hasNext) maybeOpenRegistrationHandoff();
+  }, [flow, stepId, scriptBody]);
+
   function maybeOpenRegistrationHandoff() {
     if (handoffSentRef.current) return;
     handoffSentRef.current = true;
@@ -166,18 +178,11 @@ export function CallScriptGuidePanel({
         <div className="call-script-panel-body">
           <CallDialContextBanner callId={call.id} compact />
           {!flow || !step ? (
-            <div>
-              <p className="muted">
-                {!scriptBody
-                  ? "Nenhum script de ligação ativo para este produto. Cadastre em Abordagens."
-                  : "Roteiro concluído."}
-              </p>
-              {flow && scriptBody ? (
-                <button type="button" className="btn btn-primary" style={{ marginTop: 12 }} onClick={maybeOpenRegistrationHandoff}>
-                  Continuar para complemento de registro
-                </button>
-              ) : null}
-            </div>
+            <p className="muted">
+              {!scriptBody
+                ? "Nenhum script de ligação ativo para este produto. Cadastre em Abordagens."
+                : "Abrindo complemento de registro…"}
+            </p>
           ) : (
             <>
               <h3 className="call-script-step-title">{step.title}</h3>
@@ -210,14 +215,9 @@ export function CallScriptGuidePanel({
                   </button>
                 </div>
               ) : (
-                <div className="call-script-actions">
-                  <p className="muted" style={{ fontSize: "0.875rem", margin: "0 0 0.75rem" }}>
-                    Fim deste fluxo.
-                  </p>
-                  <button type="button" className="btn btn-primary" onClick={maybeOpenRegistrationHandoff}>
-                    Continuar para complemento de registro
-                  </button>
-                </div>
+                <p className="muted" style={{ fontSize: "0.875rem", margin: 0 }}>
+                  Abrindo complemento de registro…
+                </p>
               )}
             </>
           )}

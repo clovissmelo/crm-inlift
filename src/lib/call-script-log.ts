@@ -16,6 +16,19 @@ export function normalizeCallScriptLog(raw: unknown): CallScriptLogEntry[] {
   });
 }
 
+/** Uma linha para timeline / listas (separador ·). */
+export function formatCallScriptLogInline(log: CallScriptLogEntry[]): string | null {
+  if (!log.length) return null;
+  const parts = log.map((e) => {
+    const title = e.step_title?.trim() || e.step_id;
+    if (e.action === "choice" && e.choice_label) return `${title}: ${e.choice_label}`;
+    if (e.action === "next") return `${title} → Próximo`;
+    if (e.action === "restart") return "Reinício do roteiro";
+    return title;
+  });
+  return `Roteiro: ${parts.join(" · ")}`;
+}
+
 export function formatCallScriptLogForNotes(log: CallScriptLogEntry[]): string | null {
   if (!log.length) return null;
   const lines = log.map((e) => {
