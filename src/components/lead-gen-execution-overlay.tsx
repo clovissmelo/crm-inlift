@@ -34,7 +34,7 @@ const STATUS_LABEL: Record<string, string> = {
   paused: "Pausada",
   completed: "Concluída",
   partial: "Parcial",
-  failed: "Falhou",
+  failed: "Insucesso",
   cancelled: "Cancelada"
 };
 

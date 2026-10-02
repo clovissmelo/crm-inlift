@@ -57,7 +57,7 @@ const RUN_STATUS_PT: Record<string, string> = {
   paused: "Pausada",
   completed: "Concluída",
   partial: "Parcial",
-  failed: "Falhou"
+  failed: "Insucesso"
 };
 
 function formatIndicatorDate(iso: string): string {

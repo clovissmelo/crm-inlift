@@ -1254,7 +1254,7 @@ async function tickFinalizing(runId: number) {
       geoExpanded: Boolean(counts.geo_expanded),
       exhaustedGeo: isGeoExpansionExhausted(counts, runRow.filters_json.all_cities_in_uf)
     });
-  } else if (target > 0 && created < target && processed > 0) {
+  } else if (target > 0 && created > 0 && created < target && processed > 0) {
     status = "partial";
     error_message = buildPartialRunLog({
       target,
@@ -1264,7 +1264,15 @@ async function tickFinalizing(runId: number) {
     });
   } else if (target > 0 && created === 0) {
     status = "failed";
-    error_message = buildStuckRunError({ counts, target, reason: "no_success" });
+    error_message =
+      processed > 0
+        ? buildPartialRunLog({
+            target,
+            counts,
+            geoExpanded: Boolean(counts.geo_expanded),
+            exhaustedGeo: isGeoExpansionExhausted(counts, runRow.filters_json.all_cities_in_uf)
+          })
+        : buildStuckRunError({ counts, target, reason: "no_success" });
   }
 
   await updateRun(runId, {
