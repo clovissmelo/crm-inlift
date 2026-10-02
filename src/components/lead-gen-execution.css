@@ -34,6 +34,56 @@
   background: rgba(0, 0, 0, 0.55);
 }
 
+.lead-gen-overlay-panel--wide {
+  width: min(720px, 100%);
+  max-height: min(90vh, 720px);
+  overflow: auto;
+}
+
+.lead-gen-preview-hint {
+  margin: 0.75rem 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius, 10px);
+  font-size: 0.9rem;
+}
+
+.lead-gen-preview-hint--ok {
+  border: 1px solid color-mix(in srgb, #3d9a5c 50%, transparent);
+  background: color-mix(in srgb, #3d9a5c 12%, transparent);
+}
+
+.lead-gen-preview-hint--warn {
+  border: 1px solid color-mix(in srgb, #c9a227 50%, transparent);
+  background: color-mix(in srgb, #c9a227 12%, transparent);
+}
+
+.lead-gen-preview-table-wrap {
+  max-height: 280px;
+  overflow: auto;
+  margin-top: 0.75rem;
+  border: 1px solid var(--border, #2a3340);
+  border-radius: var(--radius, 10px);
+}
+
+.lead-gen-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.lead-gen-preview-table th,
+.lead-gen-preview-table td {
+  padding: 0.45rem 0.65rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #2a3340);
+}
+
+.lead-gen-preview-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface, #121820);
+}
+
 .lead-gen-overlay-panel {
   position: relative;
   z-index: 1;

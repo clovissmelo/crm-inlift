@@ -10,6 +10,10 @@ import {
 } from "@/components/admin-novos-leads-city-picker";
 import { LeadGenFlowField } from "@/components/lead-gen-flow-field";
 import {
+  LeadGenAnpPreviewModal,
+  type AnpPreviewPayload
+} from "@/components/lead-gen-anp-preview-modal";
+import {
   LeadGenExecutionOverlay,
   type LeadGenActivityLine
 } from "@/components/lead-gen-execution-overlay";
@@ -161,6 +165,10 @@ export function AdminNovosLeadsWizard() {
   const [activityFeed, setActivityFeed] = useState<LeadGenActivityLine[]>([]);
   const [phaseLine, setPhaseLine] = useState<string | null>(null);
   const [tickBusy, setTickBusy] = useState(false);
+  const [anpPreviewOpen, setAnpPreviewOpen] = useState(false);
+  const [anpPreviewLoading, setAnpPreviewLoading] = useState(false);
+  const [anpPreviewData, setAnpPreviewData] = useState<AnpPreviewPayload | null>(null);
+  const [anpPreviewError, setAnpPreviewError] = useState<string | null>(null);
 
   const [flowPreview, setFlowPreview] = useState<{
     name: string;
@@ -432,15 +440,59 @@ export function AdminNovosLeadsWizard() {
     void fetchRunDetail(activeRunId, resultTab);
   }, [onNovosLeadsPage, activeRunId, resultTab, fetchRunDetail, selectedRunStatus]);
 
-  async function startRun() {
+  function leadGenSelectionPayload() {
+    return {
+      uf,
+      municipalities: citySelection.municipalities,
+      commercial_zone_ids: citySelection.commercial_zone_ids,
+      all_cities_in_uf: allCities,
+      segment,
+      bdr_user_id: bdrUserId === "" ? null : bdrUserId,
+      product_id: productId === "" ? null : productId,
+      max_stations: clampLeadsRequested(leadsRequested)
+    };
+  }
+
+  function validateBeforeLeadGen() {
     if (!uf || uf.length !== 2) {
       setError("Selecione uma UF.");
-      return;
+      return false;
     }
     if (!allCities && !hasGeoSelection) {
       setError("Selecione cidades, marque zonas (IBGE) ou marque todas da UF.");
-      return;
+      return false;
     }
+    return true;
+  }
+
+  async function openAnpPreviewModal() {
+    if (!validateBeforeLeadGen()) return;
+    setError(null);
+    setAnpPreviewOpen(true);
+    setAnpPreviewLoading(true);
+    setAnpPreviewData(null);
+    setAnpPreviewError(null);
+    try {
+      const res = await fetch("/api/admin/lead-generation/anp-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(leadGenSelectionPayload())
+      });
+      const data = (await res.json()) as AnpPreviewPayload & { error?: string };
+      if (!res.ok) {
+        setAnpPreviewError(data.error ?? "Falha na prévia ANP");
+        return;
+      }
+      setAnpPreviewData(data);
+    } catch {
+      setAnpPreviewError("Falha ao consultar a ANP.");
+    } finally {
+      setAnpPreviewLoading(false);
+    }
+  }
+
+  async function startRun() {
+    if (!validateBeforeLeadGen()) return;
     if (productId !== "" && citySelection.municipalities.length > 0) {
       const indRes = await fetch("/api/admin/lead-generation/geo/indicators", {
         method: "POST",
@@ -502,19 +554,11 @@ export function AdminNovosLeadsWizard() {
       created_at: new Date().toISOString()
     });
     setStarting(true);
+    setAnpPreviewOpen(false);
     const res = await fetch("/api/admin/lead-generation/runs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        uf,
-        municipalities: citySelection.municipalities,
-        commercial_zone_ids: citySelection.commercial_zone_ids,
-        all_cities_in_uf: allCities,
-        segment,
-        bdr_user_id: bdrUserId === "" ? null : bdrUserId,
-        product_id: productId === "" ? null : productId,
-        max_stations: clampLeadsRequested(leadsRequested)
-      })
+      body: JSON.stringify(leadGenSelectionPayload())
     });
     const data = (await res.json()) as { id?: number; error?: string };
     setStarting(false);
@@ -619,6 +663,17 @@ export function AdminNovosLeadsWizard() {
           </div>
         </div>
       ) : null}
+
+      <LeadGenAnpPreviewModal
+        open={anpPreviewOpen}
+        loading={anpPreviewLoading}
+        data={anpPreviewData}
+        error={anpPreviewError}
+        leadsRequested={leadsRequested}
+        onClose={() => setAnpPreviewOpen(false)}
+        onConfirmStart={() => void startRun()}
+        starting={starting}
+      />
 
       {shownRun && execOverlayOpen ? (
         <LeadGenExecutionOverlay
@@ -782,10 +837,10 @@ export function AdminNovosLeadsWizard() {
             <button
               className="btn btn-primary"
               type="button"
-              disabled={starting || shownRunActive}
-              onClick={() => void startRun()}
+              disabled={starting || shownRunActive || anpPreviewLoading}
+              onClick={() => void openAnpPreviewModal()}
             >
-              {starting ? "Iniciando…" : "Iniciar geração"}
+              {anpPreviewLoading ? "Consultando ANP…" : "Ver volume e iniciar…"}
             </button>
             {shownRunActive && shownRun ? (
               <button
