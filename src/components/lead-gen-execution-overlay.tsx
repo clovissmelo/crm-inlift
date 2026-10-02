@@ -132,7 +132,7 @@ export function LeadGenExecutionOverlay({
           <h3 className="lead-gen-overlay-feed-title">Atividade recente</h3>
           {phaseLine ? <p className="lead-gen-overlay-phase-line">{phaseLine}</p> : null}
           {activity.length === 0 ? (
-            <p className="muted">Aguardando primeiros resultados…</p>
+            <p className="muted">{phaseLine ?? "Aguardando primeiros resultados…"}</p>
           ) : (
             <ul className="lead-gen-overlay-feed-list">
               {activity.map((line) => (

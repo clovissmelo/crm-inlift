@@ -175,6 +175,7 @@ export function AdminNovosLeadsWizard() {
   );
 
   const shownRun = useMemo(() => {
+    if (starting && activeRun?.id === 0) return activeRun;
     if (activeRunId != null) {
       if (activeRun?.id === activeRunId) return activeRun;
       const fromList = runs.find((r) => r.id === activeRunId);
@@ -183,7 +184,7 @@ export function AdminNovosLeadsWizard() {
     if (activeRun && listActiveRun && activeRun.id === listActiveRun.id) return activeRun;
     if (activeRun && !listActiveRun) return activeRun;
     return listActiveRun;
-  }, [activeRunId, runs, activeRun, listActiveRun]);
+  }, [activeRunId, runs, activeRun, listActiveRun, starting]);
 
   const shownRunActive = shownRun != null && ["queued", "running", "paused"].includes(shownRun.status);
 
@@ -361,6 +362,7 @@ export function AdminNovosLeadsWizard() {
   }, [shownRun, shownRun?.status, execOverlayOpen]);
 
   const runIdToPoll = useMemo(() => {
+    if (starting) return null;
     if (listActiveRun && RUN_POLL_STATUSES.has(listActiveRun.status)) return listActiveRun.id;
     if (
       activeRunId != null &&
@@ -371,7 +373,7 @@ export function AdminNovosLeadsWizard() {
       return activeRunId;
     }
     return null;
-  }, [listActiveRun, activeRunId, activeRun?.id, activeRun?.status]);
+  }, [listActiveRun, activeRunId, activeRun?.id, activeRun?.status, starting]);
 
   useEffect(() => {
     if (!onNovosLeadsPage || runIdToPoll == null) return;
@@ -463,8 +465,36 @@ export function AdminNovosLeadsWizard() {
         }
       }
     }
-    setStarting(true);
     setError(null);
+    setExecOverlayOpen(true);
+    setBackgroundRunNotice(false);
+    setActivityFeed([]);
+    setPhaseLine("Criando execução…");
+    setActiveRun({
+      id: 0,
+      status: "queued",
+      phase: "anp_load",
+      uf,
+      simulation: false,
+      progress_pct: 1,
+      max_stations: clampLeadsRequested(leadsRequested),
+      max_google_calls: 0,
+      google_calls_used: 0,
+      product_id: productId === "" ? null : productId,
+      bdr_user_id: bdrUserId === "" ? null : bdrUserId,
+      filters_json: {
+        cities: citySelection.municipalities.map((m) => m.name),
+        all_cities_in_uf: allCities,
+        segment
+      },
+      counts_json: {
+        cities_total: Math.max(1, citySelection.municipalities.length),
+        cities_loaded: 0
+      },
+      error_message: null,
+      created_at: new Date().toISOString()
+    });
+    setStarting(true);
     const res = await fetch("/api/admin/lead-generation/runs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -483,16 +513,16 @@ export function AdminNovosLeadsWizard() {
     setStarting(false);
     if (!res.ok) {
       setError(data.error ?? "Falha ao iniciar");
+      setExecOverlayOpen(false);
+      setActiveRun(null);
+      setPhaseLine(null);
       return;
     }
     if (data.id) {
       setActiveRunId(data.id);
-      setActivityFeed([]);
       setPhaseLine(null);
-      setExecOverlayOpen(true);
-      setBackgroundRunNotice(false);
-      void tickActiveRun(data.id, true);
       void loadMeta();
+      void tickActiveRun(data.id, true);
     }
   }
 
@@ -591,7 +621,14 @@ export function AdminNovosLeadsWizard() {
           activity={activityFeed}
           cancelling={cancelling}
           onClose={closeExecOverlay}
-          onCancel={() => void cancelRun(shownRun.id)}
+          onCancel={() => {
+            if (shownRun.id > 0) void cancelRun(shownRun.id);
+            else {
+              setExecOverlayOpen(false);
+              setActiveRun(null);
+              setStarting(false);
+            }
+          }}
           onResume={shownRun.status === "paused" ? () => void resumeRun(shownRun.id) : undefined}
         />
       ) : null}

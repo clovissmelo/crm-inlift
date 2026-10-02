@@ -1,7 +1,6 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { resolveCityPairsFromMunicipalities } from "@/lib/lead-generation/city-resolve-ibge";
-import { drainLeadGenerationTicks } from "@/lib/lead-generation/drain-ticks";
 import { buildFlowSnapshot, getDefaultFlowForSegment, getLeadGenerationFlow } from "@/lib/lead-generation/flows-repo";
 import { getUfGeoFromIbge } from "@/lib/lead-generation/ibge-localidades";
 import { persistRunMunicipalities } from "@/lib/lead-generation/municipality-runs";
@@ -216,7 +215,8 @@ export async function POST(request: Request) {
     }))
   );
 
-  await drainLeadGenerationTicks({ runId: id, maxTicks: 18, maxMs: 55_000 });
+  // Progresso fica a cargo do POST /runs/[id]/tick (polling na UI). Drain longo aqui
+  // deixava "Iniciando…" por ~55s sem abrir o overlay de progresso.
 
   return Response.json({
     id,
