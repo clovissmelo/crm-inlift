@@ -665,8 +665,9 @@ export function AdminNovosLeadsWizard() {
       return;
     }
     if (data.id) {
-      setActiveRunId(data.id);
-      setActiveRun((prev) => (prev ? { ...prev, id: data.id } : null));
+      const newId = data.id;
+      setActiveRunId(newId);
+      setActiveRun((prev) => (prev ? { ...prev, id: newId } : null));
       setPhaseLine(null);
       void loadMeta();
     }

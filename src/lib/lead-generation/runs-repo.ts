@@ -182,6 +182,7 @@ export async function updateRun(
     counts_json: LeadGenCounts;
     filters_json: LeadGenFilters;
     progress_pct: number;
+    google_calls_used: number;
     error_message: string | null;
     started_at: string;
     completed_at: string;
@@ -208,6 +209,10 @@ export async function updateRun(
   if (patch.progress_pct != null) {
     sets.push("progress_pct = @pct");
     params.pct = patch.progress_pct;
+  }
+  if (patch.google_calls_used != null) {
+    sets.push("google_calls_used = @google_calls_used");
+    params.google_calls_used = patch.google_calls_used;
   }
   if (patch.error_message !== undefined) {
     sets.push("error_message = @err");

@@ -266,7 +266,7 @@ async function tickGooglePlacesCityLoad(
   runId: number,
   runRow: NonNullable<Awaited<ReturnType<typeof getLeadGenerationRun>>>
 ) {
-  const counts = { ...runRow.counts_json };
+  let counts = { ...runRow.counts_json };
   const pairs = cityPairsForInitialSource("google_places_city", runRow.uf, runRow.filters_json);
   counts.cities_total = pairs.length;
   if (pairs.length === 0) {
