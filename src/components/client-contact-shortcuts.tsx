@@ -33,6 +33,7 @@ export type ContactDialOption = {
   cycleNoContactCount?: number;
   nextEligibleAt?: string | null;
   needsReview?: boolean;
+  pendingRegistrationCalls?: number;
 };
 
 function contactOptionsFromDialStrategy(phones: PhoneDialContextItem[]): ContactDialOption[] {
@@ -53,7 +54,8 @@ function contactOptionsFromDialStrategy(phones: PhoneDialContextItem[]): Contact
       origin: p.origin,
       cycleNoContactCount: p.cycle_no_contact_count,
       nextEligibleAt: p.next_eligible_at,
-      needsReview: p.needs_review
+      needsReview: p.needs_review,
+      pendingRegistrationCalls: p.pending_registration_calls
     }));
 }
 

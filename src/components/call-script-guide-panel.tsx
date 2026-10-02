@@ -77,20 +77,6 @@ export function CallScriptGuidePanel({
     setStepId(stepIdFromLog(savedLog, flow));
   }, [flow, call.id, scriptBody, savedLog.length]);
 
-  useEffect(() => {
-    if (!flow || !stepId) return;
-    const current = flow.steps[stepId];
-    if (!current) return;
-    const atEnd =
-      current.type === "linear"
-        ? !current.next
-        : current.choices.every((c) => !c.next);
-    if (!atEnd) return;
-    if (handoffSentRef.current) return;
-    handoffSentRef.current = true;
-    onScriptFlowComplete?.();
-  }, [flow, stepId, onScriptFlowComplete]);
-
   function maybeOpenRegistrationHandoff() {
     if (handoffSentRef.current) return;
     handoffSentRef.current = true;
@@ -151,6 +137,7 @@ export function CallScriptGuidePanel({
 
   function restartFlow() {
     if (!flow) return;
+    handoffSentRef.current = false;
     void persistLog({
       step_id: stepId ?? flow.start,
       step_title: step?.title ?? "Roteiro",
@@ -179,11 +166,18 @@ export function CallScriptGuidePanel({
         <div className="call-script-panel-body">
           <CallDialContextBanner callId={call.id} compact />
           {!flow || !step ? (
-            <p className="muted">
-              {!scriptBody
-                ? "Nenhum script de ligação ativo para este produto. Cadastre em Abordagens."
-                : "Fim do roteiro ou etapa inválida. Use Reiniciar abaixo."}
-            </p>
+            <div>
+              <p className="muted">
+                {!scriptBody
+                  ? "Nenhum script de ligação ativo para este produto. Cadastre em Abordagens."
+                  : "Roteiro concluído."}
+              </p>
+              {flow && scriptBody ? (
+                <button type="button" className="btn btn-primary" style={{ marginTop: 12 }} onClick={maybeOpenRegistrationHandoff}>
+                  Continuar para complemento de registro
+                </button>
+              ) : null}
+            </div>
           ) : (
             <>
               <h3 className="call-script-step-title">{step.title}</h3>
@@ -216,9 +210,14 @@ export function CallScriptGuidePanel({
                   </button>
                 </div>
               ) : (
-                <p className="muted" style={{ fontSize: "0.875rem" }}>
-                  Fim deste fluxo. Continue a conversa ou encerre a ligação.
-                </p>
+                <div className="call-script-actions">
+                  <p className="muted" style={{ fontSize: "0.875rem", margin: "0 0 0.75rem" }}>
+                    Fim deste fluxo.
+                  </p>
+                  <button type="button" className="btn btn-primary" onClick={maybeOpenRegistrationHandoff}>
+                    Continuar para complemento de registro
+                  </button>
+                </div>
               )}
             </>
           )}

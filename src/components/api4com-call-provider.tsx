@@ -98,7 +98,7 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
       setCallScriptBody(null);
       return;
     }
-    setResultCallId(null);
+    setResultCallId((prev) => (prev === activeCall.id ? prev : null));
     setPanelCollapsed(false);
     const params = new URLSearchParams({ type: "call" });
     if (activeCall.product_id) params.set("product_id", String(activeCall.product_id));
@@ -138,10 +138,12 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
   }, [onProspeccaoPage]);
 
   useEffect(() => {
-    if (resultCallId != null && !pending.some((p) => p.id === resultCallId)) {
+    if (resultCallId == null) return;
+    if (activeCall?.id === resultCallId) return;
+    if (!pending.some((p) => p.id === resultCallId)) {
       setResultCallId(null);
     }
-  }, [pending, resultCallId]);
+  }, [pending, resultCallId, activeCall?.id]);
 
   const panelMode: CallSessionPanelMode | null =
     activeCall && resultCallId === activeCall.id
@@ -152,11 +154,11 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
           ? "result"
           : null;
 
-  function handleScriptFlowComplete() {
+  const handleScriptFlowComplete = useCallback(() => {
     if (!activeCall) return;
     setResultCallId(activeCall.id);
     setPanelCollapsed(false);
-  }
+  }, [activeCall]);
   const showSidePanel = canDial && panelMode != null && (panelMode === "script" || onProspeccaoPage);
 
   function closeResultPanel() {

@@ -143,9 +143,15 @@ export function isPhoneEligibleNow(
   return true;
 }
 
-export function phoneAttemptLabel(phone: ClientPhoneRow, settings: CallStrategySettings): string {
+export function phoneAttemptLabel(
+  phone: ClientPhoneRow,
+  settings: CallStrategySettings,
+  extraUnregisteredEnded = 0
+): string {
   const max = settings.max_no_contact_attempts ?? settings.max_no_answer_attempts;
-  const used = Math.max(phone.cycle_no_contact_count, phone.cycle_invalid_count, phone.cycle_wrong_number_count);
+  const used =
+    Math.max(phone.cycle_no_contact_count, phone.cycle_invalid_count, phone.cycle_wrong_number_count) +
+    Math.max(0, extraUnregisteredEnded);
   return `Tentativa ${Math.min(used + 1, max)} de ${max}`;
 }
 

@@ -19,6 +19,7 @@ import {
   type PhoneCounterState
 } from "@/lib/call-strategy/phone-counters";
 import { formatCounterLine, type OccurrenceKind } from "@/lib/call-strategy/occurrence-policy-shared";
+import { countUnregisteredEndedCallsByPhone } from "@/lib/call-strategy/pending-call-counts";
 
 export type PhoneDialContextItem = {
   client_phone_id: number;
@@ -43,6 +44,7 @@ export type PhoneDialContextItem = {
   counter_line: string | null;
   counter_lines: string[];
   needs_review: boolean;
+  pending_registration_calls: number;
 };
 
 export type ClientDialStrategySummary = {
@@ -130,6 +132,7 @@ export async function buildClientDialStrategySummary(input: {
   const limitsByKind = await loadLimitsByKind();
   const rawPhones = await listClientPhonesWithState(input.clientId);
   const lastMap = await loadLastAttempts(input.clientId);
+  const pendingByPhone = await countUnregisteredEndedCallsByPhone(input.clientId);
   const total = rawPhones.length;
   const now = Date.now();
 
@@ -146,6 +149,7 @@ export async function buildClientDialStrategySummary(input: {
 
   const phones: PhoneDialContextItem[] = rawPhones.map((p: ClientPhoneRow, idx) => {
     const last = lastMap.get(p.id);
+    const pendingRegistration = pendingByPhone.get(p.id) ?? 0;
     const eligible = isPhoneEligibleNow(p, settings, now) && p.status !== "exhausted";
     const counterState: PhoneCounterState = {
       cycle_no_contact_count: p.cycle_no_contact_count,
@@ -157,6 +161,13 @@ export async function buildClientDialStrategySummary(input: {
       last_occurrence_kind: p.last_occurrence_kind
     };
     const counter_lines = buildCounterLines(counterState, limitsByKind);
+    if (pendingRegistration > 0) {
+      counter_lines.push(
+        pendingRegistration === 1
+          ? "1 ligação feita aguardando registro no CRM"
+          : `${pendingRegistration} ligações feitas aguardando registro no CRM`
+      );
+    }
     const primaryKind =
       (p.last_occurrence_kind as OccurrenceKind | null) ??
       (last?.attempt_bucket as OccurrenceKind | null) ??
@@ -176,7 +187,7 @@ export async function buildClientDialStrategySummary(input: {
       position: idx + 1,
       total,
       status: p.status,
-      attempt_label: phoneAttemptLabel(p, settings),
+      attempt_label: phoneAttemptLabel(p, settings, pendingRegistration),
       cycle_no_contact_count: p.cycle_no_contact_count,
       cycle_no_answer_count: p.cycle_no_answer_count,
       cycle_invalid_count: p.cycle_invalid_count,
@@ -189,7 +200,8 @@ export async function buildClientDialStrategySummary(input: {
       primary_contact_id: p.primary_contact_id,
       counter_line,
       counter_lines,
-      needs_review: p.needs_review
+      needs_review: p.needs_review,
+      pending_registration_calls: pendingRegistration
     };
   });
 
