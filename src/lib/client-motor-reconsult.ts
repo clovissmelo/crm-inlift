@@ -189,7 +189,7 @@ async function runMotorEnrichment(
         stepLog.push({ step_key: "google_place_search", status: "error", message: "Sem correspondência" });
       } else {
         const match = validateGoogleMatch(station, found.name, found.formatted_address);
-        if (match === "accepted") {
+        if (match === "approved") {
           presetPlaceId = found.place_id;
           stepLog.push({ step_key: "google_place_search", status: "ok" });
         } else {
