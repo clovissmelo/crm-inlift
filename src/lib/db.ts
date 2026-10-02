@@ -140,13 +140,15 @@ export async function run<T = { changes: number; lastInsertRowid?: number }>(que
   const sql = getSqlClient();
   let statement = query.trim();
   const isInsert = /^\s*insert\s+/i.test(statement);
-  /** Junction / composite-PK tables have no `id` column — auto RETURNING id breaks them. */
+  /** Tabelas sem coluna `id` (PK natural / junção) — auto RETURNING id quebra no Postgres. */
   const insertWithoutIdColumn =
-    /^\s*insert\s+into\s+(user_roles|product_responsibles|client_products|meeting_internal_participants|bdr_transfer_log_clients|google_oauth_states)\b/i;
+    /^\s*insert\s+into\s+(user_roles|product_responsibles|client_products|meeting_internal_participants|bdr_transfer_log_clients|google_oauth_states|lead_generation_google_cache|lead_generation_daily_usage|lead_generation_ibge_uf_cache|lead_generation_run_municipalities|lead_generation_municipalities|lead_generation_commercial_zone_municipalities|client_product_prospeccao)\b/i;
+  const upsertWithoutRowId = /\bon conflict\b/i.test(statement);
   if (isInsert && !/\breturning\b/i.test(statement)) {
-    statement = insertWithoutIdColumn.test(statement)
-      ? `${statement} RETURNING 1 AS ok`
-      : `${statement} RETURNING id`;
+    statement =
+      insertWithoutIdColumn.test(statement) || upsertWithoutRowId
+        ? `${statement} RETURNING 1 AS ok`
+        : `${statement} RETURNING id`;
   }
   const { text, values } = convertNamedQuery(statement, params);
   const rows = await sql.unsafe<Array<{ id?: number }>>(text, values);
