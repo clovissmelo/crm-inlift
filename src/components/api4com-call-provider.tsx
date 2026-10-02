@@ -125,6 +125,18 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
           void refreshPending();
           return;
         }
+        try {
+          const settleRes = await fetch(`/api/api4com/calls/${call.id}/auto-settle`, { method: "POST" });
+          if (settleRes.ok) {
+            const data = (await settleRes.json()) as { requires_complement?: boolean };
+            if (!data.requires_complement) {
+              void refreshPending();
+              return;
+            }
+          }
+        } catch {
+          /* abre complemento se falhar */
+        }
         setResultCallId(call.id);
         setPanelCollapsed(false);
       })();
@@ -156,9 +168,24 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
 
   const handleScriptFlowComplete = useCallback(() => {
     if (!activeCall) return;
-    setResultCallId(activeCall.id);
-    setPanelCollapsed(false);
-  }, [activeCall]);
+    void (async () => {
+      try {
+        const settleRes = await fetch(`/api/api4com/calls/${activeCall.id}/auto-settle`, { method: "POST" });
+        if (settleRes.ok) {
+          const data = (await settleRes.json()) as { requires_complement?: boolean };
+          if (!data.requires_complement) {
+            setPanelCollapsed(true);
+            void refreshPending();
+            return;
+          }
+        }
+      } catch {
+        /* segue para complemento */
+      }
+      setResultCallId(activeCall.id);
+      setPanelCollapsed(false);
+    })();
+  }, [activeCall, refreshPending]);
   const showSidePanel = canDial && panelMode != null && (panelMode === "script" || onProspeccaoPage);
 
   function closeResultPanel() {

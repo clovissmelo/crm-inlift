@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CadastroModal } from "@/components/cadastro-ui";
 import { LEAD_QUALIFICATION_LABELS, type LeadQualification } from "@/lib/lead-qualification";
 import { formatSpDateTime } from "@/lib/datetime";
@@ -29,6 +29,7 @@ import {
 } from "@/lib/approach-next-actions";
 import { ApproachDecisionMakerField } from "@/components/approach-decision-maker-field";
 import { confirmProceedIfClientHasAgenda } from "@/lib/client-agenda-warning";
+import { callRequiresComplementRegistration } from "@/lib/api4com/call-registration";
 
 type CallDetail = {
   id: number;
@@ -175,6 +176,7 @@ export function Api4comCallResultForm({
   const [compatMap, setCompatMap] = useState<Record<string, number[]>>({});
   const [attendanceRules, setAttendanceRules] = useState<AttendanceRuleLite[]>([]);
   const [contactOutcomeId, setContactOutcomeId] = useState("");
+  const autoSettleRef = useRef<number | null>(null);
   const [, setTechnicalSlug] = useState<string | null>(null);
   const [technicalLabel, setTechnicalLabel] = useState("");
   const [contactedPersonName, setContactedPersonName] = useState("");
@@ -355,6 +357,10 @@ export function Api4comCallResultForm({
     void loadContext();
   }, [active, callId, loadContext]);
 
+  useEffect(() => {
+    autoSettleRef.current = null;
+  }, [callId]);
+
   const modalTitle =
     step === "next_dial" ? "Ligar para outro contato?" : "COMPLEMENTO DE REGISTRO";
 
@@ -377,15 +383,34 @@ export function Api4comCallResultForm({
     [attendanceRules, resultTypes, contactOutcomeId, compatMap]
   );
 
-  const callWasAnswered = useMemo(() => {
-    if (call?.answered_at) return true;
-    const slug = call?.technical_slug;
-    if (slug === "answered") return true;
-    if (slug === "no_answer" || slug === "busy" || slug === "invalid_number" || slug === "call_failed") {
-      return false;
-    }
-    return (call?.duration_seconds ?? 0) > 0;
-  }, [call?.answered_at, call?.technical_slug, call?.duration_seconds]);
+  const callWasAnswered = useMemo(
+    () =>
+      call
+        ? callRequiresComplementRegistration({
+            answered_at: call.answered_at,
+            technical_slug: call.technical_slug,
+            duration_seconds: call.duration_seconds
+          })
+        : false,
+    [call]
+  );
+
+  useEffect(() => {
+    if (!active || !callId || contextLoading || !call || step !== "result") return;
+    if (callWasAnswered) return;
+    if (autoSettleRef.current === callId) return;
+    autoSettleRef.current = callId;
+
+    void (async () => {
+      try {
+        await fetch(`/api/api4com/calls/${callId}/auto-settle`, { method: "POST" });
+      } catch {
+        /* ignore */
+      }
+      onCompleted();
+      onClose();
+    })();
+  }, [active, callId, contextLoading, call, callWasAnswered, step, onClose, onCompleted]);
 
   const bdrResultTypes = useMemo(() => {
     const base = listAnsweredCommercialOptions(

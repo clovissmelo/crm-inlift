@@ -4,8 +4,12 @@ import { isAdmin } from "@/lib/admin";
 import { requireUser } from "@/lib/auth";
 import { loadCatalog } from "@/lib/catalog";
 import { get } from "@/lib/db";
-import { getClientDetail } from "@/lib/clients";
-import { contactLastCallMapToRecord, getLastCallAttemptsByContactId } from "@/lib/contact-last-call";
+import { getClientDetail, serializeClientForDetailPage, serializeContactForDetailPage } from "@/lib/clients";
+import {
+  contactLastCallMapToRecord,
+  getLastCallAttemptsByContactId,
+  type ContactLastCallAttempt
+} from "@/lib/contact-last-call";
 import { listClientOpportunities } from "@/lib/opportunities";
 
 export const dynamic = "force-dynamic";
@@ -29,31 +33,24 @@ export default async function ClienteDetailPage({ params, searchParams }: Params
     { clientId }
   );
   const hasApproach = Boolean(hasApproachRow?.ok);
-  const contactLastCalls = contactLastCallMapToRecord(await getLastCallAttemptsByContactId(clientId));
+  let contactLastCalls: Record<number, ContactLastCallAttempt> = {};
+  try {
+    contactLastCalls = contactLastCallMapToRecord(await getLastCallAttemptsByContactId(clientId));
+  } catch (err) {
+    console.error("[clientes/[id]] getLastCallAttemptsByContactId", clientId, err);
+  }
   const followUpId = sp.follow_up ? Number(sp.follow_up) : undefined;
   const openMeeting = sp.agendar === "1";
 
-  const client = detail.client as {
-    id: number;
-    cnpj: string | null;
-    legal_name: string | null;
-    trade_name: string | null;
-    segment: string | null;
-    city: string | null;
-    uf: string | null;
-    address: string | null;
-    website: string | null;
-    instagram: string | null;
-    notes: string | null;
-    bdr_user_id: number | null;
-    lead_qualification: string | null;
-    in_prospeccao_queue: boolean;
-  };
+  const client = serializeClientForDetailPage(detail.client);
+  const initialContacts = detail.contacts.map((row) =>
+    serializeContactForDetailPage(row as Record<string, unknown>)
+  ) as ClientContact[];
 
   return (
     <ClientDetailView
       initialClient={client}
-      initialContacts={detail.contacts as ClientContact[]}
+      initialContacts={initialContacts}
       contactLastCalls={contactLastCalls}
       linkedProducts={detail.products}
       bdr={detail.bdr}

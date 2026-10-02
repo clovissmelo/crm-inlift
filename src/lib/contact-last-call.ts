@@ -78,7 +78,7 @@ export async function getLastCallAttemptsByContactId(clientId: number): Promise<
         COALESCE(c.ended_at, c.started_at, c.created_at) AS occurred_at,
         c.status,
         c.error_message,
-        COALESCE(a.commercial_result_name_snapshot, rt.name) AS result_name,
+        rt.name AS result_name,
         c.hangup_cause_code,
         c.hangup_cause_label,
         c.duration_seconds,
@@ -95,7 +95,7 @@ export async function getLastCallAttemptsByContactId(clientId: number): Promise<
 
   const manualCalls = await all<ManualCallRow>(
     `
-      SELECT a.contact_id, a.occurred_at, COALESCE(a.commercial_result_name_snapshot, rt.name) AS result_name
+      SELECT a.contact_id, a.occurred_at, rt.name AS result_name
       FROM approaches a
       LEFT JOIN approach_result_types rt ON rt.id = a.result_type_id
       WHERE a.client_id = @clientId

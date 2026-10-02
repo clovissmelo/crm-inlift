@@ -1,6 +1,53 @@
 import { all, get, nowIso, run } from "@/lib/db";
 import { normalizeCnpj } from "@/lib/format";
 import { parseLeadQualification } from "@/lib/lead-qualification";
+import type { ContactVerification } from "@/lib/types";
+
+const CONTACT_VERIFICATION: ContactVerification[] = [
+  "unverified",
+  "confirmed",
+  "invalid_number",
+  "wrong_contact"
+];
+
+/** Props serializáveis para RSC → ClientDetailView (evita Date/BigInt de SELECT *). */
+export function serializeClientForDetailPage(client: Record<string, unknown>) {
+  return {
+    id: Number(client.id),
+    cnpj: (client.cnpj as string | null) ?? null,
+    legal_name: (client.legal_name as string | null) ?? null,
+    trade_name: (client.trade_name as string | null) ?? null,
+    segment: (client.segment as string | null) ?? null,
+    city: (client.city as string | null) ?? null,
+    uf: (client.uf as string | null) ?? null,
+    address: (client.address as string | null) ?? null,
+    website: (client.website as string | null) ?? null,
+    instagram: (client.instagram as string | null) ?? null,
+    notes: (client.notes as string | null) ?? null,
+    bdr_user_id: client.bdr_user_id != null ? Number(client.bdr_user_id) : null,
+    lead_qualification: (client.lead_qualification as string | null) ?? null,
+    in_prospeccao_queue: client.in_prospeccao_queue !== false
+  };
+}
+
+export function serializeContactForDetailPage(row: Record<string, unknown>) {
+  const raw = row.verification_status as string | undefined;
+  const verification_status: ContactVerification = CONTACT_VERIFICATION.includes(raw as ContactVerification)
+    ? (raw as ContactVerification)
+    : "unverified";
+  return {
+    id: Number(row.id),
+    name: String(row.name ?? ""),
+    job_title: (row.job_title as string | null) ?? null,
+    phone: (row.phone as string | null) ?? null,
+    whatsapp: (row.whatsapp as string | null) ?? null,
+    email: (row.email as string | null) ?? null,
+    notes: (row.notes as string | null) ?? null,
+    verification_status,
+    is_primary_phone: Boolean(row.is_primary_phone),
+    origin: (row.origin as string | null) ?? null
+  };
+}
 
 export async function getClientDetail(id: number) {
   const client = await get<Record<string, unknown>>("SELECT * FROM clients WHERE id = @id", { id });
