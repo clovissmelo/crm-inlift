@@ -474,10 +474,45 @@ async function tickGooglePlacesCityLoad(
   await updateRun(runId, { counts_json: counts, progress_pct });
 }
 
+/** Fase anp_load com postos já na fila — evita ficar em “enfileirando…” sem tick. */
+async function closeAnpLoadWhenQueueReady(
+  runId: number,
+  runRow: NonNullable<Awaited<ReturnType<typeof getLeadGenerationRun>>>
+): Promise<boolean> {
+  if (runRow.phase !== "anp_load") return false;
+  const byStatus = await countItemsByStatus(runId);
+  const queue = (byStatus.pending ?? 0) + (byStatus.processing ?? 0);
+  if (queue === 0) return false;
+
+  const src = runInitialSource(runRow);
+  const sourceKey = src === "google_places_city" ? "google_places_city" : "anp_retail";
+  const pairs = cityPairsForInitialSource(sourceKey, runRow.uf, runRow.filters_json);
+  let counts = repairDiscoveryCounts(runRow, { ...runRow.counts_json });
+  if (pairs.length > 0) counts.cities_total = pairs.length;
+  counts.items_total = Object.values(byStatus).reduce((a, b) => a + b, 0);
+  if (pairs.length > 0 && (counts.cities_loaded ?? 0) < pairs.length) {
+    counts.cities_loaded = pairs.length;
+  }
+  counts = appendMotorLog(counts, `Fila com ${queue} posto(s): anp_load → enriquecimento`);
+  await updateRun(runId, {
+    phase: "processing",
+    counts_json: counts,
+    progress_pct: computeRunProgressPct({
+      phase: "processing",
+      status: runRow.status,
+      max_stations: runRow.max_stations,
+      counts_json: counts
+    })
+  });
+  await tickProcessing(runId);
+  return true;
+}
+
 async function tickAnpLoad(runId: number) {
   const runRow = await getLeadGenerationRun(runId);
   if (!runRow) return;
   if (await tryAdvanceToProcessingIfQueueReady(runId, runRow)) return;
+  if (await closeAnpLoadWhenQueueReady(runId, runRow)) return;
 
   const src = runInitialSource(runRow);
   if (src === "anp_distributor") {
@@ -521,6 +556,7 @@ async function tickAnpLoad(runId: number) {
   let idx = counts.cities_loaded ?? 0;
   if (idx >= pairs.length) {
     await finishAnpLoadPhase(runId, counts);
+    await tickProcessing(runId);
     return;
   }
 
@@ -590,6 +626,7 @@ async function tickAnpLoad(runId: number) {
 
   if (idx >= pairs.length) {
     await finishAnpLoadPhase(runId, counts);
+    await tickProcessing(runId);
     return;
   }
 
@@ -1187,6 +1224,12 @@ export async function processLeadGenerationTick(
 
   if (runRow.phase === "anp_load") {
     await tickAnpLoad(runId);
+    const afterAnp = await getLeadGenerationRun(runId);
+    if (afterAnp?.phase === "processing") {
+      await tickProcessing(runId);
+      await logMotorTickAction(runId, "anp_load+processing");
+      return { processedRunId: runId, action: "anp_load+processing" };
+    }
     await logMotorTickAction(runId, "anp_load");
     return { processedRunId: runId, action: "anp_load" };
   }

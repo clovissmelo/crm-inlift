@@ -18,8 +18,5 @@ export function repairDiscoveryCounts(
   if ((next.cities_total ?? 0) <= 0 && pairs.length > 0) {
     next.cities_total = pairs.length;
   }
-  if ((next.items_total ?? 0) > 0 && (next.cities_loaded ?? 0) === 0 && (next.cities_total ?? 0) > 0) {
-    next.cities_loaded = Math.min(next.cities_total, Math.max(1, next.cities_loaded ?? 0));
-  }
   return next;
 }

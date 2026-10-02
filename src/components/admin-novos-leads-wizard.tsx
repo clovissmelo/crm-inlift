@@ -208,11 +208,14 @@ export function AdminNovosLeadsWizard() {
   }, [runs, activeRunId]);
 
   const shownRun = useMemo(() => {
-    if (starting && activeRun?.id === 0) return activeRun;
-    if (activeRunId != null) {
+    if (starting && activeRunId == null && activeRun?.id === 0) return activeRun;
+    if (activeRunId != null && activeRunId > 0) {
       if (activeRun?.id === activeRunId) return activeRun;
       const fromList = runs.find((r) => r.id === activeRunId);
-      if (fromList) return activeRun?.id === fromList.id ? { ...fromList, ...activeRun } : fromList;
+      if (fromList) {
+        return activeRun?.id === fromList.id ? { ...fromList, ...activeRun } : fromList;
+      }
+      if (activeRun) return { ...activeRun, id: activeRunId };
     }
     if (activeRun && listActiveRun && activeRun.id === listActiveRun.id) return activeRun;
     if (activeRun && !listActiveRun) return activeRun;
@@ -473,12 +476,12 @@ export function AdminNovosLeadsWizard() {
 
   const runIdToPoll = useMemo(() => {
     if (starting) return null;
-    if (activeRunId != null) {
+    if (activeRunId != null && activeRunId > 0) {
       const status =
         activeRun?.id === activeRunId
           ? activeRun.status
-          : (runs.find((r) => r.id === activeRunId)?.status ?? null);
-      if (status && RUN_POLL_STATUSES.has(status)) return activeRunId;
+          : (runs.find((r) => r.id === activeRunId)?.status ?? activeRun?.status ?? "queued");
+      if (RUN_POLL_STATUSES.has(status)) return activeRunId;
     }
     if (listActiveRun && RUN_POLL_STATUSES.has(listActiveRun.status)) return listActiveRun.id;
     return null;
@@ -690,11 +693,16 @@ export function AdminNovosLeadsWizard() {
       setActiveRunId(newId);
       if (data.run) {
         applyRunRow(data.run);
+        setRuns((prev) => {
+          const rest = prev.filter((r) => r.id !== newId);
+          return [{ ...data.run! }, ...rest];
+        });
       } else {
         setActiveRun((prev) => (prev ? { ...prev, id: newId } : null));
       }
       setPhaseLine(null);
       void loadMeta();
+      void pollRunProgress(newId, true);
     }
   }
 
