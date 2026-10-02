@@ -159,8 +159,8 @@ export function ProspeccaoListView({
                   <td>{[item.city, item.uf].filter(Boolean).join(" / ") || "—"}</td>
                   <td>{item.bdr_name ?? "—"}</td>
                   <td>{productLabels(item.product_ids)}</td>
-                  <td className="muted" style={{ fontSize: "0.8125rem" }}>
-                    {item.prospeccao_phone_summary ?? (item.has_mobile || item.has_landline ? "—" : "Sem telefone")}
+                  <td className="muted" style={{ fontSize: "0.8125rem", textAlign: "center" }}>
+                    {item.contact_phone_count > 0 ? item.contact_phone_count : "—"}
                   </td>
                   <td>
                     <ClientContactShortcuts

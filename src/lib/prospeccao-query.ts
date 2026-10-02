@@ -42,11 +42,21 @@ type RawRow = {
   prospeccao_phone_summary: string | null;
 };
 
+function contactPhoneDigits(phonesRaw: string | null, whatsappsRaw: string | null): string[] {
+  const unique = new Set<string>();
+  for (const part of `${phonesRaw ?? ""},${whatsappsRaw ?? ""}`.split(",")) {
+    const d = phoneDigits(part);
+    if (d) unique.add(d);
+  }
+  return [...unique];
+}
+
+function countContactPhones(phonesRaw: string | null, whatsappsRaw: string | null): number {
+  return contactPhoneDigits(phonesRaw, whatsappsRaw).length;
+}
+
 function classifyPhones(phonesRaw: string | null, whatsappsRaw: string | null) {
-  const allDigits = `${phonesRaw ?? ""},${whatsappsRaw ?? ""}`
-    .split(",")
-    .map((p) => phoneDigits(p))
-    .filter(Boolean);
+  const allDigits = contactPhoneDigits(phonesRaw, whatsappsRaw);
   let hasMobile = false;
   let hasLandline = false;
   for (const d of allDigits) {
@@ -145,6 +155,8 @@ export type ProspeccaoListItem = ClientListItem & {
   /** @deprecated use queue_sort_order */
   queue_priority: number;
   prospeccao_phone_summary: string | null;
+  /** Telefones distintos nos contatos (phone + whatsapp). */
+  contact_phone_count: number;
   primary_phone: string | null;
   primary_whatsapp: string | null;
   primary_email: string | null;
@@ -309,6 +321,7 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
       queue_sort_order: row.resolved.effectiveSortOrder,
       queue_priority: row.resolved.effectiveSortOrder,
       prospeccao_phone_summary: row.prospeccao_phone_summary,
+      contact_phone_count: countContactPhones(row.phones, row.whatsapps),
       primary_phone: row.primary_phone,
       primary_whatsapp: row.primary_whatsapp,
       primary_email: row.primary_email,
