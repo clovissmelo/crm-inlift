@@ -33,18 +33,34 @@ export type LeadDiscoveryResult = {
   inserted: number;
 };
 
+export type ReconsultApplyOp =
+  | { op: "set_client"; field: string; value: string }
+  | { op: "set_client_bool"; field: "anp_white_flag"; value: boolean }
+  | {
+      op: "add_contact";
+      name: string;
+      phone: string | null;
+      job_title: string | null;
+      origin: string;
+    };
+
 export type ReconsultFieldChange = {
-  field: "phone" | "whatsapp" | "website" | "instagram" | "email" | "address";
+  key: string;
+  field: string;
   label: string;
   current: string | null;
   incoming: string | null;
   kind: "new" | "replace";
+  origin: string | null;
+  apply: ReconsultApplyOp | null;
 };
 
 export type ReconsultPreview = {
-  status: "stub" | "ready";
+  status: "stub" | "ready" | "failed";
   message: string;
   changes: ReconsultFieldChange[];
+  flow_label: string | null;
+  product_name: string | null;
 };
 
 function normalizeKey(cnpj: string | null | undefined, name: string, city: string) {
@@ -66,13 +82,6 @@ export async function runLeadDiscovery(input: LeadDiscoveryInput): Promise<LeadD
   };
 }
 
-export async function previewClientReconsult(clientId: number): Promise<ReconsultPreview> {
-  void clientId;
-  return {
-    status: "stub",
-    message: "Reconsulta pontual será habilitada quando o motor Google Places estiver ativo.",
-    changes: []
-  };
-}
+export { previewClientReconsult } from "@/lib/client-motor-reconsult";
 
 export { normalizeKey };
