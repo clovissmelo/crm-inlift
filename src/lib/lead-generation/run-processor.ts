@@ -1123,16 +1123,29 @@ async function tickFinalizing(runId: number) {
   }
   const created = counts.created ?? 0;
   const target = runRow.max_stations;
-  let status: "completed" | "partial" | "failed" = "completed";
+  const processed = counts.processed ?? 0;
+  const errors = counts.errors ?? 0;
+  const itemsTotal = counts.items_total ?? 0;
+  let status: "completed" | "partial" | "failed" = "failed";
   let error_message: string | null = null;
 
-  if (target > 0 && created === 0 && (counts.items_total ?? 0) === 0) {
+  if (target > 0 && created >= target) {
+    status = "completed";
+  } else if (target > 0 && created === 0 && itemsTotal === 0) {
     status = "failed";
     error_message = buildStuckRunError({ counts, target, reason: "no_success" });
   } else if (shouldFailNoSuccess(counts, target)) {
     status = "failed";
     error_message = buildStuckRunError({ counts, target, reason: "no_success" });
-  } else if (target > 0 && created < target && ((counts.processed ?? 0) > 0 || (counts.errors ?? 0) > 0)) {
+  } else if (target > 0 && created === 0 && processed > 0 && errors >= processed) {
+    status = "failed";
+    error_message = buildPartialRunLog({
+      target,
+      counts,
+      geoExpanded: Boolean(counts.geo_expanded),
+      exhaustedGeo: isGeoExpansionExhausted(counts, runRow.filters_json.all_cities_in_uf)
+    });
+  } else if (target > 0 && created < target && processed > 0) {
     status = "partial";
     error_message = buildPartialRunLog({
       target,
@@ -1140,6 +1153,9 @@ async function tickFinalizing(runId: number) {
       geoExpanded: Boolean(counts.geo_expanded),
       exhaustedGeo: isGeoExpansionExhausted(counts, runRow.filters_json.all_cities_in_uf)
     });
+  } else if (target > 0 && created === 0) {
+    status = "failed";
+    error_message = buildStuckRunError({ counts, target, reason: "no_success" });
   }
 
   await updateRun(runId, {

@@ -1196,7 +1196,7 @@ export function AdminNovosLeadsWizard() {
                           Solicitados: {r.max_stations} novo{r.max_stations === 1 ? "" : "s"}
                           {r.simulation
                             ? " · sem Google"
-                            : ` · Google ${r.google_calls_used}/${r.max_google_calls} sucesso${r.max_google_calls === 1 ? "" : "s"}${
+                            : ` · Google ${r.counts_json?.created ?? 0}/${r.max_google_calls} sucesso${r.max_google_calls === 1 ? "" : "s"}${
                                 (r.counts_json?.google_api_attempts ?? 0) > 0
                                   ? ` · ${r.counts_json.google_api_attempts} consulta${r.counts_json.google_api_attempts === 1 ? "" : "s"}`
                                   : ""

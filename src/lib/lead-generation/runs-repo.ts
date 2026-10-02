@@ -158,6 +158,22 @@ export async function listLeadGenerationRuns(limit = 30) {
   return rows.map((r) => ({ ...mapRun(r), requested_by_name: String(r.requested_by_name) }));
 }
 
+const TERMINAL_RUN_STATUSES = new Set(["completed", "partial", "failed", "cancelled"]);
+
+/** Histórico / listagem — contadores a partir dos itens (fonte de verdade). */
+export async function listLeadGenerationRunsForDisplay(limit = 40) {
+  const runs = await listLeadGenerationRuns(limit);
+  const enriched = await Promise.all(
+    runs.map(async (run) => {
+      if (!TERMINAL_RUN_STATUSES.has(run.status)) return run;
+      const counts_json = await recomputeRunCountsFromItems(run.id);
+      const created = counts_json.created ?? 0;
+      return { ...run, counts_json, google_calls_used: created };
+    })
+  );
+  return enriched;
+}
+
 export async function pickRunnableRunId(): Promise<number | null> {
   const row = await get<{ id: number }>(
     `
