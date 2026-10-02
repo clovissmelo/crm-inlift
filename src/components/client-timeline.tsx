@@ -8,6 +8,7 @@ type Item = {
   kind: string;
   title: string;
   detail: string | null;
+  script_detail?: string | null;
   occurred_at: string;
   user_name: string | null;
   meet_link?: string | null;
@@ -58,6 +59,11 @@ export function ClientTimeline({ clientId }: { clientId: number }) {
           </div>
           <strong>{item.title}</strong>
           {item.detail ? <div className="muted">{item.detail}</div> : null}
+          {item.script_detail ? (
+            <div className="muted" style={{ marginTop: "0.2rem", fontSize: "0.8125rem" }}>
+              {item.script_detail}
+            </div>
+          ) : null}
           {item.meet_link ? (
             <div style={{ marginTop: "0.25rem" }}>
               <a href={item.meet_link} target="_blank" rel="noreferrer">

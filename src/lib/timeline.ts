@@ -1,5 +1,10 @@
 import { all } from "@/lib/db";
-import { formatCallScriptLogInline, normalizeCallScriptLog } from "@/lib/call-script-log";
+import {
+  extractScriptSummaryFromApproachNotes,
+  formatCallScriptLogAnswers,
+  normalizeCallScriptLog,
+  stripScriptBlockFromApproachNotes
+} from "@/lib/call-script-log";
 import { formatSpDateTime } from "@/lib/datetime";
 import { MEETING_STATUS_LABELS, type MeetingStatus } from "@/lib/meeting-constants";
 
@@ -8,6 +13,7 @@ export type TimelineItem = {
   kind: string;
   title: string;
   detail: string | null;
+  script_detail?: string | null;
   occurred_at: string;
   user_name: string | null;
   meet_link?: string | null;
@@ -85,7 +91,9 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       title = "Ligação (em andamento)";
     } else if (call.approach_id) title = "Ligação registrada";
 
-    const scriptLine = formatCallScriptLogInline(normalizeCallScriptLog(call.script_flow_log));
+    const scriptDetail =
+      formatCallScriptLogAnswers(normalizeCallScriptLog(call.script_flow_log)) ??
+      extractScriptSummaryFromApproachNotes(call.approach_notes);
 
     let bdrParts: string[];
     if (call.status === "failed") {
@@ -97,24 +105,20 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
         call.contact_outcome_name ? `Contato: ${call.contact_outcome_name}` : null,
         call.contacted_person_name ? `Pessoa: ${call.contacted_person_name}` : null,
         call.commercial_name ? `Comercial: ${call.commercial_name}` : null,
-        call.approach_notes
+        stripScriptBlockFromApproachNotes(call.approach_notes)
       ].filter(Boolean) as string[];
     } else {
       bdrParts = ["Classificação BDR pendente"];
     }
 
-    const detailParts = [
-      call.product_name,
-      ...techParts,
-      scriptLine,
-      ...bdrParts
-    ].filter(Boolean) as string[];
+    const detailParts = [call.product_name, ...techParts, ...bdrParts].filter(Boolean) as string[];
 
     items.push({
       id: `api4com-${call.id}`,
       kind: "api4com_call",
       title,
       detail: detailParts.join(" · ") || null,
+      script_detail: scriptDetail,
       occurred_at: when,
       user_name: call.user_name ?? call.bdr_name
     });
@@ -205,11 +209,14 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       a.contacted_person_name ? `Pessoa: ${a.contacted_person_name}` : null,
       a.commercial_name ? `Comercial: ${a.commercial_name}` : null
     ].filter(Boolean);
+    const approachScript = extractScriptSummaryFromApproachNotes(a.notes);
     items.push({
       id: `approach-${a.id}`,
       kind: "approach",
       title: `Abordagem (${channelLabel})${a.result_name ? ` — ${a.result_name}` : ""}`,
-      detail: [a.product_name, ...layerParts, a.notes].filter(Boolean).join(" · ") || null,
+      detail:
+        [a.product_name, ...layerParts, stripScriptBlockFromApproachNotes(a.notes)].filter(Boolean).join(" · ") || null,
+      script_detail: approachScript,
       occurred_at: a.occurred_at,
       user_name: a.user_name
     });

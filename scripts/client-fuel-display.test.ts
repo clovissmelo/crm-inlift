@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import {
+  extractScriptSummaryFromApproachNotes,
+  formatCallScriptLogAnswers,
+  normalizeCallScriptLog
+} from "../src/lib/call-script-log";
+import {
   formatParticipatesInBrandNetwork,
   parseLeadMotorNotes,
   resolveClientFuelDisplay
@@ -29,5 +34,19 @@ const inline =
 const inlineParsed = parseLeadMotorNotes(inline);
 assert.equal(inlineParsed.leadGenerationRunId, 20);
 assert.equal(inlineParsed.anpProductsSummary?.includes("ETANOL"), true);
+
+const log = normalizeCallScriptLog([
+  {
+    at: "2026-01-01T00:00:00Z",
+    step_id: "s1",
+    step_title: "Quem é o responsável?",
+    action: "choice",
+    choice_label: "Gerente"
+  }
+]);
+assert.equal(formatCallScriptLogAnswers(log), "Quem é o responsável?: Gerente");
+
+const notes = "Roteiro da ligação:\n· Quem faz a compra?: Dono\n\nObs extra";
+assert.equal(extractScriptSummaryFromApproachNotes(notes)?.includes("Quem faz a compra"), true);
 
 console.log("client-fuel-display.test.ts OK");

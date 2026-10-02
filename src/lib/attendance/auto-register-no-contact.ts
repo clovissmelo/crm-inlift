@@ -1,3 +1,4 @@
+import { formatCallScriptLogForNotes, normalizeCallScriptLog } from "@/lib/call-script-log";
 import { getContactOutcomeTypeBySlug } from "@/lib/classifications/contact-commercial";
 import { recordDialAttemptFromApproach } from "@/lib/call-strategy/record-attempt";
 import { createApproach } from "@/lib/approaches";
@@ -20,10 +21,11 @@ export async function tryServerAutoRegisterNoContact(callId: number): Promise<bo
     started_at: string | null;
     api4com_call_id: string | null;
     result_pending: boolean;
+    script_flow_log: unknown;
   }>(
     `
       SELECT id, user_id, client_id, contact_id, product_id, technical_result_type_id,
-        approach_id, ended_at, started_at, api4com_call_id, result_pending
+        approach_id, ended_at, started_at, api4com_call_id, result_pending, script_flow_log
       FROM api4com_calls WHERE id = @id
     `,
     { id: callId }
@@ -59,6 +61,8 @@ export async function tryServerAutoRegisterNoContact(callId: number): Promise<bo
   const rule = await getAttendanceRuleBySlug("auto_no_contact");
   if (rule && rule.status !== "active") return false;
 
+  const scriptNotes = formatCallScriptLogForNotes(normalizeCallScriptLog(call.script_flow_log));
+
   const approachId = await createApproach({
     client_id: call.client_id,
     contact_id: call.contact_id,
@@ -67,7 +71,7 @@ export async function tryServerAutoRegisterNoContact(callId: number): Promise<bo
     channel: "call",
     occurred_at: call.ended_at ?? call.started_at,
     result_type_id: semContato.id,
-    notes: null,
+    notes: scriptNotes,
     external_call_id: call.api4com_call_id,
     next_action: { type: "none" },
     api4com_call_row_id: call.id,
