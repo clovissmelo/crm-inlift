@@ -19,6 +19,7 @@ type Props = {
   products: Product[];
   onResultClose: () => void;
   onResultCompleted: () => void;
+  onScriptFlowComplete?: () => void;
 };
 
 export function CallSessionSidePanel({
@@ -32,7 +33,8 @@ export function CallSessionSidePanel({
   resultCallId,
   products,
   onResultClose,
-  onResultCompleted
+  onResultCompleted,
+  onScriptFlowComplete
 }: Props) {
   if (mode === "script" && activeCall) {
     return (
@@ -43,6 +45,7 @@ export function CallSessionSidePanel({
         onCollapse={onCollapse}
         onExpand={onExpand}
         onLogUpdated={onLogUpdated}
+        onScriptFlowComplete={onScriptFlowComplete}
       />
     );
   }

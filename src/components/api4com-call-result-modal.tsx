@@ -20,7 +20,6 @@ import {
   resolveAllowedCommercialIds,
   resolveEffectiveBdrRules
 } from "@/lib/attendance/bdr-registration";
-import { CallDialContextBanner } from "@/components/call-dial-context-banner";
 import type { TechnicalResultTypeRow } from "@/lib/classifications/technical-result-match";
 import { formatCallScriptLogForNotes, normalizeCallScriptLog } from "@/lib/call-script-log";
 import { ApproachNextStepField } from "@/components/approach-next-step-field";
@@ -175,7 +174,6 @@ export function Api4comCallResultForm({
   const [contactTypes, setContactTypes] = useState<ContactOutcomeOption[]>([]);
   const [compatMap, setCompatMap] = useState<Record<string, number[]>>({});
   const [attendanceRules, setAttendanceRules] = useState<AttendanceRuleLite[]>([]);
-  const [maxNoContact, setMaxNoContact] = useState(3);
   const [contactOutcomeId, setContactOutcomeId] = useState("");
   const [, setTechnicalSlug] = useState<string | null>(null);
   const [technicalLabel, setTechnicalLabel] = useState("");
@@ -248,7 +246,6 @@ export function Api4comCallResultForm({
           max_no_contact_attempts?: number;
         };
         setAttendanceRules(att.items ?? []);
-        if (att.max_no_contact_attempts) setMaxNoContact(att.max_no_contact_attempts);
       } else {
         setAttendanceRules([]);
       }
@@ -841,7 +838,6 @@ export function Api4comCallResultForm({
 
       {step === "result" && !contextLoading && callWasAnswered ? (
         <form onSubmit={submit}>
-          {callId ? <CallDialContextBanner callId={callId} maxNoContact={maxNoContact} compact /> : null}
           {!call?.client_id ? (
             <div className="alert alert-error" style={{ marginBottom: 12 }}>
               Esta ligação não está vinculada a um cliente no CRM. Você pode dispensar o registro pendente ou fechar e
@@ -850,8 +846,6 @@ export function Api4comCallResultForm({
           ) : null}
           <CallThreeLayerRegistrationFields
             technicalLabel={technicalLabel}
-            providerLabel={call?.technical_provider_label ?? call?.hangup_cause_label}
-            providerCode={call?.technical_provider_code ?? call?.hangup_cause_code}
             contactTypes={contactTypes}
             contactOutcomeId={contactOutcomeId}
             onContactOutcomeChange={(id) => {

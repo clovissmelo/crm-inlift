@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { normalizeCallScriptLog, type CallScriptLogEntry } from "@/lib/call-script-log";
 import {
@@ -30,6 +30,8 @@ type Props = {
   collapsed?: boolean;
   onExpand?: () => void;
   onLogUpdated?: (log: CallScriptLogEntry[]) => void;
+  /** Ao concluir o roteiro, abre o complemento de registro no painel lateral. */
+  onScriptFlowComplete?: () => void;
 };
 
 export function callScriptStatusLabel(status: string) {
@@ -53,12 +55,18 @@ export function CallScriptGuidePanel({
   collapsed,
   onCollapse,
   onExpand,
-  onLogUpdated
+  onLogUpdated,
+  onScriptFlowComplete
 }: Props) {
+  const handoffSentRef = useRef(false);
   const flow = useMemo(() => (scriptBody ? parseCallScriptBody(scriptBody) : null), [scriptBody]);
   const savedLog = useMemo(() => normalizeCallScriptLog(call.script_flow_log), [call.script_flow_log]);
   const [stepId, setStepId] = useState<string | null>(null);
   const [logCount, setLogCount] = useState(savedLog.length);
+
+  useEffect(() => {
+    handoffSentRef.current = false;
+  }, [call.id]);
 
   useEffect(() => {
     setLogCount(savedLog.length);
@@ -68,6 +76,26 @@ export function CallScriptGuidePanel({
     }
     setStepId(stepIdFromLog(savedLog, flow));
   }, [flow, call.id, scriptBody, savedLog.length]);
+
+  useEffect(() => {
+    if (!flow || !stepId) return;
+    const current = flow.steps[stepId];
+    if (!current) return;
+    const atEnd =
+      current.type === "linear"
+        ? !current.next
+        : current.choices.every((c) => !c.next);
+    if (!atEnd) return;
+    if (handoffSentRef.current) return;
+    handoffSentRef.current = true;
+    onScriptFlowComplete?.();
+  }, [flow, stepId, onScriptFlowComplete]);
+
+  function maybeOpenRegistrationHandoff() {
+    if (handoffSentRef.current) return;
+    handoffSentRef.current = true;
+    onScriptFlowComplete?.();
+  }
 
   const vars = useMemo(
     () => ({
@@ -115,7 +143,10 @@ export function CallScriptGuidePanel({
       next_step_id: next
     });
     if (next && flow?.steps[next]) setStepId(next);
-    else setStepId(null);
+    else {
+      setStepId(null);
+      maybeOpenRegistrationHandoff();
+    }
   }
 
   function restartFlow() {

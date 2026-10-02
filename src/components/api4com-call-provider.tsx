@@ -143,7 +143,20 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
     }
   }, [pending, resultCallId]);
 
-  const panelMode: CallSessionPanelMode | null = activeCall ? "script" : resultCallId != null ? "result" : null;
+  const panelMode: CallSessionPanelMode | null =
+    activeCall && resultCallId === activeCall.id
+      ? "result"
+      : activeCall
+        ? "script"
+        : resultCallId != null
+          ? "result"
+          : null;
+
+  function handleScriptFlowComplete() {
+    if (!activeCall) return;
+    setResultCallId(activeCall.id);
+    setPanelCollapsed(false);
+  }
   const showSidePanel = canDial && panelMode != null && (panelMode === "script" || onProspeccaoPage);
 
   function closeResultPanel() {
@@ -207,6 +220,7 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
           products={products}
           onResultClose={closeResultPanel}
           onResultCompleted={() => void refreshPending()}
+          onScriptFlowComplete={handleScriptFlowComplete}
         />
       ) : null}
     </Api4comContext.Provider>

@@ -1,6 +1,5 @@
 "use client";
 
-import clsx from "clsx";
 import {
   matchTechnicalResultFromCatalog,
   suggestedCommercialSlugForContact,
@@ -74,8 +73,6 @@ export function applyThreeLayerSuggestions(input: {
 
 export function CallThreeLayerRegistrationFields({
   technicalLabel,
-  providerLabel,
-  providerCode,
   contactTypes,
   contactOutcomeId,
   onContactOutcomeChange,
@@ -96,8 +93,6 @@ export function CallThreeLayerRegistrationFields({
   disabled
 }: {
   technicalLabel: string;
-  providerLabel?: string | null;
-  providerCode?: string | null;
   contactTypes: ContactOutcomeOption[];
   contactOutcomeId: string;
   onContactOutcomeChange: (id: string) => void;
@@ -132,12 +127,6 @@ export function CallThreeLayerRegistrationFields({
         <p style={{ margin: 0, fontSize: "0.9375rem" }}>
           <strong>{technicalLabel || "Aguardando retorno da telefonia"}</strong>
         </p>
-        {providerLabel || providerCode ? (
-          <p className="muted" style={{ fontSize: "0.75rem", margin: "4px 0 0" }}>
-            Provedor: {providerLabel ?? "—"}
-            {providerCode ? ` (${providerCode})` : ""}
-          </p>
-        ) : null}
       </div>
 
       <div className="field">
@@ -172,24 +161,26 @@ export function CallThreeLayerRegistrationFields({
       {contactTypes.length > 0 ? (
         <div className="field">
           <label className="label">Contato realizado *</label>
-          <div className="contact-verification-picker" role="radiogroup" aria-label="Contato realizado">
-            {contactTypes.map((c) => {
-              const active = contactOutcomeId === String(c.id);
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  disabled={disabled || contactLocked}
-                  className={clsx("contact-verification-option", active && "contact-verification-option--active")}
-                  onClick={() => onContactOutcomeChange(String(c.id))}
-                >
-                  <span>{c.name}</span>
-                </button>
-              );
-            })}
-          </div>
+          {contactLocked && contactOutcomeId ? (
+            <p style={{ margin: 0, fontSize: "0.9375rem" }}>
+              <strong>{contactTypes.find((c) => String(c.id) === contactOutcomeId)?.name}</strong>
+            </p>
+          ) : (
+            <select
+              className="select"
+              value={contactOutcomeId}
+              onChange={(e) => onContactOutcomeChange(e.target.value)}
+              required
+              disabled={disabled || contactLocked}
+            >
+              <option value="">Selecione…</option>
+              {contactTypes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
           {contactLocked ? (
             <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
               Sugerido automaticamente pelo resultado técnico.
