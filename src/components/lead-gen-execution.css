@@ -252,6 +252,27 @@
   font-size: 0.78rem;
 }
 
+.lead-gen-tech-motor-log {
+  margin-top: 0.85rem;
+  font-size: 0.78rem;
+}
+
+.lead-gen-tech-motor-log-title {
+  font-weight: 500;
+  margin-bottom: 0.35rem;
+}
+
+.lead-gen-tech-motor-log-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+}
+
 .lead-gen-tech-steps {
   list-style: none;
   margin: 0.75rem 0 0;

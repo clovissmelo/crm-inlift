@@ -53,6 +53,8 @@ export type LeadGenCounts = {
   /** Derivados do banco (refresh / recompute). */
   pending?: number;
   processing?: number;
+  /** Últimas linhas do motor (diagnóstico na UI). */
+  motor_log?: string[];
 };
 
 export function emptyCounts(): LeadGenCounts {

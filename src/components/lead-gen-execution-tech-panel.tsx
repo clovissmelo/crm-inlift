@@ -23,7 +23,7 @@ type RunLike = {
   max_google_calls?: number;
   updated_at?: string;
   error_message?: string | null;
-  counts_json: Record<string, number>;
+  counts_json: Record<string, number | string[] | undefined>;
 };
 
 const STATUS_PT: Record<string, string> = {
@@ -43,14 +43,24 @@ const PHASE_PT: Record<string, string> = {
   done: "Encerrada (done)"
 };
 
+function countNum(c: RunLike["counts_json"], key: string): number {
+  const v = c[key];
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+function motorLogLines(c: RunLike["counts_json"]): string[] {
+  const v = c.motor_log;
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
+
 function buildTechnicalSteps(run: RunLike): TechStep[] {
   const c = run.counts_json ?? {};
-  const citiesTotal = c.cities_total ?? 0;
-  const citiesLoaded = c.cities_loaded ?? 0;
-  const itemsTotal = c.items_total ?? 0;
-  const processed = c.processed ?? 0;
-  const created = c.created ?? 0;
-  const googleAttempts = c.google_api_attempts ?? 0;
+  const citiesTotal = countNum(c, "cities_total");
+  const citiesLoaded = countNum(c, "cities_loaded");
+  const itemsTotal = countNum(c, "items_total");
+  const processed = countNum(c, "processed");
+  const created = countNum(c, "created");
+  const googleAttempts = countNum(c, "google_api_attempts");
   const anpDone = citiesTotal > 0 && citiesLoaded >= citiesTotal;
   const terminal = ["completed", "partial", "failed", "cancelled"].includes(run.status);
   const paused = run.status === "paused";
@@ -58,7 +68,9 @@ function buildTechnicalSteps(run: RunLike): TechStep[] {
   const motorDone = run.status !== "queued";
   const motorState: StepState = run.status === "queued" ? "active" : motorDone ? "done" : "pending";
 
-  const anpIncompleteInProcessing = run.phase === "processing" && !anpLoadComplete(c);
+  const anpIncompleteInProcessing =
+    run.phase === "processing" &&
+    !anpLoadComplete(c as unknown as import("@/lib/lead-generation/types").LeadGenCounts);
   let anpState: StepState = "pending";
   if (run.phase === "anp_load" || anpIncompleteInProcessing) anpState = paused ? "error" : "active";
   else if (anpDone || run.phase !== "anp_load") anpState = "done";
@@ -166,6 +178,7 @@ export function LeadGenExecutionTechPanel({
   const [open, setOpen] = useState(false);
   const steps = useMemo(() => buildTechnicalSteps(run), [run]);
   const c = run.counts_json ?? {};
+  const motorLog = motorLogLines(c);
 
   return (
     <div className="lead-gen-tech-panel">
@@ -189,11 +202,6 @@ export function LeadGenExecutionTechPanel({
       </div>
 
       {lastRefreshedLabel ? <p className="muted lead-gen-tech-refreshed">Última atualização na tela: {lastRefreshedLabel}</p> : null}
-
-      <p className="muted lead-gen-tech-hint">
-        A página atualiza sozinha a cada poucos segundos com a aba aberta. Use Atualizar para puxar o status agora; se
-        travar em % baixo, o motor pode estar dentro de um ciclo longo na Vercel.
-      </p>
 
       {open ? (
         <>
@@ -230,7 +238,7 @@ export function LeadGenExecutionTechPanel({
                   phase: run.phase,
                   status: run.status,
                   max_stations: run.max_stations,
-                  counts_json: c
+                  counts_json: c as unknown as import("@/lib/lead-generation/types").LeadGenCounts
                 })}
                 %
               </dd>
@@ -241,14 +249,14 @@ export function LeadGenExecutionTechPanel({
             </div>
             <div>
               <dt>ANP encontrados</dt>
-              <dd>{c.anp_found ?? 0}</dd>
+              <dd>{countNum(c, "anp_found")}</dd>
             </div>
             <div>
               <dt>Pendentes / processando</dt>
               <dd>
-                {c.pending ?? "—"} pendente(s) · {c.processing ?? 0} em processamento · ticks sem progresso:{" "}
-                {c.no_progress_ticks ?? 0}
-                {(c.processing ?? 0) > 0 && (c.processed ?? 0) === 0 ? (
+                {countNum(c, "pending")} pendente(s) · {countNum(c, "processing")} em processamento · ticks sem
+                progresso: {countNum(c, "no_progress_ticks")}
+                {countNum(c, "processing") > 0 && countNum(c, "processed") === 0 ? (
                   <span className="lead-gen-tech-stuck-hint">
                     {" "}
                     (posto preso no servidor — reenfileira após ~90s ou use Forçar ciclo)
@@ -259,10 +267,21 @@ export function LeadGenExecutionTechPanel({
             <div>
               <dt>Sem Google / revisão</dt>
               <dd>
-                {c.no_google_match ?? 0} sem match · {c.ambiguous ?? 0} revisão
+                {countNum(c, "no_google_match")} sem match · {countNum(c, "ambiguous")} revisão
               </dd>
             </div>
           </dl>
+
+          {motorLog.length > 0 ? (
+            <div className="lead-gen-tech-motor-log">
+              <div className="lead-gen-tech-motor-log-title">Log do motor (últimos passos)</div>
+              <ul className="lead-gen-tech-motor-log-lines muted">
+                {motorLog.map((line, i) => (
+                  <li key={`${i}-${line.slice(0, 12)}`}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
           {onForceTick ? (
             <button

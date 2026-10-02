@@ -1,6 +1,7 @@
 import { all, get, run, nowIso } from "@/lib/db";
 import { normalizeSegmentFilter } from "@/lib/lead-motor/lead-gen-segments";
 import { parseFlowSnapshot } from "@/lib/lead-generation/flows-repo";
+import { repairDiscoveryCounts } from "@/lib/lead-generation/run-discovery-meta";
 import { emptyCounts, type LeadGenCounts, type LeadGenFilters, type LeadGenerationRunRow } from "@/lib/lead-generation/types";
 
 function parseCounts(raw: unknown): LeadGenCounts {
@@ -374,6 +375,7 @@ export async function recomputeRunCountsFromItems(runId: number): Promise<LeadGe
   counts.pending = byStatus.pending ?? 0;
   counts.processing = byStatus.processing ?? 0;
   counts.anp_found = Math.max(counts.anp_found ?? 0, counts.items_total ?? 0);
+  if (run) return repairDiscoveryCounts(run, counts);
   return counts;
 }
 

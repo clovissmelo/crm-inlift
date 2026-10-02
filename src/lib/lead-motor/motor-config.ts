@@ -19,6 +19,13 @@ export const ITEMS_PER_CRON_TICK = 3;
 /** Itens em `processing` sem atualização — reenfileira após timeout (tick Vercel interrompido). */
 export const ITEM_PROCESSING_STALE_MS = 90_000;
 
+/** Postos na fila antes de parar varredura ANP/Google e enriquecer (meta baixa = 1). */
+export function enrichmentQueueBuffer(maxStations: number): number {
+  if (maxStations <= 3) return Math.max(1, maxStations);
+  if (maxStations <= 20) return Math.max(5, maxStations * 3);
+  return Math.max(15, maxStations * 8);
+}
+
 /** Cidades ANP carregadas por tick (acelera RS/PR inteiro). */
 export const ANP_CITIES_PER_TICK = 6;
 

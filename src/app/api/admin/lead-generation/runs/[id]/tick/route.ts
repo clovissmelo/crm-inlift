@@ -9,7 +9,8 @@ import {
   getLeadGenerationRun,
   listRunActivityFeed,
   recomputeRunCountsFromItems,
-  touchRunActivity
+  touchRunActivity,
+  updateRun
 } from "@/lib/lead-generation/runs-repo";
 
 export const maxDuration = 60;
@@ -52,10 +53,11 @@ export async function POST(request: Request, { params }: Params) {
 
   if (mayDrain) {
     const processing = before.phase === "processing";
+    const smallMeta = before.max_stations <= 3;
     await drainLeadGenerationTicks({
       runId: id,
-      maxTicks: before.phase === "finalizing" ? 2 : processing ? 6 : 4,
-      maxMs: before.phase === "finalizing" ? 12_000 : processing ? 48_000 : 38_000
+      maxTicks: before.phase === "finalizing" ? 2 : processing ? 6 : smallMeta ? 6 : 4,
+      maxMs: before.phase === "finalizing" ? 12_000 : processing ? 48_000 : smallMeta ? 50_000 : 38_000
     });
   } else if (before.status === "paused") {
     return Response.json(await leadGenTickResponse(id, before, wantFeed));
@@ -65,16 +67,19 @@ export async function POST(request: Request, { params }: Params) {
   if (!run) return Response.json({ error: "Execução não encontrada" }, { status: 404 });
 
   const counts_json = await recomputeRunCountsFromItems(id);
-  run = {
-    ...run,
-    counts_json,
-    progress_pct: computeRunProgressPct({
-      phase: run.phase,
-      status: run.status,
-      max_stations: run.max_stations,
-      counts_json
-    })
-  };
+  const progress_pct = computeRunProgressPct({
+    phase: run.phase,
+    status: run.status,
+    max_stations: run.max_stations,
+    counts_json
+  });
+  if (
+    (run.counts_json.cities_total ?? 0) !== (counts_json.cities_total ?? 0) ||
+    progress_pct !== run.progress_pct
+  ) {
+    await updateRun(id, { counts_json, progress_pct });
+  }
+  run = { ...run, counts_json, progress_pct };
 
   return Response.json(await leadGenTickResponse(id, run, wantFeed));
 }
