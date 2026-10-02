@@ -67,6 +67,13 @@ const PHASE_LABEL: Record<string, string> = {
 };
 
 const RUN_POLL_STATUSES = new Set(["queued", "running", "paused"]);
+const TERMINAL_RUN_STATUSES = new Set(["completed", "partial", "failed", "cancelled"]);
+
+function shouldApplyRunUpdate(prev: RunRow | null | undefined, incoming: RunRow): boolean {
+  if (!prev || prev.id !== incoming.id) return true;
+  if (TERMINAL_RUN_STATUSES.has(prev.status) && !TERMINAL_RUN_STATUSES.has(incoming.status)) return false;
+  return true;
+}
 
 const TICK_BUSY_PHASE_LINE =
   "Consultando ANP / Google… (cada ciclo pode levar até ~40s na nuvem)";
@@ -326,10 +333,14 @@ export function AdminNovosLeadsWizard() {
     })();
   }, [segment, selectedProduct?.lead_gen_flow_id]);
 
+  const pollGenerationRef = useRef(0);
+
   const applyRunRow = useCallback((run: RunDetail) => {
-    setActiveRun(run);
+    setActiveRun((prev) => (prev && !shouldApplyRunUpdate(prev, run) ? prev : run));
     setRuns((prev) => {
-      if (prev.some((row) => row.id === run.id)) {
+      const existing = prev.find((row) => row.id === run.id);
+      if (existing && !shouldApplyRunUpdate(existing, run)) return prev;
+      if (existing) {
         return prev.map((row) => (row.id === run.id ? { ...row, ...run } : row));
       }
       return [run, ...prev];
@@ -360,8 +371,10 @@ export function AdminNovosLeadsWizard() {
         activity?: LeadGenActivityLine[];
         phase_line?: string | null;
       },
-      withFeed: boolean
+      withFeed: boolean,
+      pollGeneration: number
     ) => {
+      if (pollGeneration !== pollGenerationRef.current) return;
       applyRunRow(data.run);
       if (!withFeed) return;
       if (data.activity !== undefined) setActivityFeed(data.activity);
@@ -371,8 +384,9 @@ export function AdminNovosLeadsWizard() {
   );
 
   const pollRunProgress = useCallback(
-    async (id: number, withFeed = false) => {
+    async (id: number, withFeed = false, pollGeneration = pollGenerationRef.current) => {
       if (id <= 0) return;
+      if (pollGeneration !== pollGenerationRef.current) return;
       const snap =
         activeRunRef.current?.id === id
           ? activeRunRef.current
@@ -387,7 +401,7 @@ export function AdminNovosLeadsWizard() {
           activity?: LeadGenActivityLine[];
           phase_line?: string | null;
         };
-        applyPollPayload(data, withFeed);
+        applyPollPayload(data, withFeed, pollGeneration);
         return;
       }
 
@@ -401,7 +415,7 @@ export function AdminNovosLeadsWizard() {
           activity?: LeadGenActivityLine[];
           phase_line?: string | null;
         };
-        applyPollPayload(data, withFeed);
+        applyPollPayload(data, withFeed, pollGeneration);
       } finally {
         setTickBusy(false);
       }
@@ -660,11 +674,21 @@ export function AdminNovosLeadsWizard() {
 
   async function cancelRun(runId = activeRunId ?? listActiveRun?.id) {
     if (!runId) return;
+    pollGenerationRef.current += 1;
     setCancelling(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/lead-generation/runs/${runId}/cancel`, { method: "POST" });
-      const data = (await res.json()) as { error?: string; run?: RunDetail };
+      const res = await fetch(`/api/admin/lead-generation/runs/${runId}/cancel`, {
+        method: "POST",
+        cache: "no-store"
+      });
+      let data: { error?: string; run?: RunDetail } = {};
+      try {
+        data = (await res.json()) as typeof data;
+      } catch {
+        setError("Resposta inválida ao cancelar. Tente atualizar a página.");
+        return;
+      }
       if (!res.ok) {
         setError(data.error ?? "Não foi possível cancelar");
         return;
@@ -672,7 +696,18 @@ export function AdminNovosLeadsWizard() {
       if (data.run) {
         applyRunRow(data.run);
       } else {
-        await fetchRunDetail(runId);
+        const base = activeRun?.id === runId ? activeRun : runs.find((r) => r.id === runId);
+        if (base) {
+          applyRunRow({
+            ...base,
+            status: "cancelled",
+            phase: "done",
+            progress_pct: 100,
+            error_message: null
+          });
+        } else {
+          await fetchRunDetail(runId);
+        }
       }
       setExecOverlayOpen(false);
       setBackgroundRunNotice(false);

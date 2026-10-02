@@ -247,6 +247,7 @@ export async function finalizeCancelledRun(id: number) {
 export async function cancelLeadGenerationRun(id: number): Promise<{ ok: true; drain: boolean } | { ok: false; error: string }> {
   const runRow = await getLeadGenerationRun(id);
   if (!runRow) return { ok: false, error: "Não encontrado" };
+  if (runRow.status === "cancelled") return { ok: true, drain: false };
   if (!["queued", "running", "paused"].includes(runRow.status)) {
     return { ok: false, error: "Execução já finalizada." };
   }
