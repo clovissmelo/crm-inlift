@@ -73,6 +73,13 @@ export function runProgressDetail(input: {
     return `ANP ${citiesLoaded}/${citiesTotal} cidades`;
   }
   if (input.phase === "anp_load" && citiesTotal > 0 && citiesLoaded >= citiesTotal) {
+    const itemsTotal = counts.items_total ?? 0;
+    const processed = counts.processed ?? 0;
+    const pending = counts.pending ?? 0;
+    const processing = counts.processing ?? 0;
+    if (itemsTotal > 0 && pending + processing === 0 && processed >= itemsTotal) {
+      return "Fila esgotada, finalizando execução…";
+    }
     return "ANP completa, enfileirando postos…";
   }
   if (created > 0) return `${created}/${input.max_stations} novos cadastrados`;

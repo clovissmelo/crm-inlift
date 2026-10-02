@@ -192,6 +192,46 @@ function parseStationFromItem(item: Record<string, unknown>): AnpStation | null 
   return null;
 }
 
+function isItemQueueFullyProcessed(
+  counts: LeadGenCounts,
+  pending: number,
+  processing: number
+): boolean {
+  const itemsTotal = counts.items_total ?? 0;
+  const processed = counts.processed ?? 0;
+  return itemsTotal > 0 && pending + processing === 0 && processed >= itemsTotal;
+}
+
+/** Fila esgotada (todos os postos em status terminal) — encerra em vez de ficar em anp_load / expandir geo. */
+async function finalizeRunIfQueueExhausted(
+  runId: number,
+  runRow: NonNullable<Awaited<ReturnType<typeof getLeadGenerationRun>>>
+): Promise<boolean> {
+  const recomp = await recomputeCounts(runId, runRow);
+  let { counts } = recomp;
+  const { pending, processing } = recomp;
+  if (!isItemQueueFullyProcessed(counts, pending, processing)) return false;
+
+  if (await targetCreatedReached(runId, runRow.max_stations)) {
+    await dropRemainingPending(runId);
+  }
+
+  counts = syncDiscoveryCountsWhenItemsQueued(runRow, counts, counts.items_total ?? 0);
+  counts = bumpProgressTracking(counts, runRow.phase);
+  await updateRun(runId, {
+    phase: "finalizing",
+    counts_json: counts,
+    progress_pct: computeRunProgressPct({
+      phase: "finalizing",
+      status: runRow.status,
+      max_stations: runRow.max_stations,
+      counts_json: counts
+    })
+  });
+  await tickFinalizing(runId);
+  return true;
+}
+
 async function recomputeCounts(runId: number, runRow: { counts_json: LeadGenCounts; max_stations: number }) {
   const byStatus = await countItemsByStatus(runId);
   const counts = { ...runRow.counts_json };
@@ -520,6 +560,7 @@ async function closeAnpLoadWhenQueueReady(
 async function tickAnpLoad(runId: number) {
   const runRow = await getLeadGenerationRun(runId);
   if (!runRow) return;
+  if (await finalizeRunIfQueueExhausted(runId, runRow)) return;
   if (await tryAdvanceToProcessingIfQueueReady(runId, runRow)) return;
   if (await closeAnpLoadWhenQueueReady(runId, runRow)) return;
 
@@ -1029,6 +1070,11 @@ async function whenProcessingQueueEmpty(
     await updateRun(runId, { counts_json: counts });
     return;
   }
+  if (isItemQueueFullyProcessed(counts, pending, processing)) {
+    await updateRun(runId, { phase: "finalizing", counts_json: counts });
+    await tickFinalizing(runId);
+    return;
+  }
   const created = counts.created ?? 0;
   const target = runRow.max_stations;
   const citiesDone = anpLoadComplete(counts);
@@ -1089,6 +1135,7 @@ async function syncGoogleSuccessCounter(runId: number, runRow: NonNullable<Await
 async function tickProcessing(runId: number) {
   let runRow = await getLeadGenerationRun(runId);
   if (!runRow) return;
+  if (await finalizeRunIfQueueExhausted(runId, runRow)) return;
 
   if (!anpLoadComplete(runRow.counts_json ?? emptyCounts())) {
     const byStatus = await countItemsByStatus(runId);
