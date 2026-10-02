@@ -1,6 +1,6 @@
 "use client";
 
-import { anpLoadComplete, computeRunProgressPct } from "@/lib/lead-generation/run-progress";
+import { anpLoadComplete } from "@/lib/lead-generation/run-progress";
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 
@@ -24,23 +24,6 @@ type RunLike = {
   updated_at?: string;
   error_message?: string | null;
   counts_json: Record<string, number | string[] | undefined>;
-};
-
-const STATUS_PT: Record<string, string> = {
-  queued: "Na fila (queued)",
-  running: "Em execução (running)",
-  paused: "Pausada (paused)",
-  completed: "Concluída",
-  partial: "Parcial",
-  failed: "Falhou",
-  cancelled: "Cancelada"
-};
-
-const PHASE_PT: Record<string, string> = {
-  anp_load: "Carregando fonte ANP (anp_load)",
-  processing: "Enriquecimento (processing)",
-  finalizing: "Finalizando (finalizing)",
-  done: "Encerrada (done)"
 };
 
 function countNum(c: RunLike["counts_json"], key: string): number {
@@ -131,21 +114,6 @@ function buildTechnicalSteps(run: RunLike): TechStep[] {
   ];
 }
 
-function formatServerTime(iso?: string): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    });
-  } catch {
-    return iso;
-  }
-}
-
 function StepMarker({ state }: { state: StepState }) {
   const className =
     state === "done"
@@ -216,61 +184,6 @@ export function LeadGenExecutionTechPanel({
               </li>
             ))}
           </ol>
-
-          <dl className="lead-gen-tech-kv muted">
-            <div>
-              <dt>Execução</dt>
-              <dd>#{run.id}</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>{STATUS_PT[run.status] ?? run.status}</dd>
-            </div>
-            <div>
-              <dt>Fase</dt>
-              <dd>{PHASE_PT[run.phase] ?? run.phase}</dd>
-            </div>
-            <div>
-              <dt>Progresso (servidor / barra)</dt>
-              <dd>
-                {run.progress_pct}% · barra:{" "}
-                {computeRunProgressPct({
-                  phase: run.phase,
-                  status: run.status,
-                  max_stations: run.max_stations,
-                  counts_json: c as unknown as import("@/lib/lead-generation/types").LeadGenCounts
-                })}
-                %
-              </dd>
-            </div>
-            <div>
-              <dt>Atualizado no servidor</dt>
-              <dd>{formatServerTime(run.updated_at)}</dd>
-            </div>
-            <div>
-              <dt>ANP encontrados</dt>
-              <dd>{countNum(c, "anp_found")}</dd>
-            </div>
-            <div>
-              <dt>Pendentes / processando</dt>
-              <dd>
-                {countNum(c, "pending")} pendente(s) · {countNum(c, "processing")} em processamento · ticks sem
-                progresso: {countNum(c, "no_progress_ticks")}
-                {countNum(c, "processing") > 0 && countNum(c, "processed") === 0 ? (
-                  <span className="lead-gen-tech-stuck-hint">
-                    {" "}
-                    (posto preso no servidor — reenfileira após ~90s ou use Forçar ciclo)
-                  </span>
-                ) : null}
-              </dd>
-            </div>
-            <div>
-              <dt>Sem Google / revisão</dt>
-              <dd>
-                {countNum(c, "no_google_match")} sem match · {countNum(c, "ambiguous")} revisão
-              </dd>
-            </div>
-          </dl>
 
           {motorLog.length > 0 ? (
             <div className="lead-gen-tech-motor-log">
