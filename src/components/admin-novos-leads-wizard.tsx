@@ -68,6 +68,16 @@ const PHASE_LABEL: Record<string, string> = {
 
 const RUN_POLL_STATUSES = new Set(["queued", "running", "paused"]);
 
+const TICK_BUSY_PHASE_LINE =
+  "Consultando ANP / Google… (cada ciclo pode levar até ~40s na nuvem)";
+
+function runNeedsLeadGenDrain(run: { status: string; phase: string } | null | undefined): boolean {
+  if (!run) return true;
+  if (run.status === "queued" || run.status === "running") return true;
+  if (run.status === "paused" && run.phase === "finalizing") return true;
+  return false;
+}
+
 const RUN_STATUS_LABEL: Record<string, string> = {
   queued: "Na fila",
   running: "Em execução",
@@ -178,10 +188,15 @@ export function AdminNovosLeadsWizard() {
 
   const maxLeadsRequested = quota?.per_run_limit ?? 100;
 
-  const listActiveRun = useMemo(
-    () => runs.find((r) => ["queued", "running", "paused"].includes(r.status)) ?? null,
-    [runs]
-  );
+  const listActiveRun = useMemo(() => {
+    const actives = runs.filter((r) => RUN_POLL_STATUSES.has(r.status));
+    if (actives.length === 0) return null;
+    if (activeRunId != null) {
+      const match = actives.find((r) => r.id === activeRunId);
+      if (match) return match;
+    }
+    return actives[0];
+  }, [runs, activeRunId]);
 
   const shownRun = useMemo(() => {
     if (starting && activeRun?.id === 0) return activeRun;
@@ -241,9 +256,17 @@ export function AdminNovosLeadsWizard() {
     }
     if (rRes.ok) {
       const r = (await rRes.json()) as { runs: RunRow[] };
-      setRuns(r.runs ?? []);
-      const active = r.runs?.find((x) => ["queued", "running", "paused"].includes(x.status));
-      if (active) setActiveRunId(active.id);
+      const rows = r.runs ?? [];
+      setRuns(rows);
+      const active = rows.find((x) => RUN_POLL_STATUSES.has(x.status));
+      if (active) {
+        setActiveRunId((prev) => {
+          if (prev != null && rows.some((x) => x.id === prev && RUN_POLL_STATUSES.has(x.status))) {
+            return prev;
+          }
+          return active.id;
+        });
+      }
     }
     if (geoRes.ok) {
       const g = (await geoRes.json()) as { ufs: UfOption[] };
@@ -305,7 +328,12 @@ export function AdminNovosLeadsWizard() {
 
   const applyRunRow = useCallback((run: RunDetail) => {
     setActiveRun(run);
-    setRuns((prev) => prev.map((row) => (row.id === run.id ? { ...row, ...run } : row)));
+    setRuns((prev) => {
+      if (prev.some((row) => row.id === run.id)) {
+        return prev.map((row) => (row.id === run.id ? { ...row, ...run } : row));
+      }
+      return [run, ...prev];
+    });
   }, []);
 
   const fetchRunDetail = useCallback(
@@ -320,9 +348,49 @@ export function AdminNovosLeadsWizard() {
     [applyRunRow]
   );
 
-  const tickActiveRun = useCallback(
+  const runsRef = useRef(runs);
+  runsRef.current = runs;
+  const activeRunRef = useRef(activeRun);
+  activeRunRef.current = activeRun;
+
+  const applyPollPayload = useCallback(
+    (
+      data: {
+        run: RunDetail;
+        activity?: LeadGenActivityLine[];
+        phase_line?: string | null;
+      },
+      withFeed: boolean
+    ) => {
+      applyRunRow(data.run);
+      if (!withFeed) return;
+      if (data.activity !== undefined) setActivityFeed(data.activity);
+      if (data.phase_line !== undefined) setPhaseLine(data.phase_line);
+    },
+    [applyRunRow]
+  );
+
+  const pollRunProgress = useCallback(
     async (id: number, withFeed = false) => {
       if (id <= 0) return;
+      const snap =
+        activeRunRef.current?.id === id
+          ? activeRunRef.current
+          : runsRef.current.find((r) => r.id === id);
+
+      if (!runNeedsLeadGenDrain(snap)) {
+        const q = withFeed ? "?feed=1" : "";
+        const res = await fetch(`/api/admin/lead-generation/runs/${id}${q}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          run: RunDetail;
+          activity?: LeadGenActivityLine[];
+          phase_line?: string | null;
+        };
+        applyPollPayload(data, withFeed);
+        return;
+      }
+
       setTickBusy(true);
       try {
         const q = withFeed ? "?feed=1" : "";
@@ -333,16 +401,19 @@ export function AdminNovosLeadsWizard() {
           activity?: LeadGenActivityLine[];
           phase_line?: string | null;
         };
-        applyRunRow(data.run);
-        if (withFeed) {
-          if (data.activity) setActivityFeed(data.activity);
-          setPhaseLine(data.phase_line ?? null);
-        }
+        applyPollPayload(data, withFeed);
       } finally {
         setTickBusy(false);
       }
     },
-    [applyRunRow]
+    [applyPollPayload]
+  );
+
+  const tickActiveRun = useCallback(
+    async (id: number, withFeed = false) => {
+      await pollRunProgress(id, withFeed);
+    },
+    [pollRunProgress]
   );
 
   function closeExecOverlay() {
@@ -378,17 +449,16 @@ export function AdminNovosLeadsWizard() {
 
   const runIdToPoll = useMemo(() => {
     if (starting) return null;
-    if (listActiveRun && RUN_POLL_STATUSES.has(listActiveRun.status)) return listActiveRun.id;
-    if (
-      activeRunId != null &&
-      activeRun?.id === activeRunId &&
-      activeRun?.status &&
-      RUN_POLL_STATUSES.has(activeRun.status)
-    ) {
-      return activeRunId;
+    if (activeRunId != null) {
+      const status =
+        activeRun?.id === activeRunId
+          ? activeRun.status
+          : (runs.find((r) => r.id === activeRunId)?.status ?? null);
+      if (status && RUN_POLL_STATUSES.has(status)) return activeRunId;
     }
+    if (listActiveRun && RUN_POLL_STATUSES.has(listActiveRun.status)) return listActiveRun.id;
     return null;
-  }, [listActiveRun, activeRunId, activeRun?.id, activeRun?.status, starting]);
+  }, [listActiveRun, activeRunId, activeRun?.id, activeRun?.status, runs, starting]);
 
   useEffect(() => {
     if (!onNovosLeadsPage || runIdToPoll == null) return;
@@ -400,15 +470,26 @@ export function AdminNovosLeadsWizard() {
       if (cancelled || tickInFlightRef.current || document.visibilityState === "hidden") return;
       tickInFlightRef.current = true;
       try {
-        await tickActiveRun(runIdToPoll!, withFeed);
+        await pollRunProgress(runIdToPoll!, withFeed);
       } finally {
         tickInFlightRef.current = false;
       }
     }
 
     void tickOnce();
-    const pollMs = execOverlayOpen ? 2500 : backgroundRunNotice ? 4500 : 4000;
-    const t = window.setInterval(() => void tickOnce(), pollMs);
+
+    function pollIntervalMs() {
+      const snap =
+        activeRunRef.current?.id === runIdToPoll
+          ? activeRunRef.current
+          : runsRef.current.find((r) => r.id === runIdToPoll);
+      if (snap && !runNeedsLeadGenDrain(snap)) {
+        return execOverlayOpen ? 8000 : 12_000;
+      }
+      return execOverlayOpen ? 2500 : backgroundRunNotice ? 4500 : 4000;
+    }
+
+    const t = window.setInterval(() => void tickOnce(), pollIntervalMs());
 
     function onVisibility() {
       if (document.visibilityState === "visible") void tickOnce();
@@ -420,7 +501,7 @@ export function AdminNovosLeadsWizard() {
       window.clearInterval(t);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [onNovosLeadsPage, runIdToPoll, execOverlayOpen, backgroundRunNotice, tickActiveRun]);
+  }, [onNovosLeadsPage, runIdToPoll, execOverlayOpen, backgroundRunNotice, pollRunProgress]);
 
   const selectedRunStatus = useMemo(() => {
     if (activeRunId == null) return null;
@@ -571,9 +652,9 @@ export function AdminNovosLeadsWizard() {
     }
     if (data.id) {
       setActiveRunId(data.id);
+      setActiveRun((prev) => (prev ? { ...prev, id: data.id } : null));
       setPhaseLine(null);
       void loadMeta();
-      void tickActiveRun(data.id, true);
     }
   }
 
@@ -583,12 +664,20 @@ export function AdminNovosLeadsWizard() {
     setError(null);
     try {
       const res = await fetch(`/api/admin/lead-generation/runs/${runId}/cancel`, { method: "POST" });
+      const data = (await res.json()) as { error?: string; run?: RunDetail };
       if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
         setError(data.error ?? "Não foi possível cancelar");
         return;
       }
-      void tickActiveRun(runId);
+      if (data.run) {
+        applyRunRow(data.run);
+      } else {
+        await fetchRunDetail(runId);
+      }
+      setExecOverlayOpen(false);
+      setBackgroundRunNotice(false);
+      setPhaseLine(null);
+      setActivityFeed([]);
       void loadMeta();
     } finally {
       setCancelling(false);
@@ -680,9 +769,7 @@ export function AdminNovosLeadsWizard() {
           open
           run={shownRun}
           phaseLine={
-            tickBusy
-              ? "Consultando ANP / Google… (cada ciclo pode levar até ~40s na nuvem)"
-              : phaseLine
+            tickBusy && runNeedsLeadGenDrain(shownRun) ? TICK_BUSY_PHASE_LINE : phaseLine
           }
           activity={activityFeed}
           cancelling={cancelling}
@@ -840,7 +927,7 @@ export function AdminNovosLeadsWizard() {
               disabled={starting || shownRunActive || anpPreviewLoading}
               onClick={() => void openAnpPreviewModal()}
             >
-              {anpPreviewLoading ? "Consultando ANP…" : "Ver volume e iniciar…"}
+              {anpPreviewLoading ? "Consultando ANP…" : "Capturar Leads"}
             </button>
             {shownRunActive && shownRun ? (
               <button
@@ -854,7 +941,7 @@ export function AdminNovosLeadsWizard() {
             ) : null}
           </div>
           <div className="lead-gen-run-note" role="note">
-            Inválidos ou já existentes são ignorados sem repetir CNPJ na execução.
+            Cadastros inválidos ou CNPJ já existentes são ignorados na execução de captura.
           </div>
         </div>
       </div>
@@ -1005,7 +1092,13 @@ export function AdminNovosLeadsWizard() {
                         </span>
                         <span className="lead-gen-history-sub muted">
                           Solicitados: {r.max_stations} novo{r.max_stations === 1 ? "" : "s"}
-                          {r.simulation ? " · sem Google" : ` · Google ${r.google_calls_used}/${r.max_google_calls}`}
+                          {r.simulation
+                            ? " · sem Google"
+                            : ` · Google ${r.google_calls_used}/${r.max_google_calls} sucesso${r.max_google_calls === 1 ? "" : "s"}${
+                                (r.counts_json?.google_api_attempts ?? 0) > 0
+                                  ? ` · ${r.counts_json.google_api_attempts} consulta${r.counts_json.google_api_attempts === 1 ? "" : "s"}`
+                                  : ""
+                              }`}
                         </span>
                         {bdrName || productName ? (
                           <span className="lead-gen-history-sub muted">

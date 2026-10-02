@@ -22,7 +22,11 @@ import {
   shouldFailNoSuccess
 } from "@/lib/lead-generation/run-outcome";
 import { isGeoExpansionExhausted, tryExpandRunGeography } from "@/lib/lead-generation/run-geo-expand";
-import { canSpendGoogleCalls, touchRunGoogleUsage } from "@/lib/lead-generation/quota";
+import {
+  canAttemptGoogleApi,
+  recordGoogleApiAttempt,
+  recordGoogleSuccessResult
+} from "@/lib/lead-generation/quota";
 import {
   countItemsByStatus,
   fetchPendingItemIds,
@@ -43,6 +47,26 @@ import { run, nowIso } from "@/lib/db";
 
 const STALE_RUN_MS = 25 * 60 * 1000;
 const NO_PROGRESS_TICK_FAIL = 35;
+
+async function pauseRunForGoogleLimit(
+  runId: number,
+  counts: LeadGenCounts,
+  error_message: string,
+  itemId?: number
+) {
+  if (itemId != null) await updateItem(itemId, { status: "pending" });
+  await updateRun(runId, { status: "paused", counts_json: counts, error_message });
+}
+
+async function registerGoogleApiAttempt(
+  runId: number,
+  counts: LeadGenCounts
+): Promise<LeadGenCounts> {
+  await recordGoogleApiAttempt(runId);
+  const next = { ...counts, google_api_attempts: (counts.google_api_attempts ?? 0) + 1 };
+  await updateRun(runId, { counts_json: next });
+  return next;
+}
 
 function bumpProgressTracking(counts: LeadGenCounts, phase: string): LeadGenCounts {
   if (phase === "anp_load" || phase === "queued") {
@@ -303,19 +327,14 @@ async function tickGooglePlacesCityLoad(
   const end = Math.min(idx + ANP_CITIES_PER_TICK, pairs.length);
   for (; idx < end; idx++) {
     const pair = pairs[idx]!;
-    const ok = await canSpendGoogleCalls(runRow.google_calls_used, runRow.max_google_calls, 1);
-    if (!ok) {
-      await updateRun(runId, {
-        status: "paused",
-        counts_json: counts,
-        error_message: "Limite Google atingido durante descoberta na cidade."
-      });
+    const gate = await canAttemptGoogleApi(counts.google_api_attempts ?? 0);
+    if (!gate.ok) {
+      await pauseRunForGoogleLimit(runId, counts, gate.error_message);
       return;
     }
     const query = buildSegmentPlacesQuery(segLabel, pair.official, runRow.uf);
     const places = await discoverPlacesInCity(apiKey, query, maxPerCity);
-    await touchRunGoogleUsage(runId, 1);
-    runRow.google_calls_used += 1;
+    counts = await registerGoogleApiAttempt(runId, counts);
 
     await insertRunItemsSafe(
       runId,
@@ -599,18 +618,17 @@ async function processOneItem(
     }
 
     if (!googleSnap && doGoogleSearch) {
-      const needCalls = 2;
-      const ok = await canSpendGoogleCalls(runRow.google_calls_used, runRow.max_google_calls, needCalls);
-      if (!ok) {
-        await updateItem(itemId, { status: "pending" });
-        await updateRun(runId, { status: "paused", error_message: "Limite diário ou por execução de Google atingido." });
+      let counts = { ...runRow.counts_json };
+      const gate = await canAttemptGoogleApi(counts.google_api_attempts ?? 0);
+      if (!gate.ok) {
+        await pauseRunForGoogleLimit(runId, counts, gate.error_message, itemId);
         return;
       }
 
       const query = buildGoogleSearchQuery(station);
       const found = await findPlaceId(apiKey, query, station);
-      await touchRunGoogleUsage(runId, 1);
-      runRow.google_calls_used += 1;
+      counts = await registerGoogleApiAttempt(runId, counts);
+      runRow.counts_json = counts;
 
       if (!found) {
         stepLog.push({ step_key: "google_place_search", status: "error", message: "Sem correspondência" });
@@ -650,15 +668,15 @@ async function processOneItem(
 
     const placeForDetails = presetPlaceId ?? googleSnap?.place_id;
     if (doGoogleDetails && placeForDetails && !googleSnap) {
-      const ok2 = await canSpendGoogleCalls(runRow.google_calls_used, runRow.max_google_calls, 1);
-      if (!ok2) {
-        await updateItem(itemId, { status: "pending" });
-        await updateRun(runId, { status: "paused", error_message: "Limite Google atingido." });
+      let counts = { ...runRow.counts_json };
+      const gate = await canAttemptGoogleApi(counts.google_api_attempts ?? 0);
+      if (!gate.ok) {
+        await pauseRunForGoogleLimit(runId, counts, gate.error_message, itemId);
         return;
       }
       const details = await getPlaceDetails(apiKey, placeForDetails);
-      await touchRunGoogleUsage(runId, 1);
-      runRow.google_calls_used += 1;
+      counts = await registerGoogleApiAttempt(runId, counts);
+      runRow.counts_json = counts;
       if (details) {
         googleSnap = {
           place_id: details.place_id,
@@ -754,6 +772,10 @@ async function processOneItem(
       google_place_id: googleSnap?.place_id ?? presetPlaceId,
       enrichment_json: appendStepLog({ ...enrichment, google: googleSnap }, stepLog)
     });
+    if (googleSnap || presetPlaceId) {
+      await recordGoogleSuccessResult(runId);
+      runRow.google_calls_used += 1;
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erro ao criar cliente";
     stepLog.push({ step_key: "create_crm_client", status: "error", message: msg });
@@ -821,9 +843,19 @@ async function whenProcessingQueueEmpty(
   await tickFinalizing(runId);
 }
 
+async function syncGoogleSuccessCounter(runId: number, runRow: NonNullable<Awaited<ReturnType<typeof getLeadGenerationRun>>>) {
+  const created = await createdCountForRun(runId);
+  if (runRow.google_calls_used !== created) {
+    await updateRun(runId, { google_calls_used: created });
+    runRow.google_calls_used = created;
+  }
+}
+
 async function tickProcessing(runId: number) {
   const runRow = await getLeadGenerationRun(runId);
   if (!runRow) return;
+
+  await syncGoogleSuccessCounter(runId, runRow);
 
   if (await targetCreatedReached(runId, runRow.max_stations)) {
     await dropRemainingPending(runId);

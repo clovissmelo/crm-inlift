@@ -1,9 +1,11 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
+import { formatLeadGenActivityEntry, runPhaseActivityLine } from "@/lib/lead-generation/activity-feed";
 import { drainLeadGenerationTicks } from "@/lib/lead-generation/drain-ticks";
 import {
   deleteLeadGenerationRun,
   getLeadGenerationRun,
+  listRunActivityFeed,
   listRunItems,
   recomputeRunCountsFromItems
 } from "@/lib/lead-generation/runs-repo";
@@ -32,7 +34,9 @@ export async function GET(_request: Request, { params }: Params) {
     run = { ...run, counts_json: await recomputeRunCountsFromItems(id) };
   }
 
-  const tab = new URL(_request.url).searchParams.get("tab");
+  const url = new URL(_request.url);
+  const tab = url.searchParams.get("tab");
+  const wantFeed = url.searchParams.get("feed") === "1";
   let items: Record<string, unknown>[] | undefined;
   if (tab === "created") items = await listRunItems(id, "created");
   else if (tab === "existing") items = await listRunItems(id, "existing");
@@ -43,7 +47,19 @@ export async function GET(_request: Request, { params }: Params) {
     items = [...err, ...ng];
   }
 
-  return Response.json({ run, items });
+  if (!wantFeed) {
+    return Response.json({ run, items });
+  }
+
+  const feedRows = await listRunActivityFeed(id, 35);
+  const activity = feedRows.map(formatLeadGenActivityEntry);
+  const phase_line = runPhaseActivityLine({
+    phase: run.phase,
+    uf: run.uf,
+    counts_json: run.counts_json
+  });
+
+  return Response.json({ run, items, activity, phase_line });
 }
 
 export async function DELETE(_request: Request, { params }: Params) {

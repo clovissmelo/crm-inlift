@@ -184,9 +184,11 @@ export async function POST(request: Request) {
   const maxStations = Math.min(Math.max(1, requested), perRunLimit, 500);
   const availableToday = Math.max(0, dailyLimit - usedToday);
   const simulation = !hasKey;
-  const maxGoogle = simulation
-    ? 0
-    : Math.min(perRunLimit, availableToday, Math.max(1, maxStations * 2));
+  if (!simulation && availableToday <= 0) {
+    return Response.json({ error: "Limite diário de consultas Google esgotado. Tente amanhã." }, { status: 429 });
+  }
+  /** Contador google_calls_used = leads novos com sucesso (meta max_stations), não cada request. */
+  const maxGoogle = simulation ? 0 : maxStations;
 
   const id = await createLeadGenerationRun({
     requested_by_user_id: user!.id,

@@ -112,8 +112,7 @@ export function LeadGenExecutionOverlay({
         </header>
 
         <p className="lead-gen-overlay-bg-note" role="note">
-          Ao fechar, a execução <strong>não é interrompida</strong> — ela continua em segundo plano enquanto esta página
-          estiver aberta.
+          Ao fechar a janela, a execução não é interrompida, continua em segundo plano.
         </p>
 
         {active ? <ProgressBar run={run} /> : null}
@@ -132,7 +131,7 @@ export function LeadGenExecutionOverlay({
           <h3 className="lead-gen-overlay-feed-title">Atividade recente</h3>
           {phaseLine ? <p className="lead-gen-overlay-phase-line">{phaseLine}</p> : null}
           {activity.length === 0 ? (
-            <p className="muted">{phaseLine ?? "Aguardando primeiros resultados…"}</p>
+            phaseLine ? null : <p className="muted">Aguardando primeiros resultados…</p>
           ) : (
             <ul className="lead-gen-overlay-feed-list">
               {activity.map((line) => (
@@ -153,11 +152,16 @@ export function LeadGenExecutionOverlay({
                 Retomar
               </button>
             ) : null}
-            <button type="button" className="btn lead-gen-cancel-exec-btn" disabled={cancelling} onClick={onCancel}>
+            <button
+              type="button"
+              className="btn lead-gen-cancel-exec-btn lead-gen-overlay-action-equal"
+              disabled={cancelling}
+              onClick={onCancel}
+            >
               {cancelling ? "Cancelando…" : "Cancelar execução"}
             </button>
-            <button type="button" className="btn" onClick={onClose}>
-              Fechar e continuar em segundo plano
+            <button type="button" className="btn lead-gen-overlay-action-equal" onClick={onClose}>
+              Fechar
             </button>
           </footer>
         ) : (

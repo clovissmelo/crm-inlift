@@ -231,6 +231,35 @@ export async function requestCancelRun(id: number) {
   );
 }
 
+export async function finalizeCancelledRun(id: number) {
+  await run(
+    `
+      UPDATE lead_generation_runs
+      SET status = 'cancelled', phase = 'done', cancel_requested = false, error_message = NULL,
+          completed_at = @now, updated_at = @now, progress_pct = 100
+      WHERE id = @id AND status IN ('queued', 'running', 'paused')
+    `,
+    { id, now: nowIso() }
+  );
+}
+
+/** Cancela execução; pausada/fila finaliza na hora; em execução sinaliza e deixa o motor concluir. */
+export async function cancelLeadGenerationRun(id: number): Promise<{ ok: true; drain: boolean } | { ok: false; error: string }> {
+  const runRow = await getLeadGenerationRun(id);
+  if (!runRow) return { ok: false, error: "Não encontrado" };
+  if (!["queued", "running", "paused"].includes(runRow.status)) {
+    return { ok: false, error: "Execução já finalizada." };
+  }
+
+  if (runRow.status === "running") {
+    await requestCancelRun(id);
+    return { ok: true, drain: true };
+  }
+
+  await finalizeCancelledRun(id);
+  return { ok: true, drain: false };
+}
+
 export async function resumeRun(id: number) {
   await run(
     `

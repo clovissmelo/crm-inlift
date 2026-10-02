@@ -48,6 +48,8 @@ export type LeadGenCounts = {
   last_created_count?: number;
   last_processed_count?: number;
   no_progress_ticks?: number;
+  /** Chamadas à API Google nesta execução (inclui tentativas sem lead novo). */
+  google_api_attempts?: number;
 };
 
 export function emptyCounts(): LeadGenCounts {

@@ -3,6 +3,7 @@ import { requireApiUser } from "@/lib/auth";
 import { drainLeadGenerationTicks } from "@/lib/lead-generation/drain-ticks";
 import { formatLeadGenActivityEntry, runPhaseActivityLine } from "@/lib/lead-generation/activity-feed";
 import {
+  finalizeCancelledRun,
   getLeadGenerationRun,
   listRunActivityFeed,
   recomputeRunCountsFromItems,
@@ -25,6 +26,15 @@ export async function POST(request: Request, { params }: Params) {
   const before = await getLeadGenerationRun(id);
   if (!before) return Response.json({ error: "Execução não encontrada" }, { status: 404 });
 
+  const wantFeed = new URL(request.url).searchParams.get("feed") === "1";
+
+  if (before.cancel_requested) {
+    await finalizeCancelledRun(id);
+    const run = await getLeadGenerationRun(id);
+    if (!run) return Response.json({ error: "Execução não encontrada" }, { status: 404 });
+    return Response.json(await leadGenTickResponse(id, run, wantFeed));
+  }
+
   await touchRunActivity(id);
 
   const mayDrain =
@@ -38,7 +48,7 @@ export async function POST(request: Request, { params }: Params) {
       maxMs: before.phase === "finalizing" ? 12_000 : 38_000
     });
   } else if (before.status === "paused") {
-    return Response.json({ run: before });
+    return Response.json(await leadGenTickResponse(id, before, wantFeed));
   }
 
   let run = await getLeadGenerationRun(id);
@@ -46,10 +56,17 @@ export async function POST(request: Request, { params }: Params) {
     run = { ...run, counts_json: await recomputeRunCountsFromItems(id) };
   }
 
-  const wantFeed = new URL(request.url).searchParams.get("feed") === "1";
-  if (!wantFeed || !run) {
-    return Response.json({ run });
-  }
+  if (!run) return Response.json({ error: "Execução não encontrada" }, { status: 404 });
+
+  return Response.json(await leadGenTickResponse(id, run, wantFeed));
+}
+
+async function leadGenTickResponse(
+  id: number,
+  run: NonNullable<Awaited<ReturnType<typeof getLeadGenerationRun>>>,
+  wantFeed: boolean
+) {
+  if (!wantFeed) return { run };
 
   const feedRows = await listRunActivityFeed(id, 35);
   const activity = feedRows.map(formatLeadGenActivityEntry);
@@ -59,5 +76,5 @@ export async function POST(request: Request, { params }: Params) {
     counts_json: run.counts_json
   });
 
-  return Response.json({ run, activity, phase_line });
+  return { run, activity, phase_line };
 }

@@ -211,6 +211,11 @@
   border-top: 1px solid var(--border, #2a3340);
 }
 
+.lead-gen-overlay-actions .lead-gen-overlay-action-equal {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .lead-gen-overlay-close {
   flex-shrink: 0;
 }
