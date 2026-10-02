@@ -101,7 +101,8 @@ export async function enrichFromReceita(cnpj: string, simulation: boolean): Prom
 export function mergeEnrichment(
   station: AnpStation,
   receita: Partial<EnrichmentResult>,
-  google: { phone_digits: string; phone_display: string; website: string; place_id: string } | null
+  google: { phone_digits: string; phone_display: string; website: string; place_id: string } | null,
+  websitePhonesFromGoogle: PhoneCandidate[] = []
 ): EnrichmentResult {
   const phones: PhoneCandidate[] = [];
   const sources = new Set<string>(["Dados da ANP"]);
@@ -117,6 +118,10 @@ export function mergeEnrichment(
       contact_name: null
     });
     sources.add("Google Places");
+  }
+  for (const p of websitePhonesFromGoogle) {
+    phones.push(p);
+    sources.add("Site (Google Places)");
   }
 
   const seen = new Set<string>();

@@ -79,8 +79,8 @@ export const FLOW_STEP_CATALOG: Record<FlowStepKey, FlowStepDefinition> = {
   website_enrich: {
     key: "website_enrich",
     label: "Site",
-    description: "Investigação leve do site (quando URL disponível).",
-    prerequisites: ["Website (Google ou Receita)"],
+    description: "Varre o site informado pelo Google Places em busca de telefones adicionais.",
+    prerequisites: ["Website do Google Places (detalhes)"],
     phase: "item"
   },
   instagram_enrich: {

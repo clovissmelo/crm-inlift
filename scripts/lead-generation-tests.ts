@@ -7,6 +7,10 @@ import { resolveCityPairs } from "../src/lib/lead-generation/city-resolve";
 import { filterStations, mapAnpRecord, type AnpStation } from "../src/lib/lead-motor/anp";
 import { validateGoogleMatch } from "../src/lib/lead-motor/google-validate";
 import { isValidCnpjDigits } from "../src/lib/lead-motor/utils";
+import {
+  extractPhonesFromWebsiteHtml,
+  resolveWebsiteFetchUrl
+} from "../src/lib/lead-motor/website-phone-scrape";
 
 function testWhiteFlagFilter() {
   const stations: AnpStation[] = [
@@ -113,9 +117,22 @@ function testDuplicateCnpjInRunDedup() {
   assert.equal(seen.size, 2);
 }
 
+function testWebsitePhoneExtract() {
+  assert.equal(resolveWebsiteFetchUrl("example.com"), "https://example.com/");
+  assert.equal(resolveWebsiteFetchUrl("javascript:alert(1)"), null);
+  const html = `
+    <a href="tel:+556832351034">Ligar</a>
+    <p>Contato: (68) 3235-9999</p>
+  `;
+  const phones = extractPhonesFromWebsiteHtml(html);
+  assert.ok(phones.includes("556832351034") || phones.includes("6832351034"));
+  assert.ok(phones.some((p) => p.includes("32359999") || p.includes("6832359999")));
+}
+
 testWhiteFlagFilter();
 testInvalidCnpjSkipped();
 testGoogleAmbiguous();
 testRsAllCitiesResolvesPairs();
 testDuplicateCnpjInRunDedup();
+testWebsitePhoneExtract();
 console.log("lead-generation-tests: OK");

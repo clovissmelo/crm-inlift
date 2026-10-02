@@ -15,9 +15,11 @@ import { buildGoogleSearchQuery, findPlaceId, getPlaceDetails } from "@/lib/lead
 import { validateGoogleMatch } from "@/lib/lead-motor/google-validate";
 import {
   GOOGLE_CONTACT_SKIP_MESSAGE,
-  googleHasLeadContactSignals
+  googleHasLeadContactSignals,
+  googleWebsiteIsInstagram
 } from "@/lib/lead-generation/google-lead-gate";
-import { enrichFromReceita, mergeEnrichment } from "@/lib/lead-motor/enrichment";
+import { enrichFromReceita, mergeEnrichment, type PhoneCandidate } from "@/lib/lead-motor/enrichment";
+import { scrapePhonesFromGoogleWebsite } from "@/lib/lead-motor/website-phone-scrape";
 import { isValidCnpjDigits } from "@/lib/lead-motor/utils";
 import { cityPairsForInitialSource } from "@/lib/lead-generation/discovery-cities";
 import { resolveCityPairs, type CityPair } from "@/lib/lead-generation/city-resolve";
@@ -882,13 +884,52 @@ async function processOneItemBody(
     stepLog.push({ step_key: "receita_cnpj", status: "na", message: "Sem CNPJ" });
   }
 
+  let websitePhonesFromGoogle: PhoneCandidate[] = [];
   if (stepEnabled(snapshot, "website_enrich")) {
-    const site = googleSnap?.website ?? receita.website ?? "";
-    stepLog.push({
-      step_key: "website_enrich",
-      status: site ? "skipped" : "na",
-      message: site ? "URL via Google/Receita" : "Integração de scraping não configurada"
-    });
+    const siteFromGoogle = googleSnap?.website?.trim() ?? "";
+    if (!googleSnap?.place_id || !siteFromGoogle) {
+      stepLog.push({
+        step_key: "website_enrich",
+        status: "na",
+        message: "Sem site no Google Places"
+      });
+    } else if (googleWebsiteIsInstagram(siteFromGoogle)) {
+      stepLog.push({
+        step_key: "website_enrich",
+        status: "na",
+        message: "Link do Google é Instagram, não site"
+      });
+    } else if (runRow.simulation) {
+      stepLog.push({
+        step_key: "website_enrich",
+        status: "skipped",
+        message: "Simulação — scraping desativado"
+      });
+    } else {
+      try {
+        websitePhonesFromGoogle = await scrapePhonesFromGoogleWebsite(siteFromGoogle);
+        const known = new Set<string>();
+        if (googleSnap.phone_digits) known.add(googleSnap.phone_digits);
+        for (const p of receita.phones ?? []) known.add(p.digits);
+        const novel = websitePhonesFromGoogle.filter((p) => !known.has(p.digits));
+        stepLog.push({
+          step_key: "website_enrich",
+          status: websitePhonesFromGoogle.length ? "ok" : "skipped",
+          message:
+            websitePhonesFromGoogle.length === 0
+              ? "Nenhum telefone encontrado no site"
+              : novel.length
+                ? `${novel.length} telefone(s) novo(s) no site`
+                : "Telefones do site já conhecidos"
+        });
+      } catch {
+        stepLog.push({
+          step_key: "website_enrich",
+          status: "error",
+          message: "Falha ao acessar o site"
+        });
+      }
+    }
   }
   if (stepEnabled(snapshot, "instagram_enrich")) {
     stepLog.push({
@@ -898,7 +939,7 @@ async function processOneItemBody(
     });
   }
 
-  const enrichment = mergeEnrichment(station, receita, googleSnap);
+  const enrichment = mergeEnrichment(station, receita, googleSnap, websitePhonesFromGoogle);
   enrichment.sources.push(`Coletado em ${nowIso()}`);
 
   if (!stepEnabled(snapshot, "create_crm_client")) {
