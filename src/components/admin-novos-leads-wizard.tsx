@@ -182,6 +182,8 @@ export function AdminNovosLeadsWizard() {
   const [activityFeed, setActivityFeed] = useState<LeadGenActivityLine[]>([]);
   const [phaseLine, setPhaseLine] = useState<string | null>(null);
   const [tickBusy, setTickBusy] = useState(false);
+  const [refreshBusy, setRefreshBusy] = useState(false);
+  const [lastRefreshedLabel, setLastRefreshedLabel] = useState<string | null>(null);
   const [anpPreviewOpen, setAnpPreviewOpen] = useState(false);
   const [anpPreviewLoading, setAnpPreviewLoading] = useState(false);
   const [anpPreviewData, setAnpPreviewData] = useState<AnpPreviewPayload | null>(null);
@@ -749,6 +751,28 @@ export function AdminNovosLeadsWizard() {
     void tickActiveRun(runId);
   }
 
+  const manualRefreshRun = useCallback(
+    async (runId: number) => {
+      setRefreshBusy(true);
+      try {
+        await refreshRunProgress(runId, true);
+        setLastRefreshedLabel(
+          new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+        );
+      } finally {
+        setRefreshBusy(false);
+      }
+    },
+    [refreshRunProgress]
+  );
+
+  const forceTickRun = useCallback(
+    (runId: number) => {
+      void pollRunProgress(runId, true);
+    },
+    [pollRunProgress]
+  );
+
   async function deleteHistoryRun(r: RunRow) {
     const when = new Date(r.created_at).toLocaleString("pt-BR", {
       day: "2-digit",
@@ -842,6 +866,11 @@ export function AdminNovosLeadsWizard() {
             }
           }}
           onResume={shownRun.status === "paused" ? () => void resumeRun(shownRun.id) : undefined}
+          onRefresh={() => void manualRefreshRun(shownRun.id)}
+          onForceTick={() => forceTickRun(shownRun.id)}
+          refreshBusy={refreshBusy}
+          tickBusy={tickBusy}
+          lastRefreshedLabel={lastRefreshedLabel}
         />
       ) : null}
 

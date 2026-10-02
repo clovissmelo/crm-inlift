@@ -2,6 +2,7 @@
 
 import "./lead-gen-execution.css";
 import { X } from "lucide-react";
+import { LeadGenExecutionTechPanel } from "@/components/lead-gen-execution-tech-panel";
 import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
 
 export type LeadGenActivityLine = {
@@ -22,6 +23,9 @@ type RunLike = {
   counts_json: Record<string, number>;
   error_message: string | null;
   simulation: boolean;
+  google_calls_used?: number;
+  max_google_calls?: number;
+  updated_at?: string;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -75,6 +79,11 @@ type Props = {
   onClose: () => void;
   onCancel: () => void;
   onResume?: () => void;
+  onRefresh?: () => void;
+  onForceTick?: () => void;
+  refreshBusy?: boolean;
+  tickBusy?: boolean;
+  lastRefreshedLabel?: string | null;
 };
 
 export function LeadGenExecutionOverlay({
@@ -85,7 +94,12 @@ export function LeadGenExecutionOverlay({
   cancelling,
   onClose,
   onCancel,
-  onResume
+  onResume,
+  onRefresh,
+  onForceTick,
+  refreshBusy,
+  tickBusy,
+  lastRefreshedLabel
 }: Props) {
   if (!open) return null;
 
@@ -126,6 +140,17 @@ export function LeadGenExecutionOverlay({
           <li>Já no CRM: {counts.existing ?? 0}</li>
           <li>Erros: {counts.errors ?? 0}</li>
         </ul>
+
+        {active ? (
+          <LeadGenExecutionTechPanel
+            run={run}
+            refreshBusy={refreshBusy}
+            tickBusy={tickBusy}
+            lastRefreshedLabel={lastRefreshedLabel}
+            onRefresh={onRefresh}
+            onForceTick={onForceTick}
+          />
+        ) : null}
 
         <div className="lead-gen-overlay-feed">
           <h3 className="lead-gen-overlay-feed-title">Atividade recente</h3>
