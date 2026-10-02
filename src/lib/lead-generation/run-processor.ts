@@ -77,6 +77,9 @@ async function syncRunProgressMetadata(
     Date.now() - updatedMs > STALE_RUN_MS;
 
   if (stale) {
+    if (runRow.phase === "finalizing") {
+      return { paused: false };
+    }
     await updateRun(runId, {
       status: "paused",
       error_message:
@@ -469,7 +472,10 @@ async function tickAnpLoad(runId: number) {
     return;
   }
 
-  const buffer = Math.max(15, runRow.max_stations * 8);
+  const buffer =
+    runRow.max_stations <= 20
+      ? Math.max(5, runRow.max_stations * 3)
+      : Math.max(15, runRow.max_stations * 8);
   if (pending >= buffer) {
     await updateRun(runId, {
       phase: "processing",
@@ -863,7 +869,10 @@ async function tickFinalizing(runId: number) {
   let status: "completed" | "partial" | "failed" = "completed";
   let error_message: string | null = null;
 
-  if (shouldFailNoSuccess(counts, target)) {
+  if (target > 0 && created === 0 && (counts.items_total ?? 0) === 0) {
+    status = "failed";
+    error_message = buildStuckRunError({ counts, target, reason: "no_success" });
+  } else if (shouldFailNoSuccess(counts, target)) {
     status = "failed";
     error_message = buildStuckRunError({ counts, target, reason: "no_success" });
   } else if (target > 0 && created < target && ((counts.processed ?? 0) > 0 || (counts.errors ?? 0) > 0)) {
@@ -914,7 +923,7 @@ export async function processLeadGenerationTick(
   }
   runRow = (await getLeadGenerationRun(runId))!;
 
-  if (runRow.status === "running") {
+  if (runRow.status === "running" && runRow.phase !== "finalizing") {
     const { counts: liveCounts } = await recomputeCounts(runId, runRow);
     const tracked = bumpProgressTracking(liveCounts, runRow.phase);
     if ((tracked.no_progress_ticks ?? 0) >= NO_PROGRESS_TICK_FAIL) {
@@ -942,6 +951,11 @@ export async function processLeadGenerationTick(
     runRow = (await getLeadGenerationRun(runId))!;
   }
 
+  if (runRow.phase === "finalizing") {
+    await tickFinalizing(runId);
+    return { processedRunId: runId, action: "finalizing" };
+  }
+
   if (runRow.status === "paused") {
     return { processedRunId: runId, action: "paused" };
   }
@@ -954,11 +968,6 @@ export async function processLeadGenerationTick(
     await tickProcessing(runId);
     return { processedRunId: runId, action: "processing" };
   }
-  if (runRow.phase === "finalizing") {
-    await tickFinalizing(runId);
-    return { processedRunId: runId, action: "finalizing" };
-  }
-
   return { processedRunId: runId, action: "noop" };
 }
 

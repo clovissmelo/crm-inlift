@@ -24,12 +24,18 @@ export async function POST(request: Request, { params }: Params) {
   const before = await getLeadGenerationRun(id);
   if (!before) return Response.json({ error: "Execução não encontrada" }, { status: 404 });
 
-  if (before.status === "paused") {
-    return Response.json({ run: before });
-  }
+  const mayDrain =
+    ["queued", "running"].includes(before.status) ||
+    (before.status === "paused" && before.phase === "finalizing");
 
-  if (["queued", "running"].includes(before.status)) {
-    await drainLeadGenerationTicks({ runId: id, maxTicks: 6, maxMs: 50_000 });
+  if (mayDrain) {
+    await drainLeadGenerationTicks({
+      runId: id,
+      maxTicks: before.phase === "finalizing" ? 2 : 6,
+      maxMs: before.phase === "finalizing" ? 15_000 : 50_000
+    });
+  } else if (before.status === "paused") {
+    return Response.json({ run: before });
   }
 
   let run = await getLeadGenerationRun(id);

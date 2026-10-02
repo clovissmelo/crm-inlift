@@ -16,7 +16,7 @@ export async function drainLeadGenerationTicks(opts: {
     if (opts.runId) {
       const run = await getLeadGenerationRun(opts.runId);
       if (!run || !ACTIVE.has(run.status)) break;
-      if (run.status === "paused") break;
+      if (run.status === "paused" && run.phase !== "finalizing") break;
     }
     await processLeadGenerationTick(opts.runId);
   }

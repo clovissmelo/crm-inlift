@@ -230,7 +230,7 @@ export async function requestCancelRun(id: number) {
 export async function resumeRun(id: number) {
   await run(
     `
-      UPDATE lead_generation_runs SET status = 'running', cancel_requested = false, updated_at = @now
+      UPDATE lead_generation_runs SET status = 'running', cancel_requested = false, error_message = NULL, updated_at = @now
       WHERE id = @id AND status = 'paused' AND cancel_requested = false
     `,
     { id, now: nowIso() }

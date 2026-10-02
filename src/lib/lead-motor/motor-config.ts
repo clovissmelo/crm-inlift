@@ -17,6 +17,6 @@ export const REQUEST_TIMEOUT_MS = 25000;
 export const ITEMS_PER_CRON_TICK = 3;
 
 /** Cidades ANP carregadas por tick (acelera RS/PR inteiro). */
-export const ANP_CITIES_PER_TICK = 4;
+export const ANP_CITIES_PER_TICK = 6;
 
 export type { LeadGenSegmentFilter } from "@/lib/lead-motor/lead-gen-segments";

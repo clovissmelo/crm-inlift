@@ -32,7 +32,9 @@ export function buildPartialRunLog(input: {
   const itemsTotal = counts.items_total ?? 0;
 
   if (processed === 0 && itemsTotal === 0) {
-    lines.push("Nenhum posto foi enfileirado (ANP vazia ou cidade sem revenda no segmento).");
+    lines.push(
+      "Nenhum posto foi enfileirado (ANP vazia, cidade/UF sem revenda no segmento ou mapa ANP desatualizado para a seleção)."
+    );
   } else if (created === 0 && existing > 0 && existing >= processed - (counts.errors ?? 0)) {
     lines.push("Todos os postos analisados já estavam no CRM ou foram descartados antes de criar lead.");
   } else if ((counts.no_google_match ?? 0) > 0) {
