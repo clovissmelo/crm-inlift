@@ -37,7 +37,14 @@ export function humanizeApi4comDialError(message: string): string {
       "Se o ramal mudou de número, atualize também em Meu perfil → Configurar ramal."
     );
   }
-  if (m.includes("invalid extension") || m.includes("extension")) {
+  if (m.includes("has been failed") || (m.includes("call from") && m.includes("failed"))) {
+    return (
+      "A telefonia não completou a ligação. Isso costuma ocorrer quando o discador/Webphone API4COM está fechado ou o ramal não está conectado. " +
+      "Abra o app ou extensão API4COM, confirme que o ramal aparece online e tente de novo. " +
+      "Se persistir, verifique rede/microfone no navegador ou contate o suporte API4COM."
+    );
+  }
+  if (m.includes("invalid extension") || (m.includes("extension") && !m.includes("call from"))) {
     return `Ramal recusado pela API4COM: ${message}. Confira o número cadastrado no CRM e no painel (Integrações → Ramal).`;
   }
   return message;

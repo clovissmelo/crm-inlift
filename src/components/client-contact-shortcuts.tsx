@@ -11,6 +11,8 @@ import { CadastroModal } from "@/components/cadastro-ui";
 import { useApi4comSession } from "@/components/api4com-call-provider";
 import { apiErrorText } from "@/lib/api-error-text";
 import { EmailApproachModal } from "@/components/email-approach-modal";
+import type { PhoneDialContextItem } from "@/lib/call-strategy/eligible-phones";
+import { formatPhoneDialSituation } from "@/lib/call-strategy/phone-dial-status";
 import { telLink, formatPhoneDisplay, isMobileBr, phoneDigits } from "@/lib/format";
 
 export type ContactDialOption = {
@@ -19,7 +21,54 @@ export type ContactDialOption = {
   phone: string;
   label?: string;
   verification_status?: ContactVerification;
+  clientPhoneId?: number;
+  position?: number;
+  total?: number;
+  status?: string;
+  eligibleNow?: boolean;
+  counterLine?: string | null;
+  counterLines?: string[];
+  attemptLabel?: string;
+  origin?: string;
+  cycleNoContactCount?: number;
+  nextEligibleAt?: string | null;
+  needsReview?: boolean;
 };
+
+function contactOptionsFromDialStrategy(phones: PhoneDialContextItem[]): ContactDialOption[] {
+  return [...phones]
+    .sort((a, b) => a.sort_order - b.sort_order || a.client_phone_id - b.client_phone_id)
+    .map((p) => ({
+      clientPhoneId: p.client_phone_id,
+      contactId: p.primary_contact_id ?? undefined,
+      phone: p.phone_display || p.phone,
+      label: p.origin,
+      attemptLabel: p.attempt_label,
+      position: p.position,
+      total: p.total,
+      status: p.status,
+      eligibleNow: p.eligible_now,
+      counterLine: p.counter_line,
+      counterLines: p.counter_lines,
+      origin: p.origin,
+      cycleNoContactCount: p.cycle_no_contact_count,
+      nextEligibleAt: p.next_eligible_at,
+      needsReview: p.needs_review
+    }));
+}
+
+function dialOptionCounterSummary(o: ContactDialOption): string | null {
+  if (o.counterLines?.length) return o.counterLines.join(" · ");
+  if (o.counterLine) return o.counterLine;
+  if (o.position != null && o.total != null) {
+    const tries =
+      o.cycleNoContactCount != null && o.cycleNoContactCount > 0
+        ? ` · ${o.cycleNoContactCount} tentativa(s) sem contato neste ciclo`
+        : "";
+    return `Número ${o.position} de ${o.total}${tries}`;
+  }
+  return null;
+}
 
 function dialOptionSortRank(o: ContactDialOption): number {
   const status = o.verification_status ?? "unverified";
@@ -106,6 +155,8 @@ export function ClientContactShortcuts({
   const [dialFeedbackOpen, setDialFeedbackOpen] = useState(false);
   const [dialing, setDialing] = useState(false);
   const [dialError, setDialError] = useState<string | null>(null);
+  const [pickerOptions, setPickerOptions] = useState<ContactDialOption[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
 
   const waNumber = whatsapp || phone;
   const hasEmail = Boolean(email?.trim());
@@ -115,7 +166,7 @@ export function ClientContactShortcuts({
     () => sortContactDialOptions(buildDialOptions({ phone, whatsapp, contactId, contactName, dialOptions })),
     [phone, whatsapp, contactId, contactName, dialOptions]
   );
-  const useApi4com = Boolean(api4com?.canDial && clientId && options.length);
+  const useApi4com = Boolean(api4com?.canDial && clientId);
 
   function resolvedDialAsUserId(): number | null {
     if (!api4com) return null;
@@ -161,6 +212,8 @@ export function ClientContactShortcuts({
   function closePicker() {
     setPickerOpen(false);
     setDialError(null);
+    setPickerOptions([]);
+    setPickerLoading(false);
   }
 
   function closeIdentityPicker() {
@@ -177,14 +230,38 @@ export function ClientContactShortcuts({
     setDialError(null);
   }
 
-  function proceedToPhonePicker(asUserId: number) {
+  async function proceedToPhonePicker(asUserId: number) {
     setDialAsUserId(asUserId);
     setDialError(null);
-    if (options.length === 1) {
-      void startCall(options[0]!, false, asUserId);
-      return;
-    }
     setPickerOpen(true);
+    setPickerLoading(true);
+    setPickerOptions([]);
+    try {
+      let list = options;
+      if (clientId) {
+        const res = await fetch(`/api/clients/${clientId}/dial-phones`);
+        if (res.ok) {
+          const j = (await res.json()) as { phones?: PhoneDialContextItem[] };
+          const fromStrategy = contactOptionsFromDialStrategy(j.phones ?? []);
+          if (fromStrategy.length) list = fromStrategy;
+        }
+      }
+      const sorted = sortContactDialOptions(list);
+      setPickerOptions(sorted);
+      if (sorted.length === 0) {
+        setDialError("Nenhum telefone cadastrado para este lead.");
+      }
+    } catch {
+      const fallback = sortContactDialOptions(options);
+      setPickerOptions(fallback);
+      setDialError(
+        fallback.length
+          ? "Não foi possível atualizar os contadores; números abaixo podem estar desatualizados."
+          : "Não foi possível carregar os telefones."
+      );
+    } finally {
+      setPickerLoading(false);
+    }
   }
 
   async function openAdminIdentityPicker() {
@@ -213,7 +290,7 @@ export function ClientContactShortcuts({
     setDialError(null);
     setDialFeedbackOpen(false);
     if (api4com.hasOwnExtension) {
-      proceedToPhonePicker(api4com.userId);
+      void proceedToPhonePicker(api4com.userId);
       return;
     }
     if (api4com.isAdmin) {
@@ -225,7 +302,7 @@ export function ClientContactShortcuts({
 
   function onIdentityPicked(identity: Api4comDialIdentity) {
     setIdentityPickerOpen(false);
-    proceedToPhonePicker(identity.id);
+    void proceedToPhonePicker(identity.id);
   }
 
   const tel =
@@ -240,7 +317,7 @@ export function ClientContactShortcuts({
             className={btnClass}
             title="Ligar via API4COM"
             aria-label="Ligar via API4COM"
-            disabled={dialing || options.length === 0}
+            disabled={dialing}
             onClick={onCallClick}
           >
             <Phone size={16} />
@@ -370,29 +447,47 @@ export function ClientContactShortcuts({
               <Phone size={22} />
             </div>
             <p className="dial-picker-head-text">
-              <strong>Discador</strong>
+              <strong>Qual número ligar?</strong>
               <br />
-              Escolha o número para ligar via API4COM. Verificados aparecem primeiro.
+              Escolha abaixo. Os contadores ajudam a acompanhar tentativas por telefone neste lead.
             </p>
           </div>
+          {pickerLoading ? <p className="muted">Carregando telefones e contadores…</p> : null}
+          {!pickerLoading && pickerOptions.length === 0 && !dialError ? (
+            <p className="muted">Nenhum telefone disponível.</p>
+          ) : null}
           <ul className="dial-picker-list">
-            {options.map((o, i) => {
+            {pickerOptions.map((o, i) => {
               const status = o.verification_status ?? "unverified";
               const isBad = status === "invalid_number" || status === "wrong_contact";
+              const counterSummary = dialOptionCounterSummary(o);
+              const situation =
+                o.status != null
+                  ? formatPhoneDialSituation({
+                      status: o.status,
+                      needs_review: o.needsReview,
+                      next_eligible_at: o.nextEligibleAt
+                    })
+                  : null;
               return (
-                <li key={`${o.contactId ?? "x"}-${o.phone}-${i}`}>
+                <li key={`${o.clientPhoneId ?? o.contactId ?? "x"}-${o.phone}-${i}`}>
                   <button
                     type="button"
                     className={`dial-picker-option${isBad ? " dial-picker-option--bad" : ""}`}
-                    disabled={dialing}
+                    disabled={dialing || pickerLoading}
                     onClick={() => void startCall(o, true, resolvedDialAsUserId())}
                   >
                     <VerificationStatusIcon status={status} size={22} />
                     <span className="dial-picker-option-body">
                       <span className="dial-picker-number">{formatPhoneDisplay(o.phone)}</span>
                       <span className="dial-picker-meta">
-                        {[o.contactName, o.label].filter(Boolean).join(" · ") || "Contato"}
+                        {[o.contactName, o.attemptLabel ?? o.label, o.origin].filter(Boolean).join(" · ") ||
+                          "Contato"}
+                        {situation ? ` · ${situation}` : ""}
                       </span>
+                      {counterSummary ? (
+                        <span className="dial-picker-meta dial-picker-meta--counters">{counterSummary}</span>
+                      ) : null}
                     </span>
                   </button>
                 </li>

@@ -767,6 +767,12 @@ table.data-table th {
   color: var(--muted);
 }
 
+.dial-picker-meta--counters {
+  margin-top: 0.35rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
 .cadastro-modal-panel.contact-edit-panel {
   width: min(520px, 94vw);
 }
