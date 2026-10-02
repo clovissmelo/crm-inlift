@@ -4,7 +4,10 @@ import {
   ITEM_PROCESSING_STALE_MS,
   ITEMS_PER_CRON_TICK
 } from "@/lib/lead-motor/motor-config";
-import { repairDiscoveryCounts } from "@/lib/lead-generation/run-discovery-meta";
+import {
+  repairDiscoveryCounts,
+  syncDiscoveryCountsWhenItemsQueued
+} from "@/lib/lead-generation/run-discovery-meta";
 import { appendMotorLog } from "@/lib/lead-generation/run-motor-log";
 import type { AnpStation } from "@/lib/lead-motor/anp";
 import { fetchAnpMunicipality, filterStations, mapAnpRecord } from "@/lib/lead-motor/anp";
@@ -970,8 +973,13 @@ async function whenProcessingQueueEmpty(
   const itemsTotal = counts.items_total ?? 0;
   const anpFound = counts.anp_found ?? 0;
 
-  if (target > 0 && created < target && !citiesDone) {
+  if (target > 0 && created < target && !citiesDone && pending + processing === 0) {
     await updateRun(runId, { phase: "anp_load", counts_json: counts });
+    return;
+  }
+  if (target > 0 && created < target && !citiesDone && pending + processing > 0) {
+    counts = syncDiscoveryCountsWhenItemsQueued(runRow, counts, pending + processing);
+    await updateRun(runId, { phase: "processing", counts_json: counts });
     return;
   }
 
@@ -1017,13 +1025,34 @@ async function syncGoogleSuccessCounter(runId: number, runRow: NonNullable<Await
 }
 
 async function tickProcessing(runId: number) {
-  const runRow = await getLeadGenerationRun(runId);
+  let runRow = await getLeadGenerationRun(runId);
   if (!runRow) return;
 
   if (!anpLoadComplete(runRow.counts_json ?? emptyCounts())) {
-    await updateRun(runId, { phase: "anp_load", error_message: null });
-    await tickAnpLoad(runId);
-    return;
+    const byStatus = await countItemsByStatus(runId);
+    const queue =
+      (byStatus.pending ?? 0) + (byStatus.processing ?? 0) ||
+      Object.values(byStatus).reduce((a, b) => a + b, 0);
+    if (queue > 0) {
+      let counts = syncDiscoveryCountsWhenItemsQueued(runRow, runRow.counts_json ?? emptyCounts(), queue);
+      counts = appendMotorLog(counts, "Fila pronta: ANP marcada concluída, enriquecendo");
+      await updateRun(runId, {
+        phase: "processing",
+        counts_json: counts,
+        progress_pct: computeRunProgressPct({
+          phase: "processing",
+          status: runRow.status,
+          max_stations: runRow.max_stations,
+          counts_json: counts
+        })
+      });
+      runRow = (await getLeadGenerationRun(runId))!;
+      if (!runRow) return;
+    } else {
+      await updateRun(runId, { phase: "anp_load", error_message: null });
+      await tickAnpLoad(runId);
+      return;
+    }
   }
 
   await syncGoogleSuccessCounter(runId, runRow);
@@ -1136,15 +1165,28 @@ export async function bootstrapLeadGenRunAnpMetadata(runId: number): Promise<voi
 
   const pairs = cityPairsForInitialSource(runInitialSource(runRow), runRow.uf, runRow.filters_json);
   if (runRow.phase !== "anp_load" && runRow.phase !== "processing") return;
-  if (runRow.phase === "processing" && anpLoadComplete(runRow.counts_json ?? emptyCounts())) return;
 
-  if (runRow.phase === "processing") {
-    await updateRun(runId, { phase: "anp_load", error_message: null });
-    runRow = (await getLeadGenerationRun(runId))!;
-    if (!runRow) return;
+  let counts = { ...runRow.counts_json };
+  const byStatus = await countItemsByStatus(runId);
+  const queue = (byStatus.pending ?? 0) + (byStatus.processing ?? 0);
+
+  if (runRow.phase === "processing" && !anpLoadComplete(counts) && queue > 0) {
+    counts = syncDiscoveryCountsWhenItemsQueued(runRow, counts, queue);
+    await updateRun(runId, {
+      phase: "processing",
+      counts_json: counts,
+      progress_pct: computeRunProgressPct({
+        phase: "processing",
+        status: "running",
+        max_stations: runRow.max_stations,
+        counts_json: counts
+      })
+    });
+    return;
   }
 
-  const counts = { ...runRow.counts_json };
+  if (runRow.phase === "processing" && anpLoadComplete(counts)) return;
+
   if (pairs.length > 0 && (counts.cities_total ?? 0) !== pairs.length) {
     counts.cities_total = pairs.length;
     await updateRun(runId, {

@@ -421,8 +421,14 @@ export function AdminNovosLeadsWizard() {
       setTickBusy(true);
       try {
         const q = withFeed ? "?feed=1" : "";
-        const res = await fetch(`/api/admin/lead-generation/runs/${id}/tick${q}`, { method: "POST" });
-        if (!res.ok) return;
+        const res = await fetch(`/api/admin/lead-generation/runs/${id}/tick${q}`, {
+          method: "POST",
+          cache: "no-store"
+        });
+        if (!res.ok) {
+          await refreshRunProgress(id, withFeed, pollGeneration);
+          return;
+        }
         const data = (await res.json()) as {
           run: RunDetail;
           activity?: LeadGenActivityLine[];
