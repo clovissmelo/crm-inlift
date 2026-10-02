@@ -136,7 +136,7 @@ export function ProspeccaoListView({
               <th>Cidade/UF</th>
               <th>BDR</th>
               <th>Produtos</th>
-              <th>Telefones</th>
+              <th className="prospeccao-col-phone-count">Telefones</th>
               <th style={{ width: 120 }}>Contato</th>
             </tr>
           </thead>
@@ -159,7 +159,7 @@ export function ProspeccaoListView({
                   <td>{[item.city, item.uf].filter(Boolean).join(" / ") || "—"}</td>
                   <td>{item.bdr_name ?? "—"}</td>
                   <td>{productLabels(item.product_ids)}</td>
-                  <td className="muted" style={{ fontSize: "0.8125rem", textAlign: "center" }}>
+                  <td className="prospeccao-col-phone-count muted prospeccao-col-phone-count__value">
                     {item.contact_phone_count > 0 ? item.contact_phone_count : "—"}
                   </td>
                   <td>

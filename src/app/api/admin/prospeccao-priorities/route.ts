@@ -1,8 +1,10 @@
+import { z } from "zod";
 import { requireAdminApi } from "@/lib/admin";
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { listProspeccaoPriorityTypes } from "@/lib/call-strategy/priorities-config";
 import { nowIso, run } from "@/lib/db";
 import { effectiveSortOrderForPatch, serializeRuleParams } from "@/lib/prospeccao-priority-queue-admin";
+import { createProspeccaoPriorityType } from "@/lib/prospeccao-priority-types-repo";
 
 const creatableRuleKindEnum = z.enum([
   "dial_round_tier",
@@ -10,18 +12,13 @@ const creatableRuleKindEnum = z.enum([
   "has_approach",
   "no_phone"
 ]);
-import {
-  createProspeccaoPriorityType,
-  persistNormalizedPrioritySortOrders
-} from "@/lib/prospeccao-priority-types-repo";
-import { z } from "zod";
 
 const patchSchema = z.object({
   id: z.number().int(),
   name: z.string().min(1).max(120).optional(),
   description: z.string().max(500).nullable().optional(),
   color: z.string().max(32).optional(),
-  sort_order: z.number().int().optional(),
+  sort_order: z.coerce.number().int().min(2).max(99_999).optional(),
   rule_kind: creatableRuleKindEnum.optional(),
   rule_params: z.record(z.string(), z.unknown()).optional()
 });
@@ -132,10 +129,6 @@ export async function PATCH(request: Request) {
       now: nowIso()
     }
   );
-
-  if (parsed.data.sort_order !== undefined && anchor === "none") {
-    await persistNormalizedPrioritySortOrders();
-  }
 
   return Response.json({ items: await listProspeccaoPriorityTypes() });
 }

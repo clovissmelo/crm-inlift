@@ -256,12 +256,22 @@ export function ProspeccaoStrategyAdmin() {
       setMsg("Algumas prioridades não foram salvas. Tente novamente.");
       return;
     }
-    await load();
+    const lastOk = results.find((r) => r.ok);
+    if (lastOk) {
+      const j = (await lastOk.json()) as { items: ProspeccaoPriorityTypeRow[] };
+      setPriorities(j.items);
+    } else {
+      await load();
+    }
     setMsg("Ordem da fila atualizada.");
   }
 
   async function savePriority(row: ProspeccaoPriorityTypeRow) {
     setMsg(null);
+    if (!isFixedQueueAnchor(row) && (!Number.isFinite(row.sort_order) || row.sort_order < 2)) {
+      setMsg("Informe uma ordem válida (número maior que 1).");
+      return;
+    }
     const res = await fetch("/api/admin/prospeccao-priorities", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -270,7 +280,7 @@ export function ProspeccaoStrategyAdmin() {
         name: row.name,
         description: row.description,
         color: row.color,
-        sort_order: row.sort_order
+        ...(isFixedQueueAnchor(row) ? {} : { sort_order: row.sort_order })
       })
     });
     if (!res.ok) {
@@ -278,7 +288,8 @@ export function ProspeccaoStrategyAdmin() {
       setMsg(j.error ?? "Erro ao salvar");
       return;
     }
-    await load();
+    const j = (await res.json()) as { items: ProspeccaoPriorityTypeRow[] };
+    setPriorities(j.items);
     setMsg("Ordem da fila atualizada.");
   }
 
@@ -690,13 +701,14 @@ export function ProspeccaoStrategyAdmin() {
                           className="input"
                           type="number"
                           value={p.sort_order}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const n = parseInt(e.target.value, 10);
                             setPriorities((rows) =>
                               rows.map((r) =>
-                                r.id === p.id ? { ...r, sort_order: Number(e.target.value) } : r
+                                r.id === p.id ? { ...r, sort_order: Number.isFinite(n) ? n : r.sort_order } : r
                               )
-                            )
-                          }
+                            );
+                          }}
                         />
                       )}
                     </div>
