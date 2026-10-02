@@ -160,6 +160,7 @@ export function AdminNovosLeadsWizard() {
   const [backgroundRunNotice, setBackgroundRunNotice] = useState(false);
   const [activityFeed, setActivityFeed] = useState<LeadGenActivityLine[]>([]);
   const [phaseLine, setPhaseLine] = useState<string | null>(null);
+  const [tickBusy, setTickBusy] = useState(false);
 
   const [flowPreview, setFlowPreview] = useState<{
     name: string;
@@ -313,18 +314,24 @@ export function AdminNovosLeadsWizard() {
 
   const tickActiveRun = useCallback(
     async (id: number, withFeed = false) => {
-      const q = withFeed ? "?feed=1" : "";
-      const res = await fetch(`/api/admin/lead-generation/runs/${id}/tick${q}`, { method: "POST" });
-      if (!res.ok) return;
-      const data = (await res.json()) as {
-        run: RunDetail;
-        activity?: LeadGenActivityLine[];
-        phase_line?: string | null;
-      };
-      applyRunRow(data.run);
-      if (withFeed) {
-        if (data.activity) setActivityFeed(data.activity);
-        setPhaseLine(data.phase_line ?? null);
+      if (id <= 0) return;
+      setTickBusy(true);
+      try {
+        const q = withFeed ? "?feed=1" : "";
+        const res = await fetch(`/api/admin/lead-generation/runs/${id}/tick${q}`, { method: "POST" });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          run: RunDetail;
+          activity?: LeadGenActivityLine[];
+          phase_line?: string | null;
+        };
+        applyRunRow(data.run);
+        if (withFeed) {
+          if (data.activity) setActivityFeed(data.activity);
+          setPhaseLine(data.phase_line ?? null);
+        }
+      } finally {
+        setTickBusy(false);
       }
     },
     [applyRunRow]
@@ -617,7 +624,11 @@ export function AdminNovosLeadsWizard() {
         <LeadGenExecutionOverlay
           open
           run={shownRun}
-          phaseLine={phaseLine}
+          phaseLine={
+            tickBusy
+              ? "Consultando ANP / Google… (cada ciclo pode levar até ~40s na nuvem)"
+              : phaseLine
+          }
           activity={activityFeed}
           cancelling={cancelling}
           onClose={closeExecOverlay}

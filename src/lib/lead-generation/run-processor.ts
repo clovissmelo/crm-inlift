@@ -16,6 +16,7 @@ import {
   placeRowToStation
 } from "@/lib/lead-motor/google-city-discover";
 import {
+  buildAnpEmptyRunError,
   buildPartialRunLog,
   buildStuckRunError,
   shouldFailNoSuccess
@@ -770,6 +771,56 @@ async function processOneItem(
   }
 }
 
+async function whenProcessingQueueEmpty(
+  runId: number,
+  runRow: NonNullable<Awaited<ReturnType<typeof getLeadGenerationRun>>>
+) {
+  let { counts } = await recomputeCounts(runId, runRow);
+  counts = bumpProgressTracking(counts, runRow.phase);
+  const created = counts.created ?? 0;
+  const target = runRow.max_stations;
+  const citiesDone = (counts.cities_loaded ?? 0) >= (counts.cities_total ?? 0);
+  const itemsTotal = counts.items_total ?? 0;
+  const anpFound = counts.anp_found ?? 0;
+
+  if (target > 0 && created < target && !citiesDone) {
+    await updateRun(runId, { phase: "anp_load", counts_json: counts });
+    return;
+  }
+
+  if (citiesDone && itemsTotal === 0 && anpFound === 0) {
+    await updateRun(runId, {
+      status: "failed",
+      phase: "done",
+      counts_json: counts,
+      progress_pct: 100,
+      completed_at: nowIso(),
+      error_message: buildAnpEmptyRunError(runRow.uf)
+    });
+    return;
+  }
+
+  if (target > 0 && created < target && citiesDone) {
+    const expanded = await tryExpandRunGeography(runId);
+    if (expanded) return;
+  }
+
+  if (shouldFailNoSuccess(counts, target)) {
+    await updateRun(runId, {
+      status: "failed",
+      phase: "done",
+      counts_json: counts,
+      progress_pct: 100,
+      completed_at: nowIso(),
+      error_message: buildStuckRunError({ counts, target, reason: "no_success" })
+    });
+    return;
+  }
+
+  await updateRun(runId, { phase: "finalizing", counts_json: counts });
+  await tickFinalizing(runId);
+}
+
 async function tickProcessing(runId: number) {
   const runRow = await getLeadGenerationRun(runId);
   if (!runRow) return;
@@ -777,40 +828,13 @@ async function tickProcessing(runId: number) {
   if (await targetCreatedReached(runId, runRow.max_stations)) {
     await dropRemainingPending(runId);
     await updateRun(runId, { phase: "finalizing" });
+    await tickFinalizing(runId);
     return;
   }
 
   const ids = await fetchPendingItemIds(runId, ITEMS_PER_CRON_TICK);
   if (ids.length === 0) {
-    let { counts } = await recomputeCounts(runId, runRow);
-    counts = bumpProgressTracking(counts, runRow.phase);
-    const created = counts.created ?? 0;
-    const target = runRow.max_stations;
-    const citiesDone = (counts.cities_loaded ?? 0) >= (counts.cities_total ?? 0);
-
-    if (target > 0 && created < target && !citiesDone) {
-      await updateRun(runId, { phase: "anp_load", counts_json: counts });
-      return;
-    }
-
-    if (target > 0 && created < target && citiesDone) {
-      const expanded = await tryExpandRunGeography(runId);
-      if (expanded) return;
-    }
-
-    if (shouldFailNoSuccess(counts, target)) {
-      await updateRun(runId, {
-        status: "failed",
-        phase: "done",
-        counts_json: counts,
-        progress_pct: 100,
-        completed_at: nowIso(),
-        error_message: buildStuckRunError({ counts, target, reason: "no_success" })
-      });
-      return;
-    }
-
-    await updateRun(runId, { phase: "finalizing", counts_json: counts });
+    await whenProcessingQueueEmpty(runId, runRow);
     return;
   }
 
@@ -837,6 +861,7 @@ async function tickProcessing(runId: number) {
       counts_json: counts
     });
     await updateRun(runId, { counts_json: counts, progress_pct, phase: "finalizing" });
+    await tickFinalizing(runId);
     return;
   }
 

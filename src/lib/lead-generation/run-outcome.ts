@@ -83,6 +83,13 @@ export function buildStuckRunError(input: {
 }
 
 /** Falha se muitas tentativas sem nenhum novo cadastro. */
+export function buildAnpEmptyRunError(uf: string): string {
+  return (
+    `Nenhum posto enfileirado na ANP para a seleção em ${uf}. ` +
+    "Revise segmento/filtro, confira se a API ANP respondeu ou amplie cidades/UF."
+  );
+}
+
 export function shouldFailNoSuccess(counts: LeadGenCounts, target: number): boolean {
   const created = counts.created ?? 0;
   const processed = counts.processed ?? 0;

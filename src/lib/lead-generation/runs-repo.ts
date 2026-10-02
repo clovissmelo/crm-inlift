@@ -170,6 +170,10 @@ export async function pickRunnableRunId(): Promise<number | null> {
   return row?.id ?? null;
 }
 
+export async function touchRunActivity(id: number) {
+  await run("UPDATE lead_generation_runs SET updated_at = @now WHERE id = @id", { id, now: nowIso() });
+}
+
 export async function updateRun(
   id: number,
   patch: Partial<{

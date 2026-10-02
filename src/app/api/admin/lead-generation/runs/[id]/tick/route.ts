@@ -5,7 +5,8 @@ import { formatLeadGenActivityEntry, runPhaseActivityLine } from "@/lib/lead-gen
 import {
   getLeadGenerationRun,
   listRunActivityFeed,
-  recomputeRunCountsFromItems
+  recomputeRunCountsFromItems,
+  touchRunActivity
 } from "@/lib/lead-generation/runs-repo";
 
 export const maxDuration = 60;
@@ -24,6 +25,8 @@ export async function POST(request: Request, { params }: Params) {
   const before = await getLeadGenerationRun(id);
   if (!before) return Response.json({ error: "Execução não encontrada" }, { status: 404 });
 
+  await touchRunActivity(id);
+
   const mayDrain =
     ["queued", "running"].includes(before.status) ||
     (before.status === "paused" && before.phase === "finalizing");
@@ -31,8 +34,8 @@ export async function POST(request: Request, { params }: Params) {
   if (mayDrain) {
     await drainLeadGenerationTicks({
       runId: id,
-      maxTicks: before.phase === "finalizing" ? 2 : 6,
-      maxMs: before.phase === "finalizing" ? 15_000 : 50_000
+      maxTicks: before.phase === "finalizing" ? 2 : 4,
+      maxMs: before.phase === "finalizing" ? 12_000 : 38_000
     });
   } else if (before.status === "paused") {
     return Response.json({ run: before });
