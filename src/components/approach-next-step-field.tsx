@@ -6,9 +6,12 @@ import {
   defaultNextTypeForResult,
   requiresNonNoneNextStep,
   resolveAllowedNextActions,
+  shouldShowNextStepField,
   type ApproachNextActionKey,
   type ApproachResultNextRules
 } from "@/lib/approach-next-actions";
+
+export { shouldShowNextStepField };
 
 type ClosureReason = { id: number; name: string; kind: "pause" | "close" };
 
@@ -64,8 +67,9 @@ export function ApproachNextStepField({
   reasonId,
   onReasonIdChange,
   closureReasons = [],
-  showNotesForSchedule = false
-}: Props) {
+  showNotesForSchedule = false,
+  invalidSchedule
+}: Props & { invalidSchedule?: boolean }) {
   useSyncNextTypeWithResult(result, nextType, onNextTypeChange);
 
   const allowed = result ? resolveAllowedNextActions(result) : (["none"] as ApproachNextActionKey[]);
@@ -73,13 +77,8 @@ export function ApproachNextStepField({
   const requireMeeting = result?.requires_meeting === true;
   const mustPick = result ? requiresNonNoneNextStep(result) : false;
 
-  if (allowed.length === 1 && allowed[0] === "none") {
-    return (
-      <div className="field">
-        <label className="label">Próximo passo</label>
-        <p style={{ margin: 0, fontSize: "0.9375rem" }}>{APPROACH_NEXT_ACTION_LABELS.none}</p>
-      </div>
-    );
+  if (!shouldShowNextStepField(result)) {
+    return null;
   }
 
   return (
@@ -117,32 +116,20 @@ export function ApproachNextStepField({
         </select>
       </div>
       {nextType === "schedule_return" || nextType === "schedule_meeting" ? (
-        <>
+        <div className={invalidSchedule ? "field field--invalid" : "field"}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <input className="input" type="date" value={nextDate} onChange={(e) => onNextDateChange(e.target.value)} required />
             <input className="input" type="time" value={nextTime} onChange={(e) => onNextTimeChange(e.target.value)} required />
           </div>
+          {invalidSchedule ? (
+            <p className="call-reg-invalid-hint">Informe data e hora.</p>
+          ) : null}
           {showNotesForSchedule && onNextNotesChange ? (
             <div className="field">
               <label className="label">Motivo / observação</label>
               <textarea className="textarea" value={nextNotes ?? ""} onChange={(e) => onNextNotesChange(e.target.value)} />
             </div>
           ) : null}
-        </>
-      ) : null}
-      {(nextType === "pause" || nextType === "close") && onReasonIdChange ? (
-        <div className="field">
-          <label className="label">Motivo</label>
-          <select className="select" value={reasonId ?? ""} onChange={(e) => onReasonIdChange(e.target.value)} required>
-            <option value="">Selecione…</option>
-            {closureReasons
-              .filter((r) => r.kind === (nextType === "pause" ? "pause" : "close"))
-              .map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-          </select>
         </div>
       ) : null}
     </>

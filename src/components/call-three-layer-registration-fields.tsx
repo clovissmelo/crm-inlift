@@ -1,5 +1,6 @@
 "use client";
 
+import { ApproachDecisionMakerField } from "@/components/approach-decision-maker-field";
 import {
   matchTechnicalResultFromCatalog,
   suggestedCommercialSlugForContact,
@@ -90,6 +91,11 @@ export function CallThreeLayerRegistrationFields({
   onContactedPersonJobTitleChange,
   contactedPersonNotes,
   onContactedPersonNotesChange,
+  hideContactOutcome,
+  showDecisionMaker,
+  spokeWithDecisionMaker,
+  onSpokeWithDecisionMakerChange,
+  invalidFields,
   disabled
 }: {
   technicalLabel: string;
@@ -111,6 +117,14 @@ export function CallThreeLayerRegistrationFields({
   onContactedPersonJobTitleChange: (v: string) => void;
   contactedPersonNotes: string;
   onContactedPersonNotesChange: (v: string) => void;
+  /** Substitui “Contato realizado” pela pergunta sobre decisor (valor gravado via contato compatível). */
+  hideContactOutcome?: boolean;
+  showDecisionMaker?: boolean;
+  spokeWithDecisionMaker?: boolean | null;
+  onSpokeWithDecisionMakerChange?: (v: boolean) => void;
+  invalidFields?: Partial<
+    Record<"commercial" | "contact" | "decision" | "personName" | "personJob" | "personNotes", boolean>
+  >;
   disabled?: boolean;
 }) {
   const filteredCommercial =
@@ -129,7 +143,7 @@ export function CallThreeLayerRegistrationFields({
         </p>
       </div>
 
-      <div className="field">
+      <div className={invalidFields?.commercial ? "field field--invalid" : "field"}>
         <label className="label">Resultado comercial *</label>
         {commercialLocked && commercialId ? (
           <p style={{ margin: 0, fontSize: "0.9375rem" }}>
@@ -156,10 +170,22 @@ export function CallThreeLayerRegistrationFields({
             Nenhum resultado comercial associado a este resultado da ligação.
           </p>
         ) : null}
+        {invalidFields?.commercial ? (
+          <p className="call-reg-invalid-hint">Selecione o resultado comercial.</p>
+        ) : null}
       </div>
 
-      {contactTypes.length > 0 ? (
-        <div className="field">
+      {showDecisionMaker ? (
+        <ApproachDecisionMakerField
+          value={spokeWithDecisionMaker ?? null}
+          onChange={(v) => onSpokeWithDecisionMakerChange?.(v)}
+          disabled={disabled}
+          invalid={invalidFields?.decision}
+        />
+      ) : null}
+
+      {contactTypes.length > 0 && !hideContactOutcome ? (
+        <div className={invalidFields?.contact ? "field field--invalid" : "field"}>
           <label className="label">Contato realizado *</label>
           {contactLocked && contactOutcomeId ? (
             <p style={{ margin: 0, fontSize: "0.9375rem" }}>
@@ -186,12 +212,15 @@ export function CallThreeLayerRegistrationFields({
               Sugerido automaticamente pelo resultado técnico.
             </p>
           ) : null}
+          {invalidFields?.contact ? (
+            <p className="call-reg-invalid-hint">Selecione o contato realizado.</p>
+          ) : null}
         </div>
       ) : null}
 
-      {requiresConversation ? (
+      {requiresConversation && !hideContactOutcome ? (
         <>
-          <div className="field">
+          <div className={invalidFields?.personName ? "field field--invalid" : "field"}>
             <label className="label">Nome da pessoa *</label>
             <input
               className="input"

@@ -7,9 +7,12 @@ type Params = { params: Promise<{ id: string }> };
 const bodySchema = z.object({
   step_id: z.string().min(1),
   step_title: z.string().min(1),
-  action: z.enum(["next", "choice", "restart"]),
+  action: z.enum(["next", "choice", "restart", "capture"]),
   choice_label: z.string().optional().nullable(),
-  next_step_id: z.string().optional().nullable()
+  next_step_id: z.string().optional().nullable(),
+  capture_notes: z
+    .array(z.object({ label: z.string(), value: z.string() }))
+    .optional()
 });
 
 export async function POST(request: Request, { params }: Params) {

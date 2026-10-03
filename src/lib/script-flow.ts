@@ -16,7 +16,23 @@ export type ScriptFlowBranchStep = {
   choices: Array<{ label: string; next: string | null }>;
 };
 
-export type ScriptFlowStep = ScriptFlowLinearStep | ScriptFlowBranchStep;
+export type ScriptFlowCaptureField = {
+  key: string;
+  label: string;
+  placeholder?: string;
+  /** text (default), tel ou textarea */
+  input?: "text" | "tel" | "textarea";
+};
+
+export type ScriptFlowCaptureStep = {
+  type: "capture";
+  title: string;
+  content: string;
+  fields: ScriptFlowCaptureField[];
+  next: string | null;
+};
+
+export type ScriptFlowStep = ScriptFlowLinearStep | ScriptFlowBranchStep | ScriptFlowCaptureStep;
 
 export type ScriptFlow = {
   v: 1;
@@ -26,13 +42,30 @@ export type ScriptFlow = {
 
 export type ScriptFlowStepDraft = {
   id: string;
-  type: "linear" | "branch";
+  type: "linear" | "branch" | "capture";
   title: string;
   content: string;
   next?: string | null;
   question?: string;
   choices?: Array<{ label: string; next: string | null }>;
+  fields?: ScriptFlowCaptureField[];
 };
+
+export const DEFAULT_CAPTURE_FIELDS: ScriptFlowCaptureField[] = [
+  { key: "nome", label: "Nome", placeholder: "Nome do contato / responsável" },
+  { key: "telefone", label: "Telefone", placeholder: "(DDD) 9xxxx-xxxx", input: "tel" },
+  { key: "observacao", label: "Observação", placeholder: "Retorno, horário, etc.", input: "textarea" }
+];
+
+function walkStepNext(step: ScriptFlowStep): string | null {
+  if (step.type === "branch") return null;
+  return step.next;
+}
+
+function walkStepBranches(step: ScriptFlowStep): Array<string | null> {
+  if (step.type !== "branch") return [];
+  return step.choices.map((c) => c.next);
+}
 
 export function isScriptFlow(value: unknown): value is ScriptFlow {
   if (!value || typeof value !== "object") return false;
@@ -82,8 +115,8 @@ export function flowToDrafts(flow: ScriptFlow): ScriptFlowStepDraft[] {
     order.push(id);
     const step = flow.steps[id];
     if (!step) return;
-    if (step.type === "linear") walk(step.next);
-    else for (const c of step.choices) walk(c.next);
+    walk(walkStepNext(step));
+    for (const n of walkStepBranches(step)) walk(n);
   }
   walk(flow.start);
   for (const id of Object.keys(flow.steps)) {
@@ -93,6 +126,16 @@ export function flowToDrafts(flow: ScriptFlow): ScriptFlowStepDraft[] {
     const step = flow.steps[id]!;
     if (step.type === "linear") {
       return { id, type: "linear", title: step.title, content: step.content, next: step.next };
+    }
+    if (step.type === "capture") {
+      return {
+        id,
+        type: "capture",
+        title: step.title,
+        content: step.content,
+        next: step.next,
+        fields: step.fields.map((f) => ({ ...f }))
+      };
     }
     return {
       id,
@@ -120,6 +163,27 @@ export function draftsToFlow(drafts: ScriptFlowStepDraft[]): ScriptFlow {
           label: c.label.trim(),
           next: c.next
         }))
+      };
+    } else if (d.type === "capture") {
+      let next = d.next ?? null;
+      if (!next && i < drafts.length - 1) {
+        const followingId = drafts[i + 1]!.id.trim() || `step-${i + 2}`;
+        next = followingId;
+      }
+      const fields = (d.fields ?? DEFAULT_CAPTURE_FIELDS)
+        .filter((f) => f.label.trim())
+        .map((f, fi) => ({
+          key: (f.key.trim() || `campo_${fi + 1}`).replace(/\s+/g, "_"),
+          label: f.label.trim(),
+          placeholder: f.placeholder?.trim() || undefined,
+          input: f.input
+        }));
+      steps[id] = {
+        type: "capture",
+        title: d.title.trim() || "Etapa",
+        content: d.content,
+        fields: fields.length > 0 ? fields : [...DEFAULT_CAPTURE_FIELDS],
+        next
       };
     } else {
       let next = d.next ?? null;
@@ -170,11 +234,14 @@ Posso seguir?`,
         ]
       },
       nao_decisor: {
-        type: "linear",
+        type: "capture",
         title: "Etapa 2b — Identificar decisor",
-        content: `Entendi. Qual o nome e o melhor contato (telefone ou WhatsApp) do responsável pela compra de combustível?
-
-Posso retornar no horário que for melhor para ele(a)? Anote o retorno e confirme data/hora.`,
+        content: `Entendi. Anote abaixo quem decide e o melhor contato. Confirme também se pode retornar e quando.`,
+        fields: [
+          { key: "nome", label: "Nome do responsável", placeholder: "Quem decide a compra" },
+          { key: "telefone", label: "Telefone / WhatsApp", input: "tel" },
+          { key: "retorno", label: "Melhor dia/horário para retorno", input: "textarea" }
+        ],
         next: "encerramento_soft"
       },
       interesse_decisor: {

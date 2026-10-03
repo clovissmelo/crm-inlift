@@ -1887,6 +1887,24 @@ table.data-table td.prospeccao-col-phone-count__value {
   margin-bottom: 0.75rem;
 }
 
+.field--invalid > .label,
+.field--invalid .label {
+  color: var(--danger, #f87171);
+}
+
+.field--invalid .input,
+.field--invalid .select,
+.field--invalid .textarea {
+  border-color: var(--danger, #f87171);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger, #f87171) 35%, transparent);
+}
+
+.field--invalid .call-reg-invalid-hint {
+  color: var(--danger, #f87171);
+  font-size: 0.75rem;
+  margin: 0.35rem 0 0;
+}
+
 .alert-error {
   background: #3f1515;
   border: 1px solid #7f1d1d;
@@ -2865,6 +2883,10 @@ table.data-table tbody tr.is-selected {
   display: block;
   font-size: 0.72rem;
   margin-top: 0.25rem;
+}
+
+.script-flow-capture-row {
+  align-items: flex-end;
 }
 
 .script-flow-branch-row {

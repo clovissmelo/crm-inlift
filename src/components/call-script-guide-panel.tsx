@@ -69,6 +69,7 @@ export function CallScriptGuidePanel({
   const savedLog = useMemo(() => normalizeCallScriptLog(call.script_flow_log), [call.script_flow_log]);
   const [stepId, setStepId] = useState<string | null>(null);
   const [logCount, setLogCount] = useState(savedLog.length);
+  const [captureDraft, setCaptureDraft] = useState<Record<string, string>>({});
 
   useEffect(() => {
     handoffSentRef.current = false;
@@ -85,6 +86,31 @@ export function CallScriptGuidePanel({
   }, [flow, call.id, scriptBody, savedLog.length]);
 
   useEffect(() => {
+    if (!stepId || !flow) {
+      setCaptureDraft({});
+      return;
+    }
+    const current = flow.steps[stepId];
+    if (current?.type !== "capture") {
+      setCaptureDraft({});
+      return;
+    }
+    const lastForStep = [...savedLog]
+      .reverse()
+      .find((e) => e.step_id === stepId && e.action === "capture");
+    if (!lastForStep?.capture_notes?.length) {
+      setCaptureDraft({});
+      return;
+    }
+    const draft: Record<string, string> = {};
+    for (const note of lastForStep.capture_notes) {
+      const field = current.fields.find((f) => f.label === note.label);
+      if (field) draft[field.key] = note.value;
+    }
+    setCaptureDraft(draft);
+  }, [stepId, flow, savedLog]);
+
+  useEffect(() => {
     if (!scriptReady) return;
     if (!scriptBody || !flow) {
       maybeOpenRegistrationHandoff();
@@ -96,8 +122,10 @@ export function CallScriptGuidePanel({
     if (!scriptReady || !flow || !scriptBody || stepId === null) return;
     const current = flow.steps[stepId];
     if (!current || current.type === "branch") return;
-    const hasNext = Boolean(current.next && flow.steps[current.next]);
-    if (!hasNext) maybeOpenRegistrationHandoff();
+    if (current.type === "linear" || current.type === "capture") {
+      const hasNext = Boolean(current.next && flow.steps[current.next]);
+      if (!hasNext) maybeOpenRegistrationHandoff();
+    }
   }, [scriptReady, flow, stepId, scriptBody, call.id]);
 
   function maybeOpenRegistrationHandoff() {
@@ -117,7 +145,7 @@ export function CallScriptGuidePanel({
     [call.contact_name, call.client_name, call.product_name, call.user_name]
   );
 
-  async function persistLog(entry: Omit<CallScriptLogEntry, "at">) {
+  async function persistLog(entry: Omit<CallScriptLogEntry, "at"> & { capture_notes?: CallScriptLogEntry["capture_notes"] }) {
     const res = await fetch(`/api/api4com/calls/${call.id}/script-log`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -144,14 +172,20 @@ export function CallScriptGuidePanel({
 
   const step: ScriptFlowStep | null = flow && stepId ? (flow.steps[stepId] ?? null) : null;
 
-  function goNext(next: string | null, action: "next" | "choice", choiceLabel?: string) {
+  function goNext(
+    next: string | null,
+    action: "next" | "choice" | "capture",
+    choiceLabel?: string,
+    captureNotes?: CallScriptLogEntry["capture_notes"]
+  ) {
     if (!step || !stepId) return;
     void persistLog({
       step_id: stepId,
       step_title: step.title,
       action,
       choice_label: choiceLabel ?? null,
-      next_step_id: next
+      next_step_id: next,
+      capture_notes: captureNotes
     });
     if (next && flow?.steps[next]) setStepId(next);
     else {
@@ -215,6 +249,58 @@ export function CallScriptGuidePanel({
                         {choice.label}
                       </button>
                     ))}
+                  </div>
+                </>
+              ) : step.type === "capture" ? (
+                <>
+                  <div className="call-script-capture-fields">
+                    {step.fields.map((field) => (
+                      <label key={field.key} className="call-script-capture-field">
+                        <span className="label">{field.label}</span>
+                        {field.input === "textarea" ? (
+                          <textarea
+                            className="textarea"
+                            rows={3}
+                            placeholder={field.placeholder}
+                            value={captureDraft[field.key] ?? ""}
+                            onChange={(e) =>
+                              setCaptureDraft((d) => ({ ...d, [field.key]: e.target.value }))
+                            }
+                          />
+                        ) : (
+                          <input
+                            className="input"
+                            type={field.input === "tel" ? "tel" : "text"}
+                            placeholder={field.placeholder}
+                            value={captureDraft[field.key] ?? ""}
+                            onChange={(e) =>
+                              setCaptureDraft((d) => ({ ...d, [field.key]: e.target.value }))
+                            }
+                          />
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="muted call-script-capture-hint">
+                    Ao avançar, o que você preencher fica salvo nesta ligação e nas observações da abordagem.
+                  </p>
+                  <div className="call-script-actions">
+                    <button
+                      type="button"
+                      className="btn btn-primary call-script-btn-next"
+                      onClick={() => {
+                        const notes = step.fields
+                          .map((f) => ({
+                            label: f.label,
+                            value: (captureDraft[f.key] ?? "").trim()
+                          }))
+                          .filter((n) => n.value);
+                        goNext(step.next, "capture", undefined, notes);
+                      }}
+                    >
+                      {step.next && flow.steps[step.next] ? "Salvar e continuar" : "Salvar e concluir"}
+                      <ChevronRight size={20} style={{ marginLeft: 8, verticalAlign: "middle" }} aria-hidden />
+                    </button>
                   </div>
                 </>
               ) : step.next && flow.steps[step.next] ? (

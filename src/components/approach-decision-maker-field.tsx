@@ -4,11 +4,12 @@ type Props = {
   value: boolean | null;
   onChange: (value: boolean) => void;
   disabled?: boolean;
+  invalid?: boolean;
 };
 
-export function ApproachDecisionMakerField({ value, onChange, disabled }: Props) {
+export function ApproachDecisionMakerField({ value, onChange, disabled, invalid }: Props) {
   return (
-    <div className="field">
+    <div className={invalid ? "field field--invalid" : "field"}>
       <span className="label">Pergunta sobre decisor</span>
       <p className="muted" style={{ fontSize: "0.8125rem", margin: "0 0 0.5rem" }}>
         Houve contato com o decisor de compra?
@@ -35,6 +36,7 @@ export function ApproachDecisionMakerField({ value, onChange, disabled }: Props)
           Não
         </label>
       </div>
+      {invalid ? <p className="call-reg-invalid-hint">Selecione Sim ou Não.</p> : null}
     </div>
   );
 }

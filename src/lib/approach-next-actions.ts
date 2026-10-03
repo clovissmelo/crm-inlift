@@ -106,6 +106,16 @@ export function defaultNextTypeForResult(row: ApproachResultNextRules): Approach
   return allowed[0] ?? "none";
 }
 
+/** Oculta o bloco na UI quando o próximo passo já está implícito (ex.: só Nenhum ou só encerrar). */
+export function shouldShowNextStepField(row: ApproachResultNextRules | null | undefined): boolean {
+  if (!row) return false;
+  const allowed = resolveAllowedNextActions(row);
+  if (allowed.length === 0) return false;
+  if (allowed.length === 1 && allowed[0] === "none") return false;
+  if (allowed.length === 1 && !row.requires_meeting && !row.require_schedule_return) return false;
+  return true;
+}
+
 export function serializeAllowedNextActions(keys: ApproachNextActionKey[]): string {
   const ordered = APPROACH_NEXT_ACTION_KEYS.filter((k) => keys.includes(k));
   return JSON.stringify(ordered);

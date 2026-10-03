@@ -42,6 +42,7 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     contact_outcome_name: string | null;
     commercial_name: string | null;
     contacted_person_name: string | null;
+    spoke_with_decision_maker: boolean | null;
     bdr_name: string | null;
     script_flow_log: unknown;
     product_name: string | null;
@@ -58,6 +59,7 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
         a.contact_outcome_name_snapshot AS contact_outcome_name,
         COALESCE(a.commercial_result_name_snapshot, rt.name) AS commercial_name,
         a.contacted_person_name,
+        a.spoke_with_decision_maker,
         bu.name AS bdr_name
       FROM api4com_calls c
       LEFT JOIN users u ON u.id = c.user_id
@@ -103,6 +105,11 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     } else if (call.approach_id) {
       bdrParts = [
         call.contact_outcome_name ? `Contato: ${call.contact_outcome_name}` : null,
+        call.spoke_with_decision_maker === true
+          ? "Decisor: Sim"
+          : call.spoke_with_decision_maker === false
+            ? "Decisor: Não"
+            : null,
         call.contacted_person_name ? `Pessoa: ${call.contacted_person_name}` : null,
         call.commercial_name ? `Comercial: ${call.commercial_name}` : null,
         stripScriptBlockFromApproachNotes(call.approach_notes)
@@ -181,6 +188,7 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     commercial_name: string | null;
     technical_name: string | null;
     contacted_person_name: string | null;
+    spoke_with_decision_maker: boolean | null;
   }>(
     `
       SELECT a.id, a.occurred_at, a.channel, a.notes,
@@ -189,7 +197,8 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
         a.contact_outcome_name_snapshot AS contact_outcome_name,
         COALESCE(a.commercial_result_name_snapshot, rt.name) AS commercial_name,
         a.technical_result_name_snapshot AS technical_name,
-        a.contacted_person_name
+        a.contacted_person_name,
+        a.spoke_with_decision_maker
       FROM approaches a
       LEFT JOIN approach_result_types rt ON rt.id = a.result_type_id
       LEFT JOIN users u ON u.id = a.user_id
@@ -206,6 +215,11 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     const layerParts = [
       a.technical_name ? `Técnico: ${a.technical_name}` : null,
       a.contact_outcome_name ? `Contato: ${a.contact_outcome_name}` : null,
+      a.spoke_with_decision_maker === true
+        ? "Decisor: Sim"
+        : a.spoke_with_decision_maker === false
+          ? "Decisor: Não"
+          : null,
       a.contacted_person_name ? `Pessoa: ${a.contacted_person_name}` : null,
       a.commercial_name ? `Comercial: ${a.commercial_name}` : null
     ].filter(Boolean);

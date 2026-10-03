@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { HelpCircle, Plus, Trash2 } from "lucide-react";
 import {
+  DEFAULT_CAPTURE_FIELDS,
   draftsToFlow,
   flowToDrafts,
   parseCallScriptBody,
   serializeCallScriptFlow,
+  type ScriptFlowCaptureField,
   type ScriptFlowStepDraft
 } from "@/lib/script-flow";
 import { PLACEHOLDER_HELP } from "@/lib/message-templates";
@@ -44,7 +46,7 @@ function PlaceholderHelpButton() {
           ))}
         </ul>
         <p className="muted script-flow-help-note">
-          Etapas sequenciais usam o botão <strong>Próximo</strong>; ramificações usam opções (ex.: Sim/Não).
+          Etapas sequenciais usam <strong>Próximo</strong>; ramificações usam opções; anotações pedem campos (nome, telefone…) gravados na ligação.
         </p>
       </div>
     </span>
@@ -86,7 +88,9 @@ export function ScriptFlowEditor({ body, onBodyChange, onLoadPostoCredTemplate }
     setDrafts((list) => {
       if (list.length === 0) return [...list, next];
       const updated = list.map((d, i) =>
-        i === list.length - 1 && d.type === "linear" && (d.next == null || d.next === "")
+        i === list.length - 1 &&
+        (d.type === "linear" || d.type === "capture") &&
+        (d.next == null || d.next === "")
           ? { ...d, next: id }
           : d
       );
@@ -99,7 +103,7 @@ export function ScriptFlowEditor({ body, onBodyChange, onLoadPostoCredTemplate }
     setDrafts((list) => {
       const next = list.filter((d) => d.id !== id);
       for (const d of next) {
-        if (d.type === "linear" && d.next === id) d.next = null;
+        if ((d.type === "linear" || d.type === "capture") && d.next === id) d.next = null;
         if (d.type === "branch" && d.choices) {
           d.choices = d.choices.map((c) => (c.next === id ? { ...c, next: null } : c));
         }
@@ -169,7 +173,9 @@ export function ScriptFlowEditor({ body, onBodyChange, onLoadPostoCredTemplate }
                   setDrafts((list) =>
                     list.map((d) => {
                       if (d.id === selected.id) return { ...d, id: newId };
-                      if (d.type === "linear" && d.next === selected.id) return { ...d, next: newId };
+                      if ((d.type === "linear" || d.type === "capture") && d.next === selected.id) {
+                        return { ...d, next: newId };
+                      }
                       if (d.type === "branch" && d.choices) {
                         return {
                           ...d,
@@ -204,7 +210,7 @@ export function ScriptFlowEditor({ body, onBodyChange, onLoadPostoCredTemplate }
                 className="select"
                 value={selected.type}
                 onChange={(e) => {
-                  const type = e.target.value as "linear" | "branch";
+                  const type = e.target.value as ScriptFlowStepDraft["type"];
                   if (type === "branch") {
                     updateSelected({
                       type,
@@ -214,12 +220,19 @@ export function ScriptFlowEditor({ body, onBodyChange, onLoadPostoCredTemplate }
                         { label: "Não", next: null }
                       ]
                     });
+                  } else if (type === "capture") {
+                    updateSelected({
+                      type,
+                      next: selected.next ?? null,
+                      fields: selected.fields?.length ? selected.fields : [...DEFAULT_CAPTURE_FIELDS]
+                    });
                   } else {
-                    updateSelected({ type, next: selected.next ?? null });
+                    updateSelected({ type: "linear", next: selected.next ?? null });
                   }
                 }}
               >
                 <option value="linear">Sequencial (botão Próximo)</option>
+                <option value="capture">Anotação (campos para preencher na ligação)</option>
                 <option value="branch">Ramificação (pergunta + opções)</option>
               </select>
             </div>
@@ -238,7 +251,87 @@ export function ScriptFlowEditor({ body, onBodyChange, onLoadPostoCredTemplate }
                 onChange={(e) => updateSelected({ content: e.target.value })}
               />
             </div>
-            {selected.type === "linear" ? (
+            {selected.type === "capture" ? (
+              <>
+                <p className="muted script-flow-field-hint">
+                  Defina os campos que o operador preenche durante a ligação (nome, telefone, etc.). Os valores vão para o
+                  registro da chamada.
+                </p>
+                {(selected.fields ?? DEFAULT_CAPTURE_FIELDS).map((field, idx) => (
+                  <div key={idx} className="filters-row script-flow-capture-row">
+                    <div className="field" style={{ flex: 1 }}>
+                      <label className="label">Rótulo do campo</label>
+                      <input
+                        className="input"
+                        value={field.label}
+                        onChange={(e) => {
+                          const fields = [...(selected.fields ?? DEFAULT_CAPTURE_FIELDS)];
+                          fields[idx] = { ...fields[idx]!, label: e.target.value };
+                          updateSelected({ fields });
+                        }}
+                      />
+                    </div>
+                    <div className="field" style={{ flex: 1 }}>
+                      <label className="label">Placeholder</label>
+                      <input
+                        className="input"
+                        value={field.placeholder ?? ""}
+                        onChange={(e) => {
+                          const fields = [...(selected.fields ?? DEFAULT_CAPTURE_FIELDS)];
+                          fields[idx] = { ...fields[idx]!, placeholder: e.target.value };
+                          updateSelected({ fields });
+                        }}
+                      />
+                    </div>
+                    <div className="field" style={{ width: "7rem" }}>
+                      <label className="label">Tipo</label>
+                      <select
+                        className="select"
+                        value={field.input ?? "text"}
+                        onChange={(e) => {
+                          const fields = [...(selected.fields ?? DEFAULT_CAPTURE_FIELDS)];
+                          fields[idx] = {
+                            ...fields[idx]!,
+                            input: e.target.value as ScriptFlowCaptureField["input"]
+                          };
+                          updateSelected({ fields });
+                        }}
+                      >
+                        <option value="text">Texto</option>
+                        <option value="tel">Telefone</option>
+                        <option value="textarea">Texto longo</option>
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-icon-sm"
+                      title="Remover campo"
+                      onClick={() => {
+                        const fields = (selected.fields ?? DEFAULT_CAPTURE_FIELDS).filter((_, i) => i !== idx);
+                        updateSelected({ fields: fields.length ? fields : [...DEFAULT_CAPTURE_FIELDS] });
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() =>
+                    updateSelected({
+                      fields: [
+                        ...(selected.fields ?? DEFAULT_CAPTURE_FIELDS),
+                        { key: `campo_${(selected.fields?.length ?? 3) + 1}`, label: "Novo campo", input: "text" }
+                      ]
+                    })
+                  }
+                >
+                  + Campo
+                </button>
+              </>
+            ) : null}
+            {selected.type === "linear" || selected.type === "capture" ? (
               <div className="field">
                 <label className="label" htmlFor="script-step-next">
                   Próxima etapa
@@ -259,7 +352,7 @@ export function ScriptFlowEditor({ body, onBodyChange, onLoadPostoCredTemplate }
                     ))}
                 </select>
               </div>
-            ) : (
+            ) : selected.type === "branch" ? (
               <>
                 <div className="field">
                   <label className="label" htmlFor="script-step-question">
@@ -332,7 +425,7 @@ export function ScriptFlowEditor({ body, onBodyChange, onLoadPostoCredTemplate }
                   + Opção
                 </button>
               </>
-            )}
+            ) : null}
           </div>
         ) : (
           <p className="muted script-flow-empty">Adicione uma etapa para começar o fluxo.</p>

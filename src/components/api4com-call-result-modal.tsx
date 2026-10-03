@@ -22,12 +22,13 @@ import {
 } from "@/lib/attendance/bdr-registration";
 import type { TechnicalResultTypeRow } from "@/lib/classifications/technical-result-match";
 import { formatCallScriptLogForNotes, normalizeCallScriptLog } from "@/lib/call-script-log";
-import { ApproachNextStepField } from "@/components/approach-next-step-field";
+import { ApproachNextStepField, useSyncNextTypeWithResult } from "@/components/approach-next-step-field";
 import {
+  shouldShowNextStepField,
   type ApproachNextActionKey,
   validateNextActionChoice
 } from "@/lib/approach-next-actions";
-import { ApproachDecisionMakerField } from "@/components/approach-decision-maker-field";
+import { Headphones } from "lucide-react";
 import { confirmProceedIfClientHasAgenda } from "@/lib/client-agenda-warning";
 import { callRequiresComplementRegistration } from "@/lib/api4com/call-registration";
 
@@ -182,6 +183,14 @@ export function Api4comCallResultForm({
   const [contactedPersonName, setContactedPersonName] = useState("");
   const [contactedPersonJobTitle, setContactedPersonJobTitle] = useState("");
   const [contactedPersonNotes, setContactedPersonNotes] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{
+    commercial?: boolean;
+    contact?: boolean;
+    decision?: boolean;
+    notes?: boolean;
+    personName?: boolean;
+    nextSchedule?: boolean;
+  }>({});
 
   const call = ctx?.call ?? null;
 
@@ -474,6 +483,15 @@ export function Api4comCallResultForm({
   useEffect(() => {
     setSpokeWithDecisionMaker(null);
   }, [resultTypeId]);
+
+  useSyncNextTypeWithResult(selectedResult, nextType, setNextType);
+
+  useEffect(() => {
+    if (!showDecisionMakerField || spokeWithDecisionMaker === null) return;
+    const slug = spokeWithDecisionMaker ? "falou_responsavel" : "falou_outra_pessoa";
+    const contact = contactTypes.find((c) => c.slug === slug);
+    if (contact) setContactOutcomeId(String(contact.id));
+  }, [showDecisionMakerField, spokeWithDecisionMaker, contactTypes]);
   const nextDial = useMemo(() => {
     const s = ctx?.call_strategy?.suggested;
     if (s) {
@@ -584,42 +602,70 @@ export function Api4comCallResultForm({
     return [base, lines.join("\n\n")].filter(Boolean).join("\n\n");
   }
 
+  function validateFinalForm(): string | null {
+    const err: typeof fieldErrors = {};
+    let msg: string | null = null;
+    const mark = (m: string) => {
+      if (!msg) msg = m;
+    };
+
+    if (!call?.client_id) mark("Esta ligação não está vinculada a um cliente no CRM.");
+    if (!resultTypeId) {
+      err.commercial = true;
+      mark("Selecione o resultado comercial.");
+    }
+    if (showDecisionMakerField && spokeWithDecisionMaker === null) {
+      err.decision = true;
+      mark("Informe se houve contato com o decisor.");
+    } else if (!contactOutcomeId) {
+      if (showDecisionMakerField) err.decision = true;
+      else err.contact = true;
+      mark(
+        showDecisionMakerField ? "Informe se houve contato com o decisor." : "Selecione o contato realizado."
+      );
+    }
+    if (selectedContact?.requires_conversation && !showDecisionMakerField && !contactedPersonName.trim()) {
+      err.personName = true;
+      mark("Informe o nome da pessoa contatada.");
+    }
+    if (selectedResult?.collect_notes === true && !notes.trim()) {
+      err.notes = true;
+      mark("Informe as observações exigidas para este resultado.");
+    }
+    if (selectedResult && showRegistrationSteps) {
+      const nextErr = validateNextActionChoice(selectedResult, nextType);
+      if (nextErr) mark(nextErr);
+      if (selectedResult.requires_meeting && nextType !== "schedule_meeting") {
+        mark("Este resultado exige reunião agendada.");
+      }
+      if (
+        (nextType === "schedule_return" || nextType === "schedule_meeting") &&
+        (!nextDate.trim() || !nextTime.trim())
+      ) {
+        err.nextSchedule = true;
+        mark("Informe data e hora.");
+      }
+    }
+
+    setFieldErrors(err);
+    return msg;
+  }
+
   async function saveRegistration(registrationStatus: "draft" | "final") {
-    if (!call || !call.client_id || !resultTypeId) {
-      setError("Selecione o resultado comercial.");
-      return;
-    }
-    if (!contactOutcomeId) {
-      setError("Selecione o contato realizado.");
-      return;
-    }
     if (registrationStatus === "final") {
-      if (selectedContact?.requires_conversation && !contactedPersonName.trim()) {
-        setError("Informe o nome da pessoa contatada.");
+      const validationMsg = validateFinalForm();
+      if (validationMsg) {
+        setError(validationMsg);
         return;
       }
-      if (selectedResult?.collect_notes === true && !notes.trim()) {
-        setError("Informe as observações exigidas para este resultado.");
-        return;
-      }
-      if (selectedResult?.ask_decision_maker && spokeWithDecisionMaker === null) {
-        setError("Informe se houve contato com o decisor.");
-        return;
-      }
-      if (selectedResult && showRegistrationSteps) {
-        const nextErr = validateNextActionChoice(selectedResult, nextType);
-        if (nextErr) {
-          setError(nextErr);
-          return;
-        }
-        if (selectedResult.requires_meeting && nextType !== "schedule_meeting") {
-          setError("Este resultado exige reunião agendada.");
-          return;
-        }
-      }
+    } else {
+      setFieldErrors({});
     }
+    if (!call || !call.client_id || !resultTypeId || !contactOutcomeId) return;
+
     setLoading(true);
     setError(null);
+    setFieldErrors({});
 
     const finalNotes = buildSessionNotes();
 
@@ -645,15 +691,24 @@ export function Api4comCallResultForm({
         notes: null
       };
     } else if (nextType === "pause" || nextType === "close") {
-      if (!resolvedProductId || !reasonId) {
-        setError("Informe produto e motivo para pausar ou encerrar.");
+      if (!resolvedProductId) {
+        setError("Produto não identificado para este registro.");
+        setLoading(false);
+        return;
+      }
+      const kind = nextType === "pause" ? "pause" : "close";
+      const autoReason =
+        reasonId ||
+        String(closureReasons.find((r) => r.kind === kind)?.id ?? "");
+      if (!autoReason) {
+        setError("Nenhum motivo de encerramento configurado no sistema.");
         setLoading(false);
         return;
       }
       next_action = {
         type: nextType,
         product_id: resolvedProductId,
-        reason_id: Number(reasonId)
+        reason_id: Number(autoReason)
       };
     }
 
@@ -722,10 +777,6 @@ export function Api4comCallResultForm({
     await saveRegistration("final");
   }
 
-  async function submitDraft() {
-    await saveRegistration("draft");
-  }
-
   const duration =
     call?.duration_seconds != null
       ? `${Math.floor(call.duration_seconds / 60)}:${String(call.duration_seconds % 60).padStart(2, "0")}`
@@ -745,60 +796,24 @@ export function Api4comCallResultForm({
             {formatPhoneDisplay(call.phone_dialed)} · {call.ended_at ? formatSpDateTime(call.ended_at) : "—"} · duração {duration}
             {call.hangup_cause_label ? ` · ${call.hangup_cause_label}` : null}
           </p>
+          {productDisplayName ? (
+            <p style={{ margin: "8px 0 0", fontSize: "0.875rem" }}>
+              Produto: <strong>{productDisplayName}</strong>
+            </p>
+          ) : null}
           {call.record_url ? (
-            <p style={{ margin: "6px 0 0" }}>
+            <p style={{ margin: "6px 0 0", display: "flex", alignItems: "center", gap: 6 }}>
+              <Headphones size={15} aria-hidden style={{ flexShrink: 0, opacity: 0.85 }} />
               <a href={`/api/api4com/calls/${call.id}/recording`} target="_blank" rel="noreferrer">
                 Ouvir gravação
               </a>
             </p>
           ) : null}
-          {currentPhone ? (
-            <div className="panel" style={{ padding: 10, marginTop: 10, fontSize: "0.8125rem" }}>
-              <div>
-                <strong>Telefone {currentPhone.position} de {currentPhone.total}</strong> · Origem: {currentPhone.origin}
-              </div>
-              <div>{currentPhone.counter_line ?? currentPhone.attempt_label}</div>
-              {currentPhone.counter_lines && currentPhone.counter_lines.length > 1 ? (
-                <div className="muted" style={{ fontSize: "0.75rem" }}>
-                  {currentPhone.counter_lines.join(" · ")}
-                </div>
-              ) : null}
-              {currentPhone.needs_review ? (
-                <div className="muted" style={{ fontSize: "0.75rem" }}>
-                  Sinalizado para revisão
-                </div>
-              ) : null}
-              <div className="muted">
-                Estado:{" "}
-                {currentPhone.status === "waiting"
-                  ? "Aguardando próxima tentativa"
-                  : currentPhone.status === "exhausted"
-                    ? "Esgotado"
-                    : "Disponível"}
-                {currentPhone.next_eligible_at ? ` · Próxima: ${formatSpDateTime(currentPhone.next_eligible_at)}` : ""}
-              </div>
-              {currentPhone.last_attempt_at ? (
-                <div className="muted">
-                  Última tentativa: {formatSpDateTime(currentPhone.last_attempt_at)}
-                  {currentPhone.last_bucket ? ` (${currentPhone.last_bucket})` : ""}
-                </div>
-              ) : null}
-              {ctx?.call_strategy?.phones && ctx.call_strategy.phones.length > 1 ? (
-                <details style={{ marginTop: 6 }}>
-                  <summary>Outros números do lead</summary>
-                  <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
-                    {ctx.call_strategy.phones.map((p) => (
-                      <li key={p.client_phone_id} className={p.eligible_now ? "" : "muted"}>
-                        {formatPhoneDisplay(p.phone_display)} · {p.position}/{p.total} · {p.origin}
-                        {!p.eligible_now && p.next_eligible_at
-                          ? ` · elegível ${formatSpDateTime(p.next_eligible_at)}`
-                          : ""}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              ) : null}
-            </div>
+          {currentPhone?.last_attempt_at ? (
+            <p className="muted" style={{ margin: "6px 0 0", fontSize: "0.8125rem" }}>
+              Última tentativa: {formatSpDateTime(currentPhone.last_attempt_at)}
+              {currentPhone.last_bucket ? ` (${currentPhone.last_bucket})` : ""}
+            </p>
           ) : null}
           {ctx?.call_strategy?.lead_status === "aguardando_intervalo" && ctx.call_strategy.waiting_next_at ? (
             <p className="muted" style={{ marginTop: 8, fontSize: "0.8125rem" }}>
@@ -875,6 +890,7 @@ export function Api4comCallResultForm({
             contactOutcomeId={contactOutcomeId}
             onContactOutcomeChange={(id) => {
               setContactOutcomeId(id);
+              setFieldErrors((e) => ({ ...e, contact: false }));
               if (!resultLockedByIntegration) setResultTypeId("");
             }}
             contactLocked={contactLocked}
@@ -893,7 +909,10 @@ export function Api4comCallResultForm({
             compatIds={compatIds}
             allowedCommercialIds={allowedCommercialIds}
             commercialId={resultTypeId}
-            onCommercialChange={setResultTypeId}
+            onCommercialChange={(id) => {
+              setResultTypeId(id);
+              setFieldErrors((e) => ({ ...e, commercial: false }));
+            }}
             commercialLocked={resultLockedByIntegration}
             requiresConversation={selectedContact?.requires_conversation === true}
             contactedPersonName={contactedPersonName}
@@ -902,6 +921,14 @@ export function Api4comCallResultForm({
             onContactedPersonJobTitleChange={setContactedPersonJobTitle}
             contactedPersonNotes={contactedPersonNotes}
             onContactedPersonNotesChange={setContactedPersonNotes}
+            hideContactOutcome={showDecisionMakerField}
+            showDecisionMaker={showDecisionMakerField}
+            spokeWithDecisionMaker={spokeWithDecisionMaker}
+            onSpokeWithDecisionMakerChange={(v) => {
+              setSpokeWithDecisionMaker(v);
+              setFieldErrors((e) => ({ ...e, decision: false, contact: false }));
+            }}
+            invalidFields={fieldErrors}
             disabled={loading}
           />
           {selectedResult?.lead_qualification ? (
@@ -909,66 +936,48 @@ export function Api4comCallResultForm({
               Qualificação do lead: <strong>{LEAD_QUALIFICATION_LABELS[selectedResult.lead_qualification]}</strong>
             </p>
           ) : null}
-          <div className="field">
-            <label className="label">Produto</label>
-            <p style={{ margin: 0, fontSize: "0.9375rem" }}>{productDisplayName ?? "—"}</p>
-          </div>
           {showNotesField ? (
-            <div className="field">
+            <div className={fieldErrors.notes ? "field field--invalid" : "field"}>
               <label className="label">Observações</label>
-              <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} required />
+              <textarea
+                className="textarea"
+                value={notes}
+                onChange={(e) => {
+                  setNotes(e.target.value);
+                  setFieldErrors((f) => ({ ...f, notes: false }));
+                }}
+                required
+              />
+              {fieldErrors.notes ? <p className="call-reg-invalid-hint">Preencha as observações.</p> : null}
             </div>
           ) : null}
-          {showDecisionMakerField ? (
-            <ApproachDecisionMakerField
-              value={spokeWithDecisionMaker}
-              onChange={setSpokeWithDecisionMaker}
-              disabled={loading}
-            />
-          ) : null}
-          {showRegistrationSteps ? (
+          {showRegistrationSteps && shouldShowNextStepField(selectedResult) ? (
             <ApproachNextStepField
               result={selectedResult}
               nextType={nextType}
               onNextTypeChange={setNextType}
               nextDate={nextDate}
               nextTime={nextTime}
-              onNextDateChange={setNextDate}
-              onNextTimeChange={setNextTime}
-              reasonId={reasonId}
-              onReasonIdChange={setReasonId}
-              closureReasons={closureReasons}
+              onNextDateChange={(v) => {
+                setNextDate(v);
+                setFieldErrors((f) => ({ ...f, nextSchedule: false }));
+              }}
+              onNextTimeChange={(v) => {
+                setNextTime(v);
+                setFieldErrors((f) => ({ ...f, nextSchedule: false }));
+              }}
+              invalidSchedule={fieldErrors.nextSchedule}
             />
-          ) : (
+          ) : showRegistrationSteps ? null : (
             <p className="muted" style={{ fontSize: "0.8125rem" }}>
               Este resultado não exige complemento de registro — confirme para concluir a ligação.
             </p>
           )}
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12, flexWrap: "wrap" }}>
-            {ctx && (ctx.call_strategy?.suggested || ctx.remaining.length > 0) ? (
-              <button type="button" className="btn" onClick={() => setStep("next_dial")}>
-                Outros números
-              </button>
-            ) : null}
-            <button type="button" className="btn" onClick={onClose}>
-              Fechar
-            </button>
-            {!call?.client_id ? (
-              <button type="button" className="btn" disabled={loading} onClick={() => void dismissPending()}>
-                Dispensar registro
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="btn"
-              disabled={loading || !call?.client_id}
-              onClick={() => void submitDraft()}
-            >
-              Salvar rascunho
-            </button>
+          <div style={{ display: "flex", justifyContent: "stretch", marginTop: 16 }}>
             <button
               className="btn btn-primary"
               type="submit"
+              style={{ width: "100%" }}
               disabled={loading || !call?.client_id || resultTypes.length === 0}
             >
               {loading ? "Salvando…" : "Finalizar atendimento"}

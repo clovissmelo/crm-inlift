@@ -1,10 +1,13 @@
+export type CallScriptCaptureNote = { label: string; value: string };
+
 export type CallScriptLogEntry = {
   at: string;
   step_id: string;
   step_title: string;
-  action: "next" | "choice" | "restart";
+  action: "next" | "choice" | "restart" | "capture";
   choice_label?: string | null;
   next_step_id?: string | null;
+  capture_notes?: CallScriptCaptureNote[];
 };
 
 export function normalizeCallScriptLog(raw: unknown): CallScriptLogEntry[] {
@@ -16,15 +19,28 @@ export function normalizeCallScriptLog(raw: unknown): CallScriptLogEntry[] {
   });
 }
 
+function formatCaptureNotes(notes: CallScriptCaptureNote[] | undefined): string | null {
+  if (!notes?.length) return null;
+  const parts = notes.filter((n) => n.value.trim()).map((n) => `${n.label}: ${n.value.trim()}`);
+  return parts.length ? parts.join("; ") : null;
+}
+
 /** Respostas do roteiro (prioriza escolhas em ramificações). */
 export function formatCallScriptLogAnswers(log: CallScriptLogEntry[]): string | null {
   if (!log.length) return null;
   const choices = log.filter((e) => e.action === "choice" && e.choice_label?.trim());
+  const captures = log.filter((e) => e.action === "capture");
+  const parts: string[] = [];
   if (choices.length > 0) {
-    return choices
-      .map((e) => `${(e.step_title || e.step_id).trim()}: ${e.choice_label!.trim()}`)
-      .join(" · ");
+    parts.push(
+      ...choices.map((e) => `${(e.step_title || e.step_id).trim()}: ${e.choice_label!.trim()}`)
+    );
   }
+  for (const e of captures) {
+    const block = formatCaptureNotes(e.capture_notes);
+    if (block) parts.push(`${(e.step_title || e.step_id).trim()} — ${block}`);
+  }
+  if (parts.length) return parts.join(" · ");
   return formatCallScriptLogInline(log);
 }
 
@@ -60,6 +76,10 @@ export function formatCallScriptLogInline(log: CallScriptLogEntry[]): string | n
   const parts = log.map((e) => {
     const title = e.step_title?.trim() || e.step_id;
     if (e.action === "choice" && e.choice_label) return `${title}: ${e.choice_label}`;
+    if (e.action === "capture") {
+      const block = formatCaptureNotes(e.capture_notes);
+      return block ? `${title}: ${block}` : `${title} (anotações)`;
+    }
     if (e.action === "next") return `${title} → Próximo`;
     if (e.action === "restart") return "Reinício do roteiro";
     return title;
@@ -73,6 +93,10 @@ export function formatCallScriptLogForNotes(log: CallScriptLogEntry[]): string |
     const title = e.step_title?.trim() || e.step_id;
     if (e.action === "choice" && e.choice_label) {
       return `· ${title}: ${e.choice_label}`;
+    }
+    if (e.action === "capture") {
+      const block = formatCaptureNotes(e.capture_notes);
+      return block ? `· ${title}: ${block}` : `· ${title} (sem anotação)`;
     }
     if (e.action === "next") {
       return `· ${title} → Próximo`;
