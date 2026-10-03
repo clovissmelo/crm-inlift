@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ClientContactShortcuts } from "@/components/client-contact-shortcuts";
+import {
+  ProspeccaoQueueOrderSummary,
+  type ProspeccaoQueuePrioritySummary
+} from "@/components/prospeccao-queue-order-summary";
 import { ProspeccaoPriorityBadge } from "@/components/prospeccao-priority-badge";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
 import { PageIntro } from "@/components/page-intro";
@@ -15,7 +20,9 @@ export function ProspeccaoListView({
   products,
   bdrs,
   companies,
-  priorityFilters
+  priorityFilters,
+  queuePriorities,
+  canEditQueueOrder
 }: {
   initialItems: ProspeccaoListItem[];
   initialTotal: number;
@@ -23,10 +30,15 @@ export function ProspeccaoListView({
   bdrs: User[];
   companies: Company[];
   priorityFilters: Array<{ slug: string; name: string }>;
+  queuePriorities: ProspeccaoQueuePrioritySummary[];
+  canEditQueueOrder: boolean;
 }) {
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const initialPrioridade = searchParams.get("prioridade") ?? "";
+
   const [filters, setFilters] = useState({
     city: "",
     uf: "",
@@ -34,7 +46,7 @@ export function ProspeccaoListView({
     product_id: "",
     bdr_user_id: "",
     phone_availability: "",
-    prioridade: "",
+    prioridade: initialPrioridade,
     company_id: "",
     search: ""
   });
@@ -78,6 +90,11 @@ export function ProspeccaoListView({
   return (
     <div>
       <PageIntro>Leads para contato</PageIntro>
+      <ProspeccaoQueueOrderSummary
+        priorities={queuePriorities}
+        canEdit={canEditQueueOrder}
+        onOrderSaved={() => void load()}
+      />
       <FilterBar>
         <FilterInput
           label="Busca"
@@ -131,6 +148,9 @@ export function ProspeccaoListView({
         <table className="data-table">
           <thead>
             <tr>
+              <th className="prospeccao-col-fila" title="Ordem sugerida de ligação nesta página">
+                #
+              </th>
               <th>Prioridade</th>
               <th>Empresa</th>
               <th>Cidade/UF</th>
@@ -141,11 +161,15 @@ export function ProspeccaoListView({
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => {
+            {items.map((item, index) => {
               const displayName = item.trade_name || item.legal_name || `#${item.id}`;
               const productId = item.product_ids[0];
+              const filaRank = offset + index + 1;
               return (
                 <tr key={item.id}>
+                  <td className="prospeccao-col-fila muted" title="Posição na fila (com filtros atuais)">
+                    {filaRank}
+                  </td>
                   <td>
                     <ProspeccaoPriorityBadge
                       label={item.queue_label}

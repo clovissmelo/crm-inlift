@@ -370,7 +370,8 @@ export function ClientContactShortcuts({
           vars={{
             contato_nome: contactName ?? undefined,
             cliente_nome: clientName,
-            produto_nome: productName ?? undefined
+            produto_nome: productName ?? undefined,
+            usuario_nome: api4com?.userName
           }}
         />
       ) : null}
@@ -383,7 +384,8 @@ export function ClientContactShortcuts({
           vars={{
             contato_nome: contactName ?? undefined,
             cliente_nome: clientName,
-            produto_nome: productName ?? undefined
+            produto_nome: productName ?? undefined,
+            usuario_nome: api4com?.userName
           }}
         />
       ) : null}

@@ -2,9 +2,11 @@ export type TemplateVars = {
   contato_nome?: string | null;
   cliente_nome?: string | null;
   produto_nome?: string | null;
+  /** Nome do usuário logado (BDR/admin) — ex.: quem faz a ligação. */
+  usuario_nome?: string | null;
 };
 
-const PLACEHOLDER_RE = /\{\{(contato_nome|cliente_nome|produto_nome)\}\}/g;
+const PLACEHOLDER_RE = /\{\{(contato_nome|cliente_nome|produto_nome|usuario_nome)\}\}/g;
 
 export function findMissingTemplateVars(body: string, vars: TemplateVars) {
   const missing = new Set<string>();
@@ -26,5 +28,6 @@ export function applyTemplate(body: string, vars: TemplateVars) {
 export const PLACEHOLDER_HELP = [
   { key: "{{contato_nome}}", label: "Nome do contato" },
   { key: "{{cliente_nome}}", label: "Nome do cliente" },
-  { key: "{{produto_nome}}", label: "Nome do produto" }
+  { key: "{{produto_nome}}", label: "Nome do produto" },
+  { key: "{{usuario_nome}}", label: "Seu nome (usuário logado)" }
 ] as const;

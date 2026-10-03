@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { CadastroModal } from "@/components/cadastro-ui";
-import { applyTemplate, findMissingTemplateVars, PLACEHOLDER_HELP } from "@/lib/message-templates";
+import {
+  applyTemplate,
+  findMissingTemplateVars,
+  PLACEHOLDER_HELP,
+  type TemplateVars
+} from "@/lib/message-templates";
 import { whatsAppLink } from "@/lib/format";
 
 export function WhatsAppTemplateModal({
@@ -15,7 +20,7 @@ export function WhatsAppTemplateModal({
   open: boolean;
   onClose: () => void;
   phone: string;
-  vars: { contato_nome?: string; cliente_nome?: string; produto_nome?: string };
+  vars: TemplateVars;
   productId?: number;
 }) {
   const [scripts, setScripts] = useState<Array<{ id: number; title: string; body: string }>>([]);

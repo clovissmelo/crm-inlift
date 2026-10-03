@@ -27,6 +27,7 @@ type Api4comSession = {
   hasOwnExtension: boolean;
   isAdmin: boolean;
   userId: number;
+  userName: string;
 };
 
 const Api4comContext = createContext<Api4comSession | null>(null);
@@ -205,7 +206,9 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
     canDial && onProspeccaoPage && pendingCount > 0 && panelMode !== "result" && !activeCall;
 
   return (
-    <Api4comContext.Provider value={{ canDial, hasOwnExtension, isAdmin, userId: user.id }}>
+    <Api4comContext.Provider
+      value={{ canDial, hasOwnExtension, isAdmin, userId: user.id, userName: user.name }}
+    >
       {showPendingHint ? (
         <div
           className="alert alert-info"
@@ -248,7 +251,7 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
           collapsed={panelCollapsed}
           onCollapse={() => setPanelCollapsed(true)}
           onExpand={() => setPanelCollapsed(false)}
-          activeCall={activeCall}
+          activeCall={activeCall ? { ...activeCall, user_name: user.name } : null}
           scriptBody={callScriptBody}
           scriptReady={callScriptReady}
           onLogUpdated={(log) => setActiveCall((c) => (c ? { ...c, script_flow_log: log } : c))}

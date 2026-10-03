@@ -11,7 +11,10 @@ import {
   type StageEnterActionPayload
 } from "@/lib/pipeline-stage-enter";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
+import { FunilProspeccaoColumnSummary } from "@/components/funil-prospeccao-column-summary";
 import { PageIntro } from "@/components/page-intro";
+import { isProspeccaoPipelineStage } from "@/lib/pipeline-stage-prospeccao";
+import type { ProspeccaoPriorityCountRow } from "@/lib/prospeccao-query";
 import type { Product, User } from "@/lib/types";
 
 type Stage = {
@@ -91,6 +94,28 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
   const [enterNextDate, setEnterNextDate] = useState("");
   const [enterNextTime, setEnterNextTime] = useState("");
   const [enterPauseReasonId, setEnterPauseReasonId] = useState("");
+  const [prospeccaoStats, setProspeccaoStats] = useState<{
+    total: number;
+    byPriority: ProspeccaoPriorityCountRow[];
+  }>({ total: 0, byPriority: [] });
+  const [prospeccaoStatsLoading, setProspeccaoStatsLoading] = useState(true);
+
+  const loadProspeccaoStats = useCallback(async () => {
+    setProspeccaoStatsLoading(true);
+    const params = new URLSearchParams();
+    if (filters.product_id) params.set("product_id", filters.product_id);
+    if (filters.origin_bdr_user_id) params.set("origin_bdr_user_id", filters.origin_bdr_user_id);
+    else if (filters.owner_user_id) params.set("owner_user_id", filters.owner_user_id);
+    if (filters.temperature) params.set("temperature", filters.temperature);
+    if (filters.city) params.set("city", filters.city);
+    if (filters.uf) params.set("uf", filters.uf);
+    const res = await fetch(`/api/prospeccao/priority-counts?${params}`);
+    if (res.ok) {
+      const data = (await res.json()) as { total: number; byPriority: ProspeccaoPriorityCountRow[] };
+      setProspeccaoStats(data);
+    }
+    setProspeccaoStatsLoading(false);
+  }, [filters.product_id, filters.origin_bdr_user_id, filters.owner_user_id, filters.temperature, filters.city, filters.uf]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -113,6 +138,7 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
 
   useEffect(() => {
     void load();
+    void loadProspeccaoStats();
     void fetch("/api/opportunity-loss-reasons").then((r) =>
       r.json().then((d) => setLossReasons((d as { items: Array<{ id: number; name: string }> }).items.filter((i) => i.id)))
     );
@@ -125,7 +151,7 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
         )
       )
     );
-  }, [load]);
+  }, [load, loadProspeccaoStats]);
 
   function resetEnterForm() {
     setEnterNotes("");
@@ -386,19 +412,38 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
       <div className="funil-kanban-scroll">
         <div className="funil-kanban-shell">
           <div className="kanban-board">
-            {stages.map((stage) => (
+            {stages.map((stage) => {
+              const isProspeccaoCol = isProspeccaoPipelineStage(stage);
+              const headerCount = isProspeccaoCol
+                ? prospeccaoStats.total
+                : (byStage.get(stage.id)?.length ?? 0);
+              return (
               <div
                 key={stage.id}
-                className="kanban-column"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => onDropStage(e, stage.id)}
+                className={`kanban-column${isProspeccaoCol ? " kanban-column--prospeccao-queue" : ""}`}
+                onDragOver={(e) => {
+                  if (isProspeccaoCol) return;
+                  e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  if (isProspeccaoCol) return;
+                  onDropStage(e, stage.id);
+                }}
               >
                 <div className="kanban-column-header" style={{ borderTopColor: stage.color }}>
                   {stage.name}
-                  <span className="muted"> ({byStage.get(stage.id)?.length ?? 0})</span>
+                  <span className="muted"> ({headerCount})</span>
                 </div>
                 <div className="kanban-column-body">
-                  {(byStage.get(stage.id) ?? []).map((card) => (
+                  {isProspeccaoCol ? (
+                    <FunilProspeccaoColumnSummary
+                      total={prospeccaoStats.total}
+                      byPriority={prospeccaoStats.byPriority}
+                      loading={prospeccaoStatsLoading}
+                    />
+                  ) : null}
+                  {!isProspeccaoCol
+                    ? (byStage.get(stage.id) ?? []).map((card) => (
                     <div key={card.id} className="kanban-card" draggable onDragStart={(e) => handleDragStart(e, card)}>
                       <Link href={`/oportunidades/${card.id}`} className="kanban-card-title">
                         {card.client_name}
@@ -424,10 +469,12 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
                         <StagePicker card={card} stages={stages} onPick={(to, kind) => beginStageMove(card, to, kind)} />
                       </div>
                     </div>
-                  ))}
+                  ))
+                    : null}
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
 
           <WonLostColumns onDrop={(card, stageId, kind) => beginStageMove(card, stageId, kind)} />

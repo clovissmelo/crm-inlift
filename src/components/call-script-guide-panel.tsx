@@ -19,6 +19,8 @@ export type ActiveCallForScript = {
   client_name: string | null;
   product_name: string | null;
   contact_name: string | null;
+  /** Preenchido no cliente com o usuário logado (quem conduz o script). */
+  user_name?: string | null;
   status: string;
   script_flow_log?: unknown;
 };
@@ -109,9 +111,10 @@ export function CallScriptGuidePanel({
     () => ({
       contato_nome: call.contact_name,
       cliente_nome: call.client_name,
-      produto_nome: call.product_name
+      produto_nome: call.product_name,
+      usuario_nome: call.user_name
     }),
-    [call.contact_name, call.client_name, call.product_name]
+    [call.contact_name, call.client_name, call.product_name, call.user_name]
   );
 
   async function persistLog(entry: Omit<CallScriptLogEntry, "at">) {

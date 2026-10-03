@@ -12,6 +12,7 @@ import {
   resolveQueuePriorityForClient,
   type ResolvedQueuePriority
 } from "@/lib/call-strategy/resolve-queue-priority";
+import { sortPrioritiesForDisplay } from "@/lib/prospeccao-priority-queue-admin";
 
 type RawRow = {
   id: number;
@@ -167,15 +168,20 @@ export type ProspeccaoListItem = ClientListItem & {
 
 type EnrichedRow = RawRow & { resolved: ResolvedQueuePriority; next_follow_up_at: string | null };
 
-export async function queryProspeccaoQueue(filters: ClientFilters) {
+export type ProspeccaoPriorityCountRow = {
+  slug: string;
+  name: string;
+  color: string;
+  sort_order: number;
+  count: number;
+};
+
+async function loadEnrichedProspeccaoRows(filters: ClientFilters): Promise<EnrichedRow[]> {
   const todayStart = spDayStartUtcIso();
   const todayEnd = spDayEndUtcIso();
   const nowIso = new Date().toISOString();
   const { where, params } = buildFilters(filters, todayStart, todayEnd, nowIso);
   const priorityTypes = await listProspeccaoPriorityTypes();
-
-  const limit = filters.limit ?? 50;
-  const offset = filters.offset ?? 0;
 
   const rows = await all<RawRow>(
     `
@@ -247,7 +253,7 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
     params
   );
 
-  const enriched: EnrichedRow[] = rows.map((row) => {
+  return rows.map((row) => {
     const phoneKinds = classifyPhones(row.phones, row.whatsapps);
     const resolved = resolveQueuePriorityForClient(
       {
@@ -266,7 +272,9 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
       next_follow_up_at: row.pending_return_at
     };
   });
+}
 
+function applyProspeccaoListFilters(enriched: EnrichedRow[], filters: ClientFilters): EnrichedRow[] {
   let filtered = enriched;
   if (filters.prioridade) {
     filtered = filtered.filter((r) => r.resolved.slug === filters.prioridade);
@@ -280,6 +288,33 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
       );
     });
   }
+  return filtered;
+}
+
+export async function countProspeccaoQueueByPriority(
+  filters: ClientFilters
+): Promise<{ total: number; byPriority: ProspeccaoPriorityCountRow[] }> {
+  const priorityTypes = await listProspeccaoPriorityTypes();
+  const enriched = applyProspeccaoListFilters(await loadEnrichedProspeccaoRows(filters), filters);
+  const counts = new Map<string, number>();
+  for (const row of enriched) {
+    counts.set(row.resolved.slug, (counts.get(row.resolved.slug) ?? 0) + 1);
+  }
+  const byPriority = sortPrioritiesForDisplay(priorityTypes).map((t) => ({
+    slug: t.slug,
+    name: t.name,
+    color: t.color,
+    sort_order: t.sort_order,
+    count: counts.get(t.slug) ?? 0
+  }));
+  return { total: enriched.length, byPriority };
+}
+
+export async function queryProspeccaoQueue(filters: ClientFilters) {
+  const limit = filters.limit ?? 50;
+  const offset = filters.offset ?? 0;
+
+  let filtered = applyProspeccaoListFilters(await loadEnrichedProspeccaoRows(filters), filters);
 
   filtered.sort((a, b) => {
     const cmp = compareResolvedQueuePriority(

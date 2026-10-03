@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Mail, Phone, Plus, RefreshCw, Star, Trash2 } from "lucide-react";
+import { Mail, Phone, Plus, RefreshCw, Search, Star, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ApproachWorkflowModal } from "@/components/approach-workflow-modal";
@@ -13,6 +13,7 @@ import { ClientDialPhonesPanel } from "@/components/client-dial-phones-panel";
 import { ClientReconsultModal } from "@/components/client-reconsult-modal";
 import { formatSpDateTime } from "@/lib/datetime";
 import { externalWebHref, formatCnpj, instagramHref } from "@/lib/format";
+import { buildSocioDiscoverySearchUrl, isSocioJobTitle } from "@/lib/socio-discovery-search";
 import { LeadQualificationPicker } from "@/components/lead-qualification-picker";
 import { parseLeadQualification, type LeadQualification } from "@/lib/lead-qualification";
 import { CONTACT_ORIGIN, formatContactOrigin } from "@/lib/contact-origin";
@@ -1122,6 +1123,9 @@ export function ClientDetailView({
           <ContactReadOnly
             key={contact.id}
             contact={contact}
+            companyName={clientDisplayName}
+            companyCity={initialClient.city}
+            companyUf={initialClient.uf}
             lastCall={contactLastCalls[contact.id]}
             onEdit={() => openContactEdit(contact)}
             onSetPrimary={() => void markPrimaryPhone(contact.id)}
@@ -1207,12 +1211,18 @@ export function ClientDetailView({
 
 function ContactReadOnly({
   contact,
+  companyName,
+  companyCity,
+  companyUf,
   lastCall,
   onEdit,
   onSetPrimary,
   settingPrimary
 }: {
   contact: ClientContact;
+  companyName: string;
+  companyCity: string | null;
+  companyUf: string | null;
   lastCall?: ContactLastCallAttempt;
   onEdit: () => void;
   onSetPrimary: () => void;
@@ -1220,12 +1230,33 @@ function ContactReadOnly({
 }) {
   const canBePrimary = hasText(contact.phone) || hasText(contact.whatsapp);
   const isPrimary = Boolean(contact.is_primary_phone);
+  const showSocioSearch = isSocioJobTitle(contact.job_title) && hasText(contact.name);
+  const socioSearchHref = showSocioSearch
+    ? buildSocioDiscoverySearchUrl({
+        socioName: contact.name,
+        companyName,
+        city: companyCity,
+        uf: companyUf
+      })
+    : null;
 
   return (
     <div className="client-contact-readonly">
       <div className="client-contact-readonly-body">
-        <div>
+        <div className="client-contact-name-row">
           <strong>{contact.name}</strong>
+          {showSocioSearch && socioSearchHref ? (
+            <a
+              href={socioSearchHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-icon-sm client-contact-socio-search"
+              title="Buscar nome do sócio + empresa no Google (notícias, redes, contatos)"
+              aria-label={`Buscar ${contact.name} no Google`}
+            >
+              <Search size={16} aria-hidden />
+            </a>
+          ) : null}
           {hasText(contact.job_title) ? <span className="muted"> · {contact.job_title}</span> : null}
           {isPrimary ? (
             <span className="badge badge-contact-primary" title="Usado em Ligar e prospecção">

@@ -99,8 +99,8 @@ function funnelCellLabel(
   return { text: "—", muted: true };
 }
 
-export function ProspeccaoStrategyAdmin() {
-  const [tab, setTab] = useState<"rules" | "queue">("rules");
+export function ProspeccaoStrategyAdmin({ initialTab = "rules" }: { initialTab?: "rules" | "queue" }) {
+  const [tab, setTab] = useState<"rules" | "queue">(initialTab);
   const [rules, setRules] = useState<AttendanceRuleItem[]>([]);
   const [priorities, setPriorities] = useState<ProspeccaoPriorityTypeRow[]>([]);
   const [settings, setSettings] = useState<CallStrategySettings | null>(null);

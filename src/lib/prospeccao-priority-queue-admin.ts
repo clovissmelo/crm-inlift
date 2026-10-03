@@ -89,7 +89,5 @@ export function effectiveSortOrderForPatch(
   row: ProspeccaoPriorityTypeRow,
   requested: number | undefined
 ): number {
-  if (row.queue_anchor === "start") return 1;
-  if (row.queue_anchor === "end") return 100_000;
   return requested ?? row.sort_order;
 }

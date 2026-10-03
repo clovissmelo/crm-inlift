@@ -18,7 +18,7 @@ const patchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   description: z.string().max(500).nullable().optional(),
   color: z.string().max(32).optional(),
-  sort_order: z.coerce.number().int().min(2).max(99_999).optional(),
+  sort_order: z.coerce.number().int().min(1).max(999_999).optional(),
   rule_kind: creatableRuleKindEnum.optional(),
   rule_params: z.record(z.string(), z.unknown()).optional()
 });
