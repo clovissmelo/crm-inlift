@@ -29,14 +29,24 @@ export function CadastroPageHeader({
 export function CadastroRowActions({
   onEdit,
   onDelete,
-  canDelete
+  canDelete,
+  onTest
 }: {
   onEdit: () => void;
   onDelete?: () => void | Promise<void>;
   canDelete?: boolean;
+  onTest?: () => void;
 }) {
   return (
     <div className="cadastro-list-actions">
+      {onTest ? (
+        <button type="button" className="btn btn-result-test" onClick={onTest}>
+          <span className="btn-result-test-icon" aria-hidden>
+            ▶
+          </span>
+          Testar
+        </button>
+      ) : null}
       <button type="button" className="btn" onClick={onEdit}>
         Editar
       </button>

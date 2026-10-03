@@ -2,7 +2,7 @@
 
 import "./lead-gen-execution.css";
 import Link from "next/link";
-import { Trash2 } from "lucide-react";
+import { Sparkles, Trash2 } from "lucide-react";
 import {
   AdminNovosLeadsCityPicker,
   type CitySelectionPayload,
@@ -1016,11 +1016,12 @@ export function AdminNovosLeadsWizard() {
           </div>
           <div className="lead-gen-start-actions">
             <button
-              className="btn btn-primary"
+              className="btn btn-primary lead-gen-capture-btn"
               type="button"
               disabled={starting || shownRunActive || anpPreviewLoading}
               onClick={() => void openAnpPreviewModal()}
             >
+              {anpPreviewLoading ? null : <Sparkles size={22} strokeWidth={2.25} aria-hidden />}
               {anpPreviewLoading ? "Consultando ANP…" : "Capturar Leads"}
             </button>
             {shownRunActive && shownRun ? (

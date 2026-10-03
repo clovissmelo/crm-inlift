@@ -5,6 +5,7 @@ import { Mail, Phone, Plus, RefreshCw, Search, Star, Trash2 } from "lucide-react
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ApproachWorkflowModal } from "@/components/approach-workflow-modal";
+import { ScheduleContactModal } from "@/components/schedule-contact-modal";
 import { CadastroModal, requestCadastroDelete } from "@/components/cadastro-ui";
 import { ClientContactShortcuts, type ContactDialOption } from "@/components/client-contact-shortcuts";
 import { MeetingFormModal } from "@/components/meeting-form-modal";
@@ -188,6 +189,7 @@ export function ClientDetailView({
   const [savingProspeccao, setSavingProspeccao] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [approachOpen, setApproachOpen] = useState(!!followUpId);
+  const [scheduleContactOpen, setScheduleContactOpen] = useState(false);
   const [meetingOpen, setMeetingOpen] = useState(!!openMeetingForm);
   const [meetingProductId, setMeetingProductId] = useState<number | undefined>();
   const [reconsultOpen, setReconsultOpen] = useState(false);
@@ -658,6 +660,9 @@ export function ClientDetailView({
             >
               Registrar abordagem
             </button>
+            <button className="btn btn-primary" type="button" onClick={() => setScheduleContactOpen(true)}>
+              Agendar contato
+            </button>
             <button
               className="btn btn-primary"
               type="button"
@@ -745,6 +750,17 @@ export function ClientDetailView({
         defaultContactId={primaryContact?.id}
         defaultProductId={linkedProducts[0]?.product_id}
         followUpId={followUpId}
+      />
+      <ScheduleContactModal
+        open={scheduleContactOpen}
+        onClose={() => setScheduleContactOpen(false)}
+        clientId={initialClient.id}
+        clientName={clientDisplayName}
+        products={allProducts.filter((p) => linkedProducts.some((lp) => lp.product_id === p.id) || linkedProducts.length === 0)}
+        defaultProductId={linkedProducts[0]?.product_id}
+        inProspeccao={inProspeccao}
+        bdrUserId={initialClient.bdr_user_id}
+        bdrs={bdrs.map((b) => ({ id: b.id, name: b.name }))}
       />
 
       <CadastroModal

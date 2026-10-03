@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { FilterBar, FilterSelect } from "@/components/filter-bar";
@@ -61,6 +62,32 @@ export function AgendamentosView({
   const [editContacts, setEditContacts] = useState<ClientContact[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [contactReminders, setContactReminders] = useState<
+    Array<{ id: number; client_id: number; client_name: string; scheduled_at: string }>
+  >([]);
+
+  const loadContactReminders = useCallback(async () => {
+    const base = new URLSearchParams();
+    if (scope === "mine") base.set("bdr_user_id", String(currentUserId));
+    if (productId) base.set("product_id", productId);
+    const [overdueRes, todayRes] = await Promise.all([
+      fetch(`/api/follow-ups?section=overdue&${base}`),
+      fetch(`/api/follow-ups?section=today&${base}`)
+    ]);
+    const overdue = overdueRes.ok
+      ? ((await overdueRes.json()) as { items: typeof contactReminders }).items ?? []
+      : [];
+    const today = todayRes.ok ? ((await todayRes.json()) as { items: typeof contactReminders }).items ?? [] : [];
+    const seen = new Set<number>();
+    const merged: typeof contactReminders = [];
+    for (const row of [...overdue, ...today]) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      merged.push(row);
+    }
+    merged.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+    setContactReminders(merged.slice(0, 8));
+  }, [scope, currentUserId, productId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,7 +104,8 @@ export function AgendamentosView({
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadContactReminders();
+  }, [load, loadContactReminders]);
 
   useEffect(() => {
     setSelectedId(null);
@@ -248,6 +276,21 @@ export function AgendamentosView({
       </FilterBar>
 
       {loading ? <p className="muted">Carregando…</p> : null}
+
+      {contactReminders.length > 0 ? (
+        <aside className="agendamentos-contact-reminders" aria-label="Contatos agendados para ligação">
+          <p className="agendamentos-contact-reminders-title">Contatos agendados (não ocupam a agenda de reuniões)</p>
+          <ul>
+            {contactReminders.map((f) => (
+              <li key={f.id}>
+                <Link href={`/clientes/${f.client_id}`}>
+                  {formatSpDateTime(f.scheduled_at)} — {f.client_name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      ) : null}
 
       {viewMode === "calendar" ? (
         <MeetingsCalendar

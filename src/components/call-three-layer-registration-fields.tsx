@@ -1,6 +1,6 @@
 "use client";
 
-import { ApproachDecisionMakerField } from "@/components/approach-decision-maker-field";
+import { CallContactLayerField } from "@/components/call-contact-layer-field";
 import {
   matchTechnicalResultFromCatalog,
   suggestedCommercialSlugForContact,
@@ -8,6 +8,8 @@ import {
   suggestedContactSlugForTechnical,
   type TechnicalResultTypeRow
 } from "@/lib/classifications/technical-result-match";
+import type { ContactLayerChoice } from "@/lib/attendance/call-contact-layer";
+import { resolveContactLayerOptions } from "@/lib/attendance/call-contact-layer";
 
 export type ContactOutcomeOption = {
   id: number;
@@ -73,73 +75,77 @@ export function applyThreeLayerSuggestions(input: {
 }
 
 export function CallThreeLayerRegistrationFields({
+  callAnswered,
   technicalLabel,
   contactTypes,
-  contactOutcomeId,
-  onContactOutcomeChange,
-  contactLocked,
+  contactLayerChoice,
+  onContactLayerChoiceChange,
+  contactLayerLocked,
   commercialTypes,
-  compatIds,
   allowedCommercialIds,
   commercialId,
   onCommercialChange,
   commercialLocked,
-  requiresConversation,
+  compatMap,
   contactedPersonName,
   onContactedPersonNameChange,
   contactedPersonJobTitle,
   onContactedPersonJobTitleChange,
   contactedPersonNotes,
   onContactedPersonNotesChange,
-  hideContactOutcome,
-  showDecisionMaker,
-  spokeWithDecisionMaker,
-  onSpokeWithDecisionMakerChange,
   invalidFields,
   disabled
 }: {
+  callAnswered: boolean;
   technicalLabel: string;
   contactTypes: ContactOutcomeOption[];
-  contactOutcomeId: string;
-  onContactOutcomeChange: (id: string) => void;
-  contactLocked?: boolean;
+  contactLayerChoice: ContactLayerChoice | null;
+  onContactLayerChoiceChange: (v: ContactLayerChoice) => void;
+  contactLayerLocked?: boolean;
   commercialTypes: CommercialOption[];
-  compatIds: number[] | null;
-  /** Quando definido (ex.: matriz técnico×comercial), filtra opções comerciais. */
   allowedCommercialIds?: number[] | null;
   commercialId: string;
   onCommercialChange: (id: string) => void;
   commercialLocked?: boolean;
-  requiresConversation?: boolean;
+  compatMap: Record<string, number[]>;
   contactedPersonName: string;
   onContactedPersonNameChange: (v: string) => void;
   contactedPersonJobTitle: string;
   onContactedPersonJobTitleChange: (v: string) => void;
   contactedPersonNotes: string;
   onContactedPersonNotesChange: (v: string) => void;
-  /** Substitui “Contato realizado” pela pergunta sobre decisor (valor gravado via contato compatível). */
-  hideContactOutcome?: boolean;
-  showDecisionMaker?: boolean;
-  spokeWithDecisionMaker?: boolean | null;
-  onSpokeWithDecisionMakerChange?: (v: boolean) => void;
   invalidFields?: Partial<
-    Record<"commercial" | "contact" | "decision" | "personName" | "personJob" | "personNotes", boolean>
+    Record<"commercial" | "contact" | "personName" | "personJob" | "personNotes", boolean>
   >;
   disabled?: boolean;
 }) {
   const filteredCommercial =
     allowedCommercialIds && allowedCommercialIds.length > 0
       ? commercialTypes.filter((c) => allowedCommercialIds.includes(c.id))
-      : compatIds && contactOutcomeId
-        ? commercialTypes.filter((c) => compatIds.includes(c.id))
-        : commercialTypes;
+      : commercialTypes;
+
+  const selectedCommercial = commercialTypes.find((c) => String(c.id) === commercialId);
+  const nenhumType = contactTypes.find((c) => c.slug === "nenhum_contato");
+  const layerOptions = resolveContactLayerOptions({
+    callAnswered,
+    commercialSlug: selectedCommercial?.slug ?? null,
+    nenhumContatoTypeId: nenhumType?.id ?? null,
+    commercialTypeId: selectedCommercial?.id ?? null,
+    compatMap
+  });
+
+  const showPersonFields =
+    contactLayerChoice === "outra" || contactLayerChoice === "decisor";
 
   return (
     <div className="call-three-layer-fields">
       <div className="field">
-        <label className="label">Resultado da ligação (telefonia)</label>
+        <label className="label">Atendeu?</label>
         <p style={{ margin: 0, fontSize: "0.9375rem" }}>
-          <strong>{technicalLabel || "Aguardando retorno da telefonia"}</strong>
+          <strong>{callAnswered ? "Sim" : "Não"}</strong>
+          <span className="muted" style={{ fontSize: "0.8125rem", marginLeft: 8 }}>
+            ({technicalLabel || "telefonia"})
+          </span>
         </p>
       </div>
 
@@ -167,7 +173,7 @@ export function CallThreeLayerRegistrationFields({
         )}
         {filteredCommercial.length === 0 ? (
           <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
-            Nenhum resultado comercial associado a este resultado da ligação.
+            Nenhum resultado comercial disponível para esta ligação.
           </p>
         ) : null}
         {invalidFields?.commercial ? (
@@ -175,53 +181,30 @@ export function CallThreeLayerRegistrationFields({
         ) : null}
       </div>
 
-      {showDecisionMaker ? (
-        <ApproachDecisionMakerField
-          value={spokeWithDecisionMaker ?? null}
-          onChange={(v) => onSpokeWithDecisionMakerChange?.(v)}
+      {commercialId ? (
+        <CallContactLayerField
+          options={layerOptions}
+          value={contactLayerChoice}
+          onChange={onContactLayerChoiceChange}
           disabled={disabled}
-          invalid={invalidFields?.decision}
+          invalid={invalidFields?.contact}
+          locked={contactLayerLocked}
+          lockedLabel={
+            contactLayerLocked && contactLayerChoice === "ninguem" && !callAnswered
+              ? "Ninguém (não atendeu)"
+              : contactLayerLocked && contactLayerChoice === "ninguem"
+                ? "Ninguém"
+                : undefined
+          }
         />
       ) : null}
 
-      {contactTypes.length > 0 && !hideContactOutcome ? (
-        <div className={invalidFields?.contact ? "field field--invalid" : "field"}>
-          <label className="label">Contato realizado *</label>
-          {contactLocked && contactOutcomeId ? (
-            <p style={{ margin: 0, fontSize: "0.9375rem" }}>
-              <strong>{contactTypes.find((c) => String(c.id) === contactOutcomeId)?.name}</strong>
-            </p>
-          ) : (
-            <select
-              className="select"
-              value={contactOutcomeId}
-              onChange={(e) => onContactOutcomeChange(e.target.value)}
-              required
-              disabled={disabled || contactLocked}
-            >
-              <option value="">Selecione…</option>
-              {contactTypes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          )}
-          {contactLocked ? (
-            <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
-              Sugerido automaticamente pelo resultado técnico.
-            </p>
-          ) : null}
-          {invalidFields?.contact ? (
-            <p className="call-reg-invalid-hint">Selecione o contato realizado.</p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {requiresConversation && !hideContactOutcome ? (
+      {showPersonFields ? (
         <>
           <div className={invalidFields?.personName ? "field field--invalid" : "field"}>
-            <label className="label">Nome da pessoa *</label>
+            <label className="label">
+              {contactLayerChoice === "decisor" ? "Nome do decisor *" : "Nome de quem atendeu *"}
+            </label>
             <input
               className="input"
               value={contactedPersonName}
@@ -229,6 +212,9 @@ export function CallThreeLayerRegistrationFields({
               disabled={disabled}
               required
             />
+            {invalidFields?.personName ? (
+              <p className="call-reg-invalid-hint">Informe o nome para o histórico.</p>
+            ) : null}
           </div>
           <div className="field">
             <label className="label">Função / cargo</label>

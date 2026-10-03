@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ClientContactShortcuts } from "@/components/client-contact-shortcuts";
 import { ProspeccaoPriorityBadge } from "@/components/prospeccao-priority-badge";
+import { ProspeccaoPriorityLegend } from "@/components/prospeccao-priority-legend";
+import type { ProspeccaoPriorityLegendItem } from "@/lib/prospeccao-priority-legend-text";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
 import { PageIntro } from "@/components/page-intro";
 import type { Company, Product, User } from "@/lib/types";
@@ -16,7 +18,8 @@ export function ProspeccaoListView({
   products,
   bdrs,
   companies,
-  priorityFilters
+  priorityFilters,
+  priorityLegend
 }: {
   initialItems: ProspeccaoListItem[];
   initialTotal: number;
@@ -24,6 +27,7 @@ export function ProspeccaoListView({
   bdrs: User[];
   companies: Company[];
   priorityFilters: Array<{ slug: string; name: string }>;
+  priorityLegend: ProspeccaoPriorityLegendItem[];
 }) {
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
@@ -130,6 +134,8 @@ export function ProspeccaoListView({
         </FilterSelect>
       </FilterBar>
 
+      <div className="prospeccao-page-layout">
+        <div className="prospeccao-page-main">
       <div className="panel table-wrap">
         {loading ? <p className="muted">Carregando…</p> : null}
         <table className="data-table">
@@ -203,6 +209,13 @@ export function ProspeccaoListView({
         <button className="btn" type="button" disabled={offset + limit >= total} onClick={() => setOffset((o) => o + limit)}>
           Próxima
         </button>
+      </div>
+        </div>
+        <ProspeccaoPriorityLegend
+          priorities={priorityLegend}
+          activeSlug={filters.prioridade || undefined}
+          onSelectSlug={(slug) => updateFilter({ prioridade: slug || "" })}
+        />
       </div>
     </div>
   );

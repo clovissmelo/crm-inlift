@@ -15,19 +15,22 @@ import {
 } from "@/components/call-three-layer-registration-fields";
 import type { OperationalAction } from "@/lib/attendance/operational-actions";
 import {
-  filterCommercialByContactCompat,
   listAnsweredCommercialOptions,
   resolveAllowedCommercialIds,
   resolveEffectiveBdrRules
 } from "@/lib/attendance/bdr-registration";
 import type { TechnicalResultTypeRow } from "@/lib/classifications/technical-result-match";
 import { formatCallScriptLogForNotes, normalizeCallScriptLog } from "@/lib/call-script-log";
-import { ApproachNextStepField, useSyncNextTypeWithResult } from "@/components/approach-next-step-field";
+import { ApproachMinimalScheduleField } from "@/components/approach-minimal-schedule-field";
+import { type ApproachNextActionKey } from "@/lib/approach-next-actions";
 import {
-  shouldShowNextStepField,
-  type ApproachNextActionKey,
-  validateNextActionChoice
-} from "@/lib/approach-next-actions";
+  contactSlugForLayerChoice,
+  contactLayerRequiresPersonName,
+  layerChoiceFromContactSlug,
+  resolveContactLayerOptions,
+  spokeWithDecisionMakerForChoice,
+  type ContactLayerChoice
+} from "@/lib/attendance/call-contact-layer";
 import { Headphones } from "lucide-react";
 import { confirmProceedIfClientHasAgenda } from "@/lib/client-agenda-warning";
 import { callRequiresComplementRegistration } from "@/lib/api4com/call-registration";
@@ -171,7 +174,8 @@ export function Api4comCallResultForm({
   const [error, setError] = useState<string | null>(null);
   const [resultLockedByIntegration, setResultLockedByIntegration] = useState(false);
   const [contactLocked, setContactLocked] = useState(false);
-  const [spokeWithDecisionMaker, setSpokeWithDecisionMaker] = useState<boolean | null>(null);
+  const [contactLayerChoice, setContactLayerChoice] = useState<ContactLayerChoice | null>(null);
+  const [contactLayerLocked, setContactLayerLocked] = useState(false);
   const [, setTechnicalTypes] = useState<TechnicalResultTypeRow[]>([]);
   const [contactTypes, setContactTypes] = useState<ContactOutcomeOption[]>([]);
   const [compatMap, setCompatMap] = useState<Record<string, number[]>>({});
@@ -186,7 +190,6 @@ export function Api4comCallResultForm({
   const [fieldErrors, setFieldErrors] = useState<{
     commercial?: boolean;
     contact?: boolean;
-    decision?: boolean;
     notes?: boolean;
     personName?: boolean;
     nextSchedule?: boolean;
@@ -235,6 +238,11 @@ export function Api4comCallResultForm({
     setResultTypeId(suggestions.commercialId);
     setContactLocked(suggestions.lockContact);
     setResultLockedByIntegration(suggestions.lockCommercial);
+    const initialChoice = layerChoiceFromContactSlug(
+      contacts.find((c) => String(c.id) === suggestions.contactId)?.slug
+    );
+    setContactLayerChoice(initialChoice);
+    setContactLayerLocked(suggestions.lockContact);
 
     setStep("result");
   }
@@ -355,6 +363,8 @@ export function Api4comCallResultForm({
     setResultLockedByIntegration(false);
     setContactLocked(false);
     setContactOutcomeId("");
+    setContactLayerChoice(null);
+    setContactLayerLocked(false);
     setTechnicalSlug(null);
     setTechnicalLabel("");
     setNotes("");
@@ -378,18 +388,15 @@ export function Api4comCallResultForm({
   }, [layout, modalTitle, onModalTitleChange]);
 
   const selectedResultBase = resultTypes.find((r) => String(r.id) === resultTypeId);
-  const selectedContact = contactTypes.find((c) => String(c.id) === contactOutcomeId);
-  const compatIds = contactOutcomeId ? compatMap[contactOutcomeId] ?? null : null;
-
   const allowedCommercialIds = useMemo(
     () =>
       resolveAllowedCommercialIds(
         attendanceRules,
         resultTypes.map((r) => ({ id: r.id, slug: r.slug, name: r.name })),
-        contactOutcomeId || null,
+        null,
         compatMap
       ),
-    [attendanceRules, resultTypes, contactOutcomeId, compatMap]
+    [attendanceRules, resultTypes, compatMap]
   );
 
   const callWasAnswered = useMemo(
@@ -430,16 +437,6 @@ export function Api4comCallResultForm({
     return resultTypes.filter((r) => base.some((b) => b.id === r.id));
   }, [resultTypes, attendanceRules]);
 
-  const commercialOptionsForContact = useMemo(
-    () =>
-      filterCommercialByContactCompat(
-        bdrResultTypes.map((r) => ({ id: r.id, slug: r.slug, name: r.name })),
-        contactOutcomeId,
-        compatMap
-      ),
-    [bdrResultTypes, contactOutcomeId, compatMap]
-  );
-
   const selectedResult = useMemo(() => {
     if (!selectedResultBase) return undefined;
     const effective = resolveEffectiveBdrRules(selectedResultBase, attendanceRules);
@@ -455,14 +452,46 @@ export function Api4comCallResultForm({
     };
   }, [selectedResultBase, attendanceRules]);
 
+  const nenhumContatoType = useMemo(
+    () => contactTypes.find((c) => c.slug === "nenhum_contato"),
+    [contactTypes]
+  );
+
   useEffect(() => {
-    if (!contactOutcomeId || resultLockedByIntegration) return;
-    const contact = contactTypes.find((c) => String(c.id) === contactOutcomeId);
-    if (contact?.slug === "nenhum_contato") {
-      const sem = resultTypes.find((r) => r.slug === "sem_contato");
-      if (sem) setResultTypeId(String(sem.id));
+    if (!resultTypeId || resultLockedByIntegration || !callWasAnswered) return;
+    const commercial = resultTypes.find((r) => String(r.id) === resultTypeId);
+    if (!commercial) return;
+
+    if (commercial.slug === "sem_contato" && nenhumContatoType) {
+      setContactLayerChoice("ninguem");
+      setContactOutcomeId(String(nenhumContatoType.id));
+      setContactLayerLocked(true);
+      return;
     }
-  }, [contactOutcomeId, contactTypes, resultTypes, resultLockedByIntegration]);
+
+    setContactLayerLocked(false);
+    const options = resolveContactLayerOptions({
+      callAnswered: callWasAnswered,
+      commercialSlug: commercial.slug,
+      nenhumContatoTypeId: nenhumContatoType?.id ?? null,
+      commercialTypeId: commercial.id,
+      compatMap
+    });
+    setContactLayerChoice((prev) => {
+      if (prev && !options.includes(prev)) {
+        setContactOutcomeId("");
+        return null;
+      }
+      return prev;
+    });
+  }, [resultTypeId, resultTypes, resultLockedByIntegration, callWasAnswered, nenhumContatoType, compatMap]);
+
+  useEffect(() => {
+    if (!contactLayerChoice) return;
+    const slug = contactSlugForLayerChoice(contactLayerChoice);
+    const contact = contactTypes.find((c) => c.slug === slug);
+    if (contact) setContactOutcomeId(String(contact.id));
+  }, [contactLayerChoice, contactTypes]);
   const effectiveProductId = useMemo(() => {
     if (call?.product_id != null) return call.product_id;
     const ids = ctx?.client_product_ids ?? [];
@@ -478,20 +507,16 @@ export function Api4comCallResultForm({
 
   const showNotesField = selectedResult?.collect_notes === true;
   const showRegistrationSteps = selectedResult?.require_final_registration !== false;
-  const showDecisionMakerField = selectedResult?.ask_decision_maker === true;
+  const showReturnSchedule = selectedResult?.require_schedule_return === true;
+  const showMeetingSchedule = selectedResult?.requires_meeting === true;
+  const spokeWithDecisionMaker = spokeWithDecisionMakerForChoice(contactLayerChoice);
 
   useEffect(() => {
-    setSpokeWithDecisionMaker(null);
-  }, [resultTypeId]);
-
-  useSyncNextTypeWithResult(selectedResult, nextType, setNextType);
-
-  useEffect(() => {
-    if (!showDecisionMakerField || spokeWithDecisionMaker === null) return;
-    const slug = spokeWithDecisionMaker ? "falou_responsavel" : "falou_outra_pessoa";
-    const contact = contactTypes.find((c) => c.slug === slug);
-    if (contact) setContactOutcomeId(String(contact.id));
-  }, [showDecisionMakerField, spokeWithDecisionMaker, contactTypes]);
+    if (!selectedResult) return;
+    if (selectedResult.requires_meeting) setNextType("schedule_meeting");
+    else if (selectedResult.require_schedule_return) setNextType("schedule_return");
+    else setNextType("none");
+  }, [selectedResult?.id, selectedResult?.requires_meeting, selectedResult?.require_schedule_return]);
   const nextDial = useMemo(() => {
     const s = ctx?.call_strategy?.suggested;
     if (s) {
@@ -614,32 +639,21 @@ export function Api4comCallResultForm({
       err.commercial = true;
       mark("Selecione o resultado comercial.");
     }
-    if (showDecisionMakerField && spokeWithDecisionMaker === null) {
-      err.decision = true;
-      mark("Informe se houve contato com o decisor.");
-    } else if (!contactOutcomeId) {
-      if (showDecisionMakerField) err.decision = true;
-      else err.contact = true;
-      mark(
-        showDecisionMakerField ? "Informe se houve contato com o decisor." : "Selecione o contato realizado."
-      );
+    if (!contactLayerChoice || !contactOutcomeId) {
+      err.contact = true;
+      mark("Selecione o contato na ligação.");
     }
-    if (selectedContact?.requires_conversation && !showDecisionMakerField && !contactedPersonName.trim()) {
+    if (contactLayerRequiresPersonName(contactLayerChoice) && !contactedPersonName.trim()) {
       err.personName = true;
-      mark("Informe o nome da pessoa contatada.");
+      mark("Informe o nome para o histórico.");
     }
     if (selectedResult?.collect_notes === true && !notes.trim()) {
       err.notes = true;
       mark("Informe as observações exigidas para este resultado.");
     }
     if (selectedResult && showRegistrationSteps) {
-      const nextErr = validateNextActionChoice(selectedResult, nextType);
-      if (nextErr) mark(nextErr);
-      if (selectedResult.requires_meeting && nextType !== "schedule_meeting") {
-        mark("Este resultado exige reunião agendada.");
-      }
       if (
-        (nextType === "schedule_return" || nextType === "schedule_meeting") &&
+        (showReturnSchedule || showMeetingSchedule) &&
         (!nextDate.trim() || !nextTime.trim())
       ) {
         err.nextSchedule = true;
@@ -730,7 +744,7 @@ export function Api4comCallResultForm({
         registration_status: registrationStatus,
         notes: finalNotes || null,
         external_call_id: call.api4com_call_id,
-        spoke_with_decision_maker: showDecisionMakerField ? spokeWithDecisionMaker : null,
+        spoke_with_decision_maker: spokeWithDecisionMaker,
         next_action
       })
     });
@@ -885,18 +899,17 @@ export function Api4comCallResultForm({
             </div>
           ) : null}
           <CallThreeLayerRegistrationFields
+            callAnswered={callWasAnswered}
             technicalLabel={technicalLabel}
             contactTypes={contactTypes}
-            contactOutcomeId={contactOutcomeId}
-            onContactOutcomeChange={(id) => {
-              setContactOutcomeId(id);
-              setFieldErrors((e) => ({ ...e, contact: false }));
-              if (!resultLockedByIntegration) setResultTypeId("");
+            contactLayerChoice={contactLayerChoice}
+            onContactLayerChoiceChange={(v) => {
+              setContactLayerChoice(v);
+              setFieldErrors((e) => ({ ...e, contact: false, personName: false }));
             }}
-            contactLocked={contactLocked}
-            commercialTypes={commercialOptionsForContact.map((r) => {
-              const full = bdrResultTypes.find((x) => x.id === r.id)!;
-              const effective = resolveEffectiveBdrRules(full, attendanceRules);
+            contactLayerLocked={contactLayerLocked || contactLocked}
+            commercialTypes={bdrResultTypes.map((r) => {
+              const effective = resolveEffectiveBdrRules(r, attendanceRules);
               return {
                 id: r.id,
                 slug: r.slug,
@@ -906,28 +919,25 @@ export function Api4comCallResultForm({
                 require_schedule_return: effective.require_schedule_return
               };
             })}
-            compatIds={compatIds}
             allowedCommercialIds={allowedCommercialIds}
             commercialId={resultTypeId}
             onCommercialChange={(id) => {
               setResultTypeId(id);
               setFieldErrors((e) => ({ ...e, commercial: false }));
+              if (!resultLockedByIntegration) {
+                setContactLayerChoice(null);
+                setContactOutcomeId("");
+                setContactLayerLocked(false);
+              }
             }}
             commercialLocked={resultLockedByIntegration}
-            requiresConversation={selectedContact?.requires_conversation === true}
+            compatMap={compatMap}
             contactedPersonName={contactedPersonName}
             onContactedPersonNameChange={setContactedPersonName}
             contactedPersonJobTitle={contactedPersonJobTitle}
             onContactedPersonJobTitleChange={setContactedPersonJobTitle}
             contactedPersonNotes={contactedPersonNotes}
             onContactedPersonNotesChange={setContactedPersonNotes}
-            hideContactOutcome={showDecisionMakerField}
-            showDecisionMaker={showDecisionMakerField}
-            spokeWithDecisionMaker={spokeWithDecisionMaker}
-            onSpokeWithDecisionMakerChange={(v) => {
-              setSpokeWithDecisionMaker(v);
-              setFieldErrors((e) => ({ ...e, decision: false, contact: false }));
-            }}
             invalidFields={fieldErrors}
             disabled={loading}
           />
@@ -946,11 +956,9 @@ export function Api4comCallResultForm({
               {fieldErrors.notes ? <p className="call-reg-invalid-hint">Preencha as observações.</p> : null}
             </div>
           ) : null}
-          {showRegistrationSteps && shouldShowNextStepField(selectedResult) ? (
-            <ApproachNextStepField
-              result={selectedResult}
-              nextType={nextType}
-              onNextTypeChange={setNextType}
+          {showRegistrationSteps && showMeetingSchedule ? (
+            <ApproachMinimalScheduleField
+              mode="meeting"
               nextDate={nextDate}
               nextTime={nextTime}
               onNextDateChange={(v) => {
@@ -963,11 +971,28 @@ export function Api4comCallResultForm({
               }}
               invalidSchedule={fieldErrors.nextSchedule}
             />
-          ) : showRegistrationSteps ? null : (
+          ) : null}
+          {showRegistrationSteps && showReturnSchedule && !showMeetingSchedule ? (
+            <ApproachMinimalScheduleField
+              mode="return"
+              nextDate={nextDate}
+              nextTime={nextTime}
+              onNextDateChange={(v) => {
+                setNextDate(v);
+                setFieldErrors((f) => ({ ...f, nextSchedule: false }));
+              }}
+              onNextTimeChange={(v) => {
+                setNextTime(v);
+                setFieldErrors((f) => ({ ...f, nextSchedule: false }));
+              }}
+              invalidSchedule={fieldErrors.nextSchedule}
+            />
+          ) : null}
+          {!showRegistrationSteps ? (
             <p className="muted" style={{ fontSize: "0.8125rem" }}>
               Este resultado não exige complemento de registro — confirme para concluir a ligação.
             </p>
-          )}
+          ) : null}
           <div style={{ display: "flex", justifyContent: "stretch", marginTop: 16 }}>
             <button
               className="btn btn-primary"

@@ -19,11 +19,13 @@ import {
   LEAD_QUALIFICATION_ORDER,
   type LeadQualification
 } from "@/lib/lead-qualification";
+import { ResultadoComercialTestModal } from "@/components/resultado-comercial-test-modal";
 import "./resultado-comercial-admin.css";
 
 type ResultRow = {
   id: number;
   name: string;
+  slug: string;
   layer?: string;
   description?: string | null;
   status: string;
@@ -83,6 +85,7 @@ export function ResultadoComercialAdmin({
     allowed_next_actions: ["none"]
   });
   const [resultSaving, setResultSaving] = useState(false);
+  const [testResult, setTestResult] = useState<ResultRow | null>(null);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/approach-result-types").then((res) => res.json());
@@ -254,6 +257,7 @@ export function ResultadoComercialAdmin({
                 <td>
                   <CadastroRowActions
                     canDelete={canDelete}
+                    onTest={() => setTestResult(r)}
                     onEdit={() => openResultEdit(r)}
                     onDelete={() => removeResult(r)}
                   />
@@ -429,6 +433,12 @@ export function ResultadoComercialAdmin({
           </div>
         </form>
       </CadastroModal>
+
+      <ResultadoComercialTestModal
+        open={testResult != null}
+        result={testResult}
+        onClose={() => setTestResult(null)}
+      />
     </div>
   );
 }
