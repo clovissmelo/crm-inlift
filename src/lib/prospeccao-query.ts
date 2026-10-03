@@ -314,7 +314,7 @@ export async function queryProspeccaoQueue(filters: ClientFilters) {
   const limit = filters.limit ?? 50;
   const offset = filters.offset ?? 0;
 
-  let filtered = applyProspeccaoListFilters(await loadEnrichedProspeccaoRows(filters), filters);
+  const filtered = applyProspeccaoListFilters(await loadEnrichedProspeccaoRows(filters), filters);
 
   filtered.sort((a, b) => {
     const cmp = compareResolvedQueuePriority(
