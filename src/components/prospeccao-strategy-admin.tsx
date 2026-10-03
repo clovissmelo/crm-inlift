@@ -7,7 +7,6 @@ import type { ProspeccaoPriorityTypeRow } from "@/lib/call-strategy/priorities-c
 import {
   canDeletePriority,
   CREATABLE_RULE_KINDS,
-  isFixedQueueAnchor,
   normalizePrioritySortOrders,
   parseRuleParams,
   PROSPECCAO_RULE_KIND_LABELS,
@@ -667,27 +666,11 @@ export function ProspeccaoStrategyAdmin({ initialTab = "rules" }: { initialTab?:
           </p>
 
           <div className="prospeccao-queue-list">
-            {sortedPriorities.map((p, index) => {
+            {sortedPriorities.map((p) => {
               const color = p.color.startsWith("#") ? p.color : "#64748b";
-              const fixed = isFixedQueueAnchor(p);
-              const showMiddleHeader =
-                p.queue_anchor === "none" &&
-                (index === 0 || sortedPriorities[index - 1]?.queue_anchor !== "none");
-              const showEndHeader = p.queue_anchor === "end";
               return (
                 <div key={p.id}>
-                  {showMiddleHeader ? (
-                    <p className="prospeccao-queue-section-title">Prioridades configuráveis</p>
-                  ) : null}
-                  {showEndHeader ? <p className="prospeccao-queue-section-title">Fixo — fim da fila</p> : null}
-                  {p.queue_anchor === "start" ? (
-                    <p className="prospeccao-queue-section-title">Fixo — início da fila</p>
-                  ) : null}
-                  <div
-                    className={
-                      fixed ? "prospeccao-queue-row prospeccao-queue-row--fixed" : "prospeccao-queue-row"
-                    }
-                  >
+                  <div className="prospeccao-queue-row">
                     <div className="prospeccao-queue-row__order">
                       <span className="prospeccao-queue-row__label">Ordem</span>
                       <input
@@ -767,8 +750,6 @@ export function ProspeccaoStrategyAdmin({ initialTab = "rules" }: { initialTab?:
                             Excluir
                           </button>
                         </>
-                      ) : fixed ? (
-                        <span className="prospeccao-badge prospeccao-badge--system">Fixo</span>
                       ) : null}
                       <button type="button" className="btn btn-sm btn-primary" onClick={() => void savePriority(p)}>
                         Salvar
