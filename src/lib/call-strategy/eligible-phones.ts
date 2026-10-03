@@ -19,7 +19,7 @@ import {
   type PhoneCounterState
 } from "@/lib/call-strategy/phone-counters";
 import { formatCounterLine, type OccurrenceKind } from "@/lib/call-strategy/occurrence-policy-shared";
-import { loadDialDisplayTimesByPhone } from "@/lib/call-strategy/dial-picker-display";
+import { loadDialDisplayTimesByPhone } from "@/lib/call-strategy/load-dial-display-times";
 import { countUnregisteredEndedCallsByPhone } from "@/lib/call-strategy/pending-call-counts";
 
 export type PhoneDialContextItem = {
