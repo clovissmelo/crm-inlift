@@ -64,6 +64,20 @@ export function mailtoLink(email: string) {
   return `mailto:${trimmed}`;
 }
 
+export function buildMailtoHref(input: {
+  email: string;
+  subject?: string;
+  body?: string;
+}): string | null {
+  const to = input.email.trim();
+  if (!to) return null;
+  const params = new URLSearchParams();
+  if (input.subject?.trim()) params.set("subject", input.subject.trim());
+  if (input.body?.trim()) params.set("body", input.body.trim());
+  const q = params.toString();
+  return q ? `mailto:${to}?${q}` : `mailto:${to}`;
+}
+
 /** Site ou URL genérica para abrir em nova aba */
 export function externalWebHref(value: string | null | undefined): string | null {
   const trimmed = value?.trim();

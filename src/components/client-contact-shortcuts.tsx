@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Check, Phone, Mail, MessageCircle } from "lucide-react";
+import { Check, Phone, Mail, MessageCircle, Smartphone } from "lucide-react";
 import { API4COM_NO_EXTENSION_MESSAGE, type Api4comDialIdentity } from "@/lib/api4com/dial-identity-shared";
 import type { ContactVerification } from "@/lib/types";
 import { WhatsAppTemplateModal } from "@/components/whatsapp-template-modal";
@@ -73,6 +73,12 @@ function dialOptionAtCallLimit(o: ContactDialOption): boolean {
   const limit = o.maxDialAttempts ?? 3;
   const count = o.dialHistoryAt?.length ?? 0;
   return count >= limit && limit > 0;
+}
+
+function dialPhoneKindLabel(phone: string): { kind: "mobile" | "landline"; label: string } {
+  const digits = phoneDigits(phone);
+  if (isMobileBr(digits)) return { kind: "mobile", label: "Celular" };
+  return { kind: "landline", label: "Fixo" };
 }
 
 function dialOptionSortRank(o: ContactDialOption): number {
@@ -493,6 +499,7 @@ export function ClientContactShortcuts({
               const hasMoreHistory = !historyExpanded && sortedTimes.length > DIAL_PICKER_RECENT_CALLS;
               const atLimit = dialOptionAtCallLimit(o);
               const disabled = dialing || pickerLoading;
+              const phoneKind = dialPhoneKindLabel(o.phone);
               return (
                 <li key={`${o.clientPhoneId ?? o.contactId ?? "x"}-${o.phone}-${i}`}>
                   <div
@@ -513,7 +520,20 @@ export function ClientContactShortcuts({
                     }}
                   >
                     <span className="dial-picker-option-body">
-                      <span className="dial-picker-number">{formatPhoneDisplay(o.phone)}</span>
+                      <span className="dial-picker-number-row">
+                        <span className="dial-picker-number">{formatPhoneDisplay(o.phone)}</span>
+                        <span
+                          className={`dial-picker-kind dial-picker-kind--${phoneKind.kind}`}
+                          title={phoneKind.label}
+                          aria-label={phoneKind.label}
+                        >
+                          {phoneKind.kind === "mobile" ? (
+                            <Smartphone size={17} strokeWidth={2} aria-hidden />
+                          ) : (
+                            <Phone size={17} strokeWidth={2} aria-hidden />
+                          )}
+                        </span>
+                      </span>
                       <span className="dial-picker-meta dial-picker-meta--status">{statusLine}</span>
                       {visibleTimes.length > 0 ? (
                         <span className="dial-picker-call-history">

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { HelpCircle, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
+import { TemplatePlaceholderHelp } from "@/components/template-placeholder-help";
 import {
   DEFAULT_CAPTURE_FIELDS,
   draftsToFlow,
@@ -11,8 +12,6 @@ import {
   type ScriptFlowCaptureField,
   type ScriptFlowStepDraft
 } from "@/lib/script-flow";
-import { PLACEHOLDER_HELP } from "@/lib/message-templates";
-
 type Props = {
   body: string;
   onBodyChange: (body: string) => void;
@@ -26,30 +25,6 @@ function newStepId(existing: ScriptFlowStepDraft[]) {
 
 function nextSuggestedId(existing: ScriptFlowStepDraft[]) {
   return newStepId(existing);
-}
-
-function PlaceholderHelpButton() {
-  return (
-    <span className="script-flow-help-wrap">
-      <button type="button" className="script-flow-help-btn" aria-label="Variáveis disponíveis no texto">
-        <HelpCircle size={15} aria-hidden />
-      </button>
-      <div className="script-flow-help-popover" role="tooltip">
-        <p className="script-flow-help-popover-title">Variáveis no texto</p>
-        <ul className="script-flow-help-list">
-          {PLACEHOLDER_HELP.map((p) => (
-            <li key={p.key}>
-              <code>{p.key}</code>
-              <span>{p.label}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="muted script-flow-help-note">
-          Etapas sequenciais usam <strong>Próximo</strong>; ramificações usam opções; anotações pedem campos (nome, telefone…) gravados na ligação.
-        </p>
-      </div>
-    </span>
-  );
 }
 
 export function ScriptFlowEditor({ body, onBodyChange }: Props) {
@@ -235,7 +210,7 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                 <label className="label" htmlFor="script-step-content">
                   Texto / fala sugerida
                 </label>
-                <PlaceholderHelpButton />
+                <TemplatePlaceholderHelp showFlowNote />
               </div>
               <textarea
                 id="script-step-content"

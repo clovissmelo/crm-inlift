@@ -2,12 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { CadastroModal } from "@/components/cadastro-ui";
-import {
-  applyTemplate,
-  findMissingTemplateVars,
-  PLACEHOLDER_HELP,
-  type TemplateVars
-} from "@/lib/message-templates";
+import { TemplatePlaceholderHelp } from "@/components/template-placeholder-help";
+import { applyTemplate, findMissingTemplateVars, type TemplateVars } from "@/lib/message-templates";
 import { whatsAppLink } from "@/lib/format";
 
 export function WhatsAppTemplateModal({
@@ -83,12 +79,12 @@ export function WhatsAppTemplateModal({
         </select>
       </div>
       <div className="field">
-        <label className="label">Mensagem</label>
+        <div className="label-with-help">
+          <label className="label">Mensagem</label>
+          <TemplatePlaceholderHelp />
+        </div>
         <textarea className="textarea" value={body} onChange={(e) => setBody(e.target.value)} rows={6} />
       </div>
-      <p className="muted" style={{ fontSize: "0.75rem" }}>
-        Campos: {PLACEHOLDER_HELP.map((p) => p.key).join(", ")}
-      </p>
       <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end", marginTop: "0.5rem" }}>
         <button className="btn" type="button" onClick={onClose}>
           Cancelar
