@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CadastroModal } from "@/components/cadastro-ui";
 import type { LeadQualification } from "@/lib/lead-qualification";
-import { formatSpDateTime } from "@/lib/datetime";
 import type { Product } from "@/lib/types";
 import { formatPhoneDisplay } from "@/lib/format";
 import {
@@ -31,7 +30,8 @@ import {
   spokeWithDecisionMakerForChoice,
   type ContactLayerChoice
 } from "@/lib/attendance/call-contact-layer";
-import { Headphones } from "lucide-react";
+import { CallRegistrationHeader } from "@/components/call-registration-header";
+import { ComplementObservationsTextarea } from "@/components/complement-observations-textarea";
 import { confirmProceedIfClientHasAgenda } from "@/lib/client-agenda-warning";
 import { callRequiresComplementRegistration } from "@/lib/api4com/call-registration";
 
@@ -138,6 +138,10 @@ function spInputToIso(date: string, time: string) {
   return new Date(`${date}T${time}:00-03:00`).toISOString();
 }
 
+export type CallRegistrationSimulation = {
+  initialCommercialResultId: number;
+};
+
 type ResultFormProps = {
   callId: number | null;
   active: boolean;
@@ -146,6 +150,8 @@ type ResultFormProps = {
   onCompleted: () => void;
   products: Product[];
   onModalTitleChange?: (title: string) => void;
+  /** Mesmo complemento da ligação, com cliente fictício — não persiste abordagem. */
+  simulation?: CallRegistrationSimulation;
 };
 
 export function Api4comCallResultForm({
@@ -155,8 +161,10 @@ export function Api4comCallResultForm({
   onClose,
   onCompleted,
   products,
-  onModalTitleChange
+  onModalTitleChange,
+  simulation
 }: ResultFormProps) {
+  const isSimulation = Boolean(simulation);
   const [ctx, setCtx] = useState<DialContext | null>(null);
   const [step, setStep] = useState<"next_dial" | "result">("result");
   const [resultTypes, setResultTypes] = useState<ResultType[]>([]);
@@ -186,7 +194,7 @@ export function Api4comCallResultForm({
   const [technicalLabel, setTechnicalLabel] = useState("");
   const [contactedPersonName, setContactedPersonName] = useState("");
   const [contactedPersonJobTitle, setContactedPersonJobTitle] = useState("");
-  const [contactedPersonNotes, setContactedPersonNotes] = useState("");
+  const [simulationFeedback, setSimulationFeedback] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{
     commercial?: boolean;
     contact?: boolean;
@@ -248,10 +256,130 @@ export function Api4comCallResultForm({
   }
 
   const loadContext = useCallback(async () => {
-    if (!callId) return;
+    if (!callId && !simulation) return;
     setError(null);
+    setSimulationFeedback(null);
     setContextLoading(true);
     try {
+      if (simulation) {
+        const [classRes, crRes, attRes] = await Promise.all([
+          fetch("/api/approach-classifications"),
+          fetch("/api/closure-reason-types"),
+          fetch("/api/attendance-rules")
+        ]);
+        if (attRes.ok) {
+          const att = (await attRes.json()) as { items?: AttendanceRuleLite[] };
+          setAttendanceRules(att.items ?? []);
+        } else {
+          setAttendanceRules([]);
+        }
+        if (crRes.ok) {
+          const cr = (await crRes.json()) as { items?: ClosureReason[] };
+          setClosureReasons(cr.items ?? []);
+        }
+        const classJson = (await classRes.json()) as {
+          technical?: TechnicalResultTypeRow[];
+          contact?: ContactOutcomeOption[];
+          commercial?: CommercialOption[];
+          contact_commercial_compat?: Record<string, number[]>;
+          error?: string;
+        };
+        const techTypes = classRes.ok ? (classJson.technical ?? []) : [];
+        const contacts = classRes.ok ? (classJson.contact ?? []) : [];
+        const commercialRaw = classRes.ok ? (classJson.commercial ?? []) : [];
+        type CommercialFromApi = CommercialOption & {
+          suggest_follow_up?: boolean;
+          lead_qualification?: string | null;
+          require_final_registration?: boolean;
+          ask_decision_maker?: boolean;
+          allowed_next_actions?: unknown;
+          requires_meeting?: boolean;
+        };
+        const activeResults: ResultType[] = (commercialRaw as CommercialFromApi[]).map((c) => ({
+          id: c.id,
+          slug: c.slug,
+          name: c.name,
+          suggest_follow_up: Boolean(c.suggest_follow_up),
+          lead_qualification:
+            c.lead_qualification === "warm" || c.lead_qualification === "hot" || c.lead_qualification === "cold"
+              ? c.lead_qualification
+              : null,
+          collect_notes: c.collect_notes !== false,
+          require_schedule_return: c.require_schedule_return === true,
+          require_final_registration: c.require_final_registration !== false,
+          ask_decision_maker: c.ask_decision_maker === true,
+          mark_phone_verified: (c as { mark_phone_verified?: boolean }).mark_phone_verified === true,
+          allowed_next_actions: c.allowed_next_actions,
+          requires_meeting: c.requires_meeting === true
+        }));
+        if (!classRes.ok) {
+          setError(classJson.error ?? "Não foi possível carregar classificações.");
+        }
+        setTechnicalTypes(techTypes);
+        setContactTypes(contacts);
+        setCompatMap(classJson.contact_commercial_compat ?? {});
+        setResultTypes(activeResults);
+
+        const mockProductId = products[0]?.id ?? null;
+        const now = new Date().toISOString();
+        const mockCall: CallDetail = {
+          id: -1,
+          api4com_call_id: "simulation",
+          client_id: 1,
+          contact_id: 1,
+          product_id: mockProductId,
+          phone_dialed: "5511999990000",
+          started_at: now,
+          ended_at: now,
+          duration_seconds: 36,
+          hangup_cause_code: null,
+          hangup_cause_label: "NORMAL_CLEARING",
+          answered_at: now,
+          technical_display_name: "Atendeu",
+          technical_slug: "answered",
+          client_name: "Empresa Exemplo Ltda",
+          contact_name: "Clóvis Melo",
+          record_url: null
+        };
+        const ctxData: DialContext = {
+          call: mockCall,
+          session_root_id: -1,
+          remaining: [],
+          skipped: [],
+          session_calls: [],
+          client_product_ids: mockProductId != null ? [mockProductId] : [],
+          current_phone: {
+            client_phone_id: 0,
+            phone: mockCall.phone_dialed,
+            phone_display: mockCall.phone_dialed,
+            origin: "simulation",
+            position: 1,
+            total: 1,
+            status: "active",
+            attempt_label: "Simulação",
+            next_eligible_at: null,
+            last_attempt_at: now,
+            last_bucket: "simulation",
+            eligible_now: true,
+            primary_contact_id: 1,
+            counter_line: null,
+            counter_lines: [],
+            needs_review: false
+          }
+        };
+        applyCallContext(ctxData, activeResults, techTypes, contacts, commercialRaw);
+        setResultTypeId(String(simulation.initialCommercialResultId));
+        setContactOutcomeId("");
+        setContactLayerChoice(null);
+        setContactLayerLocked(false);
+        setContactLocked(false);
+        setResultLockedByIntegration(false);
+        setTechnicalSlug("answered");
+        setTechnicalLabel("Atendeu");
+        setStep("result");
+        return;
+      }
+
       const [ctxRes, classRes, basicRes, crRes, attRes] = await Promise.all([
         fetch(`/api/api4com/calls/${callId}/dial-context`),
         fetch("/api/approach-classifications"),
@@ -353,10 +481,10 @@ export function Api4comCallResultForm({
     } finally {
       setContextLoading(false);
     }
-  }, [callId]);
+  }, [callId, simulation, products]);
 
   useEffect(() => {
-    if (!active || !callId) return;
+    if (!active || (!callId && !simulation)) return;
     setCtx(null);
     setResultTypes([]);
     setResultTypeId("");
@@ -374,7 +502,7 @@ export function Api4comCallResultForm({
     setNextTime("");
     setStep("result");
     void loadContext();
-  }, [active, callId, loadContext]);
+  }, [active, callId, simulation, loadContext]);
 
   useEffect(() => {
     autoSettleRef.current = null;
@@ -412,6 +540,7 @@ export function Api4comCallResultForm({
   );
 
   useEffect(() => {
+    if (isSimulation) return;
     if (!active || !callId || contextLoading || !call || step !== "result") return;
     if (callWasAnswered) return;
     if (autoSettleRef.current === callId) return;
@@ -426,7 +555,7 @@ export function Api4comCallResultForm({
       onCompleted();
       onClose();
     })();
-  }, [active, callId, contextLoading, call, callWasAnswered, step, onClose, onCompleted]);
+  }, [active, callId, contextLoading, call, callWasAnswered, step, onClose, onCompleted, isSimulation]);
 
   const bdrResultTypes = useMemo(() => {
     const base = listAnsweredCommercialOptions(
@@ -681,6 +810,12 @@ export function Api4comCallResultForm({
     setError(null);
     setFieldErrors({});
 
+    if (isSimulation && registrationStatus === "final") {
+      setSimulationFeedback("Validação concluída — nenhum dado foi gravado.");
+      setLoading(false);
+      return;
+    }
+
     const finalNotes = buildSessionNotes();
 
     const resolvedProductId = effectiveProductId ?? call.product_id;
@@ -740,7 +875,7 @@ export function Api4comCallResultForm({
         api4com_call_row_id: call.id,
         contacted_person_name: contactedPersonName.trim() || null,
         contacted_person_job_title: contactedPersonJobTitle.trim() || null,
-        contacted_person_notes: contactedPersonNotes.trim() || null,
+        contacted_person_notes: null,
         registration_status: registrationStatus,
         notes: finalNotes || null,
         external_call_id: call.api4com_call_id,
@@ -796,45 +931,42 @@ export function Api4comCallResultForm({
       ? `${Math.floor(call.duration_seconds / 60)}:${String(call.duration_seconds % 60).padStart(2, "0")}`
       : "—";
 
-  if (!active || !callId) return null;
+  if (!active || (!callId && !simulation)) return null;
 
   const inner = (
     <>
-      {call ? (
-        <div className="muted" style={{ fontSize: "0.8125rem", marginBottom: 12 }}>
-          <p style={{ margin: "0 0 4px" }}>
-            <strong>{call.client_name ?? "Cliente"}</strong>
-            {call.contact_name ? ` · ${call.contact_name}` : null}
-          </p>
-          <p style={{ margin: 0 }}>
-            {formatPhoneDisplay(call.phone_dialed)} · {call.ended_at ? formatSpDateTime(call.ended_at) : "—"} · duração {duration}
-            {call.hangup_cause_label ? ` · ${call.hangup_cause_label}` : null}
-          </p>
-          {productDisplayName ? (
-            <p style={{ margin: "8px 0 0", fontSize: "0.875rem" }}>
-              Produto: <strong>{productDisplayName}</strong>
-            </p>
-          ) : null}
-          {call.record_url ? (
-            <p style={{ margin: "6px 0 0", display: "flex", alignItems: "center", gap: 6 }}>
-              <Headphones size={15} aria-hidden style={{ flexShrink: 0, opacity: 0.85 }} />
-              <a href={`/api/api4com/calls/${call.id}/recording`} target="_blank" rel="noreferrer">
-                Ouvir gravação
-              </a>
-            </p>
-          ) : null}
-          {currentPhone?.last_attempt_at ? (
-            <p className="muted" style={{ margin: "6px 0 0", fontSize: "0.8125rem" }}>
-              Última tentativa: {formatSpDateTime(currentPhone.last_attempt_at)}
-              {currentPhone.last_bucket ? ` (${currentPhone.last_bucket})` : ""}
-            </p>
-          ) : null}
-          {ctx?.call_strategy?.lead_status === "aguardando_intervalo" && ctx.call_strategy.waiting_next_at ? (
-            <p className="muted" style={{ marginTop: 8, fontSize: "0.8125rem" }}>
-              Aguardando próxima tentativa — elegível a partir de {formatSpDateTime(ctx.call_strategy.waiting_next_at)}.
-            </p>
-          ) : null}
+      {isSimulation ? (
+        <p className="call-reg-simulation-note muted" role="status">
+          Modo teste — mesmo fluxo da ligação real; nada é gravado no banco.
+        </p>
+      ) : null}
+      {simulationFeedback ? (
+        <div className="alert" style={{ marginBottom: 12 }}>
+          {simulationFeedback}
         </div>
+      ) : null}
+      {call ? (
+        <CallRegistrationHeader
+          clientName={call.client_name}
+          contactName={call.contact_name}
+          productName={productDisplayName}
+          phoneDialed={call.phone_dialed}
+          endedAt={call.ended_at}
+          durationLabel={duration}
+          callAnswered={callWasAnswered}
+          technicalLabel={technicalLabel}
+          hangupCauseLabel={call.hangup_cause_label}
+          recordUrl={call.record_url}
+          callId={call.id}
+          hideRecording={isSimulation}
+          lastAttemptAt={currentPhone?.last_attempt_at}
+          lastAttemptBucket={currentPhone?.last_bucket}
+          waitingNextAt={
+            ctx?.call_strategy?.lead_status === "aguardando_intervalo"
+              ? ctx.call_strategy.waiting_next_at
+              : null
+          }
+        />
       ) : null}
       {error ? <div className="alert alert-error">{error}</div> : null}
       {contextLoading ? <p className="muted">Carregando dados da ligação…</p> : null}
@@ -891,7 +1023,7 @@ export function Api4comCallResultForm({
       ) : null}
 
       {step === "result" && !contextLoading && callWasAnswered ? (
-        <form onSubmit={submit}>
+        <form className="call-reg-complement-form" onSubmit={submit}>
           {!call?.client_id ? (
             <div className="alert alert-error" style={{ marginBottom: 12 }}>
               Esta ligação não está vinculada a um cliente no CRM. Você pode dispensar o registro pendente ou fechar e
@@ -936,16 +1068,13 @@ export function Api4comCallResultForm({
             onContactedPersonNameChange={setContactedPersonName}
             contactedPersonJobTitle={contactedPersonJobTitle}
             onContactedPersonJobTitleChange={setContactedPersonJobTitle}
-            contactedPersonNotes={contactedPersonNotes}
-            onContactedPersonNotesChange={setContactedPersonNotes}
             invalidFields={fieldErrors}
             disabled={loading}
           />
           {showNotesField ? (
             <div className={fieldErrors.notes ? "field field--invalid" : "field"}>
               <label className="label">Observações</label>
-              <textarea
-                className="textarea"
+              <ComplementObservationsTextarea
                 value={notes}
                 onChange={(e) => {
                   setNotes(e.target.value);

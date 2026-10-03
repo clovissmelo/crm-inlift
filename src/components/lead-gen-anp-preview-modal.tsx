@@ -54,9 +54,9 @@ export function LeadGenAnpPreviewModal({
       <div className="lead-gen-overlay-panel lead-gen-overlay-panel--wide">
         <header className="lead-gen-overlay-head">
           <div>
-            <h2 id="lead-gen-anp-preview-title">Pré-execução de captura</h2>
+            <h2 id="lead-gen-anp-preview-title">Conferir antes de solicitar</h2>
             <p className="muted lead-gen-overlay-sub">
-              Consulta a API pública da ANP antes de iniciar a captação · meta {leadsRequested} lead
+              Consulta a ANP antes de iniciar · meta de {leadsRequested} lead
               {leadsRequested === 1 ? "" : "s"} novo{leadsRequested === 1 ? "" : "s"}
             </p>
           </div>

@@ -91,8 +91,6 @@ export function CallThreeLayerRegistrationFields({
   onContactedPersonNameChange,
   contactedPersonJobTitle,
   onContactedPersonJobTitleChange,
-  contactedPersonNotes,
-  onContactedPersonNotesChange,
   invalidFields,
   disabled
 }: {
@@ -112,10 +110,8 @@ export function CallThreeLayerRegistrationFields({
   onContactedPersonNameChange: (v: string) => void;
   contactedPersonJobTitle: string;
   onContactedPersonJobTitleChange: (v: string) => void;
-  contactedPersonNotes: string;
-  onContactedPersonNotesChange: (v: string) => void;
   invalidFields?: Partial<
-    Record<"commercial" | "contact" | "personName" | "personJob" | "personNotes", boolean>
+    Record<"commercial" | "contact" | "personName" | "personJob", boolean>
   >;
   disabled?: boolean;
 }) {
@@ -137,15 +133,15 @@ export function CallThreeLayerRegistrationFields({
   const showPersonFields =
     contactLayerChoice === "outra" || contactLayerChoice === "decisor";
 
+  const answeredHint = technicalLabel || (callAnswered ? "Atendeu" : "Não atendeu");
+
   return (
     <div className="call-three-layer-fields">
-      <div className="field">
-        <label className="label">Atendeu?</label>
-        <p style={{ margin: 0, fontSize: "0.9375rem" }}>
+      <div className="call-reg-header-block call-reg-header-block--answered field">
+        <span className="label">Atendeu?</span>
+        <p className="call-reg-answered-value">
           <strong>{callAnswered ? "Sim" : "Não"}</strong>
-          <span className="muted" style={{ fontSize: "0.8125rem", marginLeft: 8 }}>
-            ({technicalLabel || "telefonia"})
-          </span>
+          <span className="muted"> ({answeredHint})</span>
         </p>
       </div>
 
@@ -223,16 +219,6 @@ export function CallThreeLayerRegistrationFields({
               value={contactedPersonJobTitle}
               onChange={(e) => onContactedPersonJobTitleChange(e.target.value)}
               disabled={disabled}
-            />
-          </div>
-          <div className="field">
-            <label className="label">Observações sobre a pessoa</label>
-            <textarea
-              className="textarea"
-              value={contactedPersonNotes}
-              onChange={(e) => onContactedPersonNotesChange(e.target.value)}
-              disabled={disabled}
-              rows={2}
             />
           </div>
         </>

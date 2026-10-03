@@ -2,7 +2,7 @@
 
 import "./lead-gen-execution.css";
 import Link from "next/link";
-import { Sparkles, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import {
   AdminNovosLeadsCityPicker,
   type CitySelectionPayload,
@@ -1016,13 +1016,12 @@ export function AdminNovosLeadsWizard() {
           </div>
           <div className="lead-gen-start-actions">
             <button
-              className="btn btn-primary lead-gen-capture-btn"
+              className="btn btn-primary lead-gen-start-btn"
               type="button"
               disabled={starting || shownRunActive || anpPreviewLoading}
               onClick={() => void openAnpPreviewModal()}
             >
-              {anpPreviewLoading ? null : <Sparkles size={22} strokeWidth={2.25} aria-hidden />}
-              {anpPreviewLoading ? "Consultando ANP…" : "Capturar Leads"}
+              {anpPreviewLoading ? "Consultando ANP…" : "Solicitar leads"}
             </button>
             {shownRunActive && shownRun ? (
               <button
@@ -1035,9 +1034,9 @@ export function AdminNovosLeadsWizard() {
               </button>
             ) : null}
           </div>
-          <div className="lead-gen-run-note" role="note">
-            Cadastros inválidos ou CNPJ já existentes são ignorados na execução de captura.
-          </div>
+          <p className="lead-gen-run-note muted" role="note">
+            CNPJs já no CRM ou cadastros inválidos são ignorados na geração.
+          </p>
         </div>
       </div>
 

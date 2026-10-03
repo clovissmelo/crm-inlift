@@ -21,6 +21,7 @@ import {
   resolveEffectiveBdrRules,
   type AttendanceRuleForUi
 } from "@/lib/attendance/bdr-registration";
+import { ComplementObservationsTextarea } from "@/components/complement-observations-textarea";
 import { type ApproachNextActionKey } from "@/lib/approach-next-actions";
 
 type ResultType = {
@@ -89,7 +90,6 @@ export function ApproachWorkflowModal({
   const [contactOutcomeId, setContactOutcomeId] = useState("");
   const [contactedPersonName, setContactedPersonName] = useState("");
   const [contactedPersonJobTitle, setContactedPersonJobTitle] = useState("");
-  const [contactedPersonNotes, setContactedPersonNotes] = useState("");
 
   const resolvedProductId =
     defaultProductId ?? (products.length === 1 ? products[0].id : products.length > 0 ? products[0].id : null);
@@ -232,7 +232,7 @@ export function ApproachWorkflowModal({
         contact_outcome_type_id: Number(contactOutcomeId),
         contacted_person_name: contactedPersonName.trim() || null,
         contacted_person_job_title: contactedPersonJobTitle.trim() || null,
-        contacted_person_notes: contactedPersonNotes.trim() || null,
+        contacted_person_notes: null,
         notes: notes || null,
         follow_up_id: followUpId,
         spoke_with_decision_maker: spokeWithDecisionMaker,
@@ -271,7 +271,7 @@ export function ApproachWorkflowModal({
 
   return (
     <CadastroModal open={open} title={`Registrar abordagem — ${clientName}`} onClose={onClose} wide>
-      <form onSubmit={submit}>
+      <form className="call-reg-complement-form" onSubmit={submit}>
         {error ? <div className="alert alert-error">{error}</div> : null}
         <div className="filters-row">
           <div className="field">
@@ -330,8 +330,6 @@ export function ApproachWorkflowModal({
             onContactedPersonNameChange={setContactedPersonName}
             contactedPersonJobTitle={contactedPersonJobTitle}
             onContactedPersonJobTitleChange={setContactedPersonJobTitle}
-            contactedPersonNotes={contactedPersonNotes}
-            onContactedPersonNotesChange={setContactedPersonNotes}
           />
         ) : (
           <div className="field">
@@ -354,7 +352,7 @@ export function ApproachWorkflowModal({
         {showNotesField ? (
           <div className="field">
             <label className="label">Observações</label>
-            <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <ComplementObservationsTextarea value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         ) : null}
         <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>

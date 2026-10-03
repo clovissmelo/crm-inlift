@@ -29,7 +29,7 @@ export function ApproachMinimalScheduleField({
       <p className="muted" style={{ fontSize: "0.75rem", margin: "0 0 6px" }}>
         {hint}
       </p>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div className="call-reg-schedule-row">
         <input className="input" type="date" value={nextDate} onChange={(e) => onNextDateChange(e.target.value)} required />
         <input className="input" type="time" value={nextTime} onChange={(e) => onNextTimeChange(e.target.value)} required />
       </div>

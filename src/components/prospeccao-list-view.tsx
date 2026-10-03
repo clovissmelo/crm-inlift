@@ -132,10 +132,13 @@ export function ProspeccaoListView({
           <option value="landline">Fixo</option>
           <option value="none">Sem telefone</option>
         </FilterSelect>
+        <ProspeccaoPriorityLegend
+          priorities={priorityLegend}
+          activeSlug={filters.prioridade || undefined}
+          onSelectSlug={(slug) => updateFilter({ prioridade: slug || "" })}
+        />
       </FilterBar>
 
-      <div className="prospeccao-page-layout">
-        <div className="prospeccao-page-main">
       <div className="panel table-wrap">
         {loading ? <p className="muted">Carregando…</p> : null}
         <table className="data-table">
@@ -209,13 +212,6 @@ export function ProspeccaoListView({
         <button className="btn" type="button" disabled={offset + limit >= total} onClick={() => setOffset((o) => o + limit)}>
           Próxima
         </button>
-      </div>
-        </div>
-        <ProspeccaoPriorityLegend
-          priorities={priorityLegend}
-          activeSlug={filters.prioridade || undefined}
-          onSelectSlug={(slug) => updateFilter({ prioridade: slug || "" })}
-        />
       </div>
     </div>
   );
