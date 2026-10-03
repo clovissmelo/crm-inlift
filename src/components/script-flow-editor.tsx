@@ -16,7 +16,6 @@ import { PLACEHOLDER_HELP } from "@/lib/message-templates";
 type Props = {
   body: string;
   onBodyChange: (body: string) => void;
-  onLoadPostoCredTemplate?: () => void;
 };
 
 function newStepId(existing: ScriptFlowStepDraft[]) {
@@ -53,7 +52,7 @@ function PlaceholderHelpButton() {
   );
 }
 
-export function ScriptFlowEditor({ body, onBodyChange, onLoadPostoCredTemplate }: Props) {
+export function ScriptFlowEditor({ body, onBodyChange }: Props) {
   const parsed = useMemo(() => parseCallScriptBody(body), [body]);
   const [drafts, setDrafts] = useState<ScriptFlowStepDraft[]>(() =>
     parsed ? flowToDrafts(parsed) : flowToDrafts({ v: 1, start: "1", steps: {} })
@@ -125,11 +124,6 @@ export function ScriptFlowEditor({ body, onBodyChange, onLoadPostoCredTemplate }
           <div className="script-flow-steps-head">
             <span className="label">Etapas</span>
             <div className="script-flow-steps-actions">
-              {onLoadPostoCredTemplate ? (
-                <button type="button" className="btn btn-sm script-flow-template-btn" onClick={onLoadPostoCredTemplate}>
-                  Modelo PostoCred
-                </button>
-              ) : null}
               <button type="button" className="btn btn-icon-sm" onClick={addStep} title="Nova etapa">
                 <Plus size={16} />
               </button>

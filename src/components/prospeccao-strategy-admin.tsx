@@ -268,8 +268,8 @@ export function ProspeccaoStrategyAdmin({ initialTab = "rules" }: { initialTab?:
 
   async function savePriority(row: ProspeccaoPriorityTypeRow) {
     setMsg(null);
-    if (!isFixedQueueAnchor(row) && (!Number.isFinite(row.sort_order) || row.sort_order < 2)) {
-      setMsg("Informe uma ordem válida (número maior que 1).");
+    if (!Number.isFinite(row.sort_order) || row.sort_order < 1) {
+      setMsg("Informe uma ordem válida (número inteiro ≥ 1).");
       return;
     }
     const res = await fetch("/api/admin/prospeccao-priorities", {
@@ -280,7 +280,7 @@ export function ProspeccaoStrategyAdmin({ initialTab = "rules" }: { initialTab?:
         name: row.name,
         description: row.description,
         color: row.color,
-        ...(isFixedQueueAnchor(row) ? {} : { sort_order: row.sort_order })
+        sort_order: row.sort_order
       })
     });
     if (!res.ok) {
@@ -663,9 +663,8 @@ export function ProspeccaoStrategyAdmin({ initialTab = "rules" }: { initialTab?:
       {tab === "queue" ? (
         <div>
           <p className="muted prospeccao-admin__intro">
-            Primeiro contato fica sempre na ordem 1 e Retorno sempre por último. Entre
-            eles você define quantas faixas quiser (ex.: ligação 1, 2, 3, acompanhamento). Retornos com data/hora futura
-            só entram na fila quando vencerem.
+            Menor número = liga antes na fila. Todas as prioridades (inclusive início e retorno) usam ordem numérica.
+            Retornos com data/hora futura só entram na fila quando vencerem.
           </p>
 
           <div className="prospeccao-queue-list">
@@ -692,25 +691,20 @@ export function ProspeccaoStrategyAdmin({ initialTab = "rules" }: { initialTab?:
                   >
                     <div className="prospeccao-queue-row__order">
                       <span className="prospeccao-queue-row__label">Ordem</span>
-                      {fixed ? (
-                        <span className="prospeccao-queue-row__order-fixed">
-                          {p.queue_anchor === "start" ? "1" : "Última"}
-                        </span>
-                      ) : (
-                        <input
-                          className="input"
-                          type="number"
-                          value={p.sort_order}
-                          onChange={(e) => {
-                            const n = parseInt(e.target.value, 10);
-                            setPriorities((rows) =>
-                              rows.map((r) =>
-                                r.id === p.id ? { ...r, sort_order: Number.isFinite(n) ? n : r.sort_order } : r
-                              )
-                            );
-                          }}
-                        />
-                      )}
+                      <input
+                        className="input"
+                        type="number"
+                        min={1}
+                        value={p.sort_order}
+                        onChange={(e) => {
+                          const n = parseInt(e.target.value, 10);
+                          setPriorities((rows) =>
+                            rows.map((r) =>
+                              r.id === p.id ? { ...r, sort_order: Number.isFinite(n) ? n : r.sort_order } : r
+                            )
+                          );
+                        }}
+                      />
                     </div>
                     <div>
                       <span className="prospeccao-queue-row__label">Cor</span>

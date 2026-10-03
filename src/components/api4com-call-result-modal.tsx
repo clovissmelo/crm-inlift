@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CadastroModal } from "@/components/cadastro-ui";
-import { LEAD_QUALIFICATION_LABELS, type LeadQualification } from "@/lib/lead-qualification";
+import type { LeadQualification } from "@/lib/lead-qualification";
 import { formatSpDateTime } from "@/lib/datetime";
 import type { Product } from "@/lib/types";
 import { formatPhoneDisplay } from "@/lib/format";
@@ -931,11 +931,6 @@ export function Api4comCallResultForm({
             invalidFields={fieldErrors}
             disabled={loading}
           />
-          {selectedResult?.lead_qualification ? (
-            <p className="muted" style={{ fontSize: "0.75rem", margin: "0 0 0.75rem" }}>
-              Qualificação do lead: <strong>{LEAD_QUALIFICATION_LABELS[selectedResult.lead_qualification]}</strong>
-            </p>
-          ) : null}
           {showNotesField ? (
             <div className={fieldErrors.notes ? "field field--invalid" : "field"}>
               <label className="label">Observações</label>

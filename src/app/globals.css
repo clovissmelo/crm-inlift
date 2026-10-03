@@ -2797,12 +2797,6 @@ table.data-table tbody tr.is-selected {
   flex-shrink: 0;
 }
 
-.script-flow-template-btn {
-  font-size: 0.72rem;
-  padding: 0.3rem 0.55rem;
-  white-space: nowrap;
-}
-
 .script-flow-steps-list {
   list-style: none;
   margin: 0;

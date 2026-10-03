@@ -108,3 +108,26 @@
   bottom: 16px;
   z-index: 46;
 }
+
+.call-script-capture-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.call-script-capture-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.call-script-capture-field .label {
+  font-size: 0.8125rem;
+}
+
+.call-script-capture-hint {
+  font-size: 0.78rem;
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
+}

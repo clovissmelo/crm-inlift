@@ -6,12 +6,7 @@ import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroD
 import { FilterBar, FilterSelect } from "@/components/filter-bar";
 import { ScriptFlowEditor } from "@/components/script-flow-editor";
 import { PLACEHOLDER_HELP } from "@/lib/message-templates";
-import {
-  defaultEmptyCallFlow,
-  defaultPostoCredCallFlow,
-  parseCallScriptBody,
-  serializeCallScriptFlow
-} from "@/lib/script-flow";
+import { defaultEmptyCallFlow, parseCallScriptBody, serializeCallScriptFlow } from "@/lib/script-flow";
 import type { Product } from "@/lib/types";
 
 type ScriptRow = {
@@ -263,9 +258,6 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
                 key={`flow-${scriptEditingId ?? "new"}-${scriptModal}`}
                 body={scriptForm.body}
                 onBodyChange={(body) => setScriptForm((f) => ({ ...f, body }))}
-                onLoadPostoCredTemplate={() =>
-                  setScriptForm((f) => ({ ...f, body: serializeCallScriptFlow(defaultPostoCredCallFlow()) }))
-                }
               />
             </div>
           ) : (
