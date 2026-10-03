@@ -19,6 +19,7 @@ import {
   type PhoneCounterState
 } from "@/lib/call-strategy/phone-counters";
 import { formatCounterLine, type OccurrenceKind } from "@/lib/call-strategy/occurrence-policy-shared";
+import { loadDialDisplayTimesByPhone } from "@/lib/call-strategy/dial-picker-display";
 import { countUnregisteredEndedCallsByPhone } from "@/lib/call-strategy/pending-call-counts";
 
 export type PhoneDialContextItem = {
@@ -46,6 +47,9 @@ export type PhoneDialContextItem = {
   needs_review: boolean;
   pending_registration_calls: number;
   attempts_at_limit: boolean;
+  /** Ligações já feitas neste número (registradas + encerradas sem complemento). */
+  dial_history_at: string[];
+  max_dial_attempts: number;
 };
 
 export type ClientDialStrategySummary = {
@@ -134,8 +138,10 @@ export async function buildClientDialStrategySummary(input: {
   const rawPhones = await listClientPhonesWithState(input.clientId);
   const lastMap = await loadLastAttempts(input.clientId);
   const pendingByPhone = await countUnregisteredEndedCallsByPhone(input.clientId);
+  const dialTimesByPhone = await loadDialDisplayTimesByPhone(input.clientId);
   const total = rawPhones.length;
   const now = Date.now();
+  const maxNoContactDefault = settings.max_no_contact_attempts ?? settings.max_no_answer_attempts;
 
   if (total === 0) {
     return {
@@ -162,11 +168,13 @@ export async function buildClientDialStrategySummary(input: {
       last_occurrence_kind: p.last_occurrence_kind
     };
     const counter_lines = buildCounterLines(counterState, limitsByKind);
-    const maxNoContact = settings.max_no_contact_attempts ?? settings.max_no_answer_attempts;
+    const maxNoContact = maxNoContactDefault;
     const usedAttempts =
       Math.max(p.cycle_no_contact_count, p.cycle_invalid_count, p.cycle_wrong_number_count) +
       Math.max(0, pendingRegistration);
-    const attempts_at_limit = p.status === "exhausted" || usedAttempts >= maxNoContact;
+    const dial_history_at = dialTimesByPhone.get(p.id) ?? [];
+    const attempts_at_limit =
+      p.status === "exhausted" || usedAttempts >= maxNoContact || dial_history_at.length >= maxNoContact;
     const primaryKind =
       (p.last_occurrence_kind as OccurrenceKind | null) ??
       (last?.attempt_bucket as OccurrenceKind | null) ??
@@ -201,7 +209,9 @@ export async function buildClientDialStrategySummary(input: {
       counter_lines,
       needs_review: p.needs_review,
       pending_registration_calls: pendingRegistration,
-      attempts_at_limit
+      attempts_at_limit,
+      dial_history_at,
+      max_dial_attempts: maxNoContact
     };
   });
 

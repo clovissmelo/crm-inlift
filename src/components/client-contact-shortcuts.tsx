@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Check, Phone, Mail, MessageCircle } from "lucide-react";
 import { API4COM_NO_EXTENSION_MESSAGE, type Api4comDialIdentity } from "@/lib/api4com/dial-identity-shared";
-import { VerificationStatusIcon } from "@/components/contact-verification-ui";
 import type { ContactVerification } from "@/lib/types";
 import { WhatsAppTemplateModal } from "@/components/whatsapp-template-modal";
 import { CadastroModal } from "@/components/cadastro-ui";
@@ -12,7 +11,10 @@ import { useApi4comSession } from "@/components/api4com-call-provider";
 import { apiErrorText } from "@/lib/api-error-text";
 import { EmailApproachModal } from "@/components/email-approach-modal";
 import type { PhoneDialContextItem } from "@/lib/call-strategy/eligible-phones";
-import { formatPhoneDialSituation } from "@/lib/call-strategy/phone-dial-status";
+import {
+  dialPickerStatusLine,
+  formatDialHistoryDateLine
+} from "@/lib/call-strategy/dial-picker-display";
 import { telLink, formatPhoneDisplay, isMobileBr, phoneDigits } from "@/lib/format";
 
 export type ContactDialOption = {
@@ -35,6 +37,8 @@ export type ContactDialOption = {
   needsReview?: boolean;
   pendingRegistrationCalls?: number;
   attemptsAtLimit?: boolean;
+  dialHistoryAt?: string[];
+  maxDialAttempts?: number;
 };
 
 function contactOptionsFromDialStrategy(phones: PhoneDialContextItem[]): ContactDialOption[] {
@@ -57,22 +61,16 @@ function contactOptionsFromDialStrategy(phones: PhoneDialContextItem[]): Contact
       nextEligibleAt: p.next_eligible_at,
       needsReview: p.needs_review,
       pendingRegistrationCalls: p.pending_registration_calls,
-      attemptsAtLimit: p.attempts_at_limit
+      attemptsAtLimit: p.attempts_at_limit,
+      dialHistoryAt: p.dial_history_at,
+      maxDialAttempts: p.max_dial_attempts
     }));
 }
 
-function dialOptionCounterSummary(o: ContactDialOption): string | null {
-  const lines = o.counterLines?.filter((line) => !/aguardando registro/i.test(line));
-  if (lines?.length) return lines.join(" · ");
-  if (o.counterLine) return o.counterLine;
-  if (o.position != null && o.total != null) {
-    const tries =
-      o.cycleNoContactCount != null && o.cycleNoContactCount > 0
-        ? ` · ${o.cycleNoContactCount} tentativa(s) sem contato neste ciclo`
-        : "";
-    return `Número ${o.position} de ${o.total}${tries}`;
-  }
-  return null;
+function dialOptionAtCallLimit(o: ContactDialOption): boolean {
+  const limit = o.maxDialAttempts ?? 3;
+  const count = o.dialHistoryAt?.length ?? 0;
+  return count >= limit && limit > 0;
 }
 
 function dialOptionSortRank(o: ContactDialOption): number {
@@ -456,10 +454,10 @@ export function ClientContactShortcuts({
             <p className="dial-picker-head-text">
               <strong>Qual número ligar?</strong>
               <br />
-              Escolha abaixo. Os telefones precisam ter a quantidade mínima de tentativas por telefone.
+              Escolha abaixo. O ✓ verde indica que aquele número já atingiu o limite de ligações configurado.
             </p>
           </div>
-          {pickerLoading ? <p className="muted">Carregando telefones e contadores…</p> : null}
+          {pickerLoading ? <p className="muted">Carregando telefones…</p> : null}
           {!pickerLoading && pickerOptions.length === 0 && !dialError ? (
             <p className="muted">Nenhum telefone disponível.</p>
           ) : null}
@@ -467,15 +465,10 @@ export function ClientContactShortcuts({
             {pickerOptions.map((o, i) => {
               const status = o.verification_status ?? "unverified";
               const isBad = status === "invalid_number" || status === "wrong_contact";
-              const counterSummary = dialOptionCounterSummary(o);
-              const situation =
-                o.status != null
-                  ? formatPhoneDialSituation({
-                      status: o.status,
-                      needs_review: o.needsReview,
-                      next_eligible_at: o.nextEligibleAt
-                    })
-                  : null;
+              const callCount = o.dialHistoryAt?.length ?? 0;
+              const statusLine = dialPickerStatusLine(callCount);
+              const dateLine = formatDialHistoryDateLine(o.dialHistoryAt ?? []);
+              const atLimit = dialOptionAtCallLimit(o);
               return (
                 <li key={`${o.clientPhoneId ?? o.contactId ?? "x"}-${o.phone}-${i}`}>
                   <button
@@ -484,20 +477,15 @@ export function ClientContactShortcuts({
                     disabled={dialing || pickerLoading}
                     onClick={() => void startCall(o, true, resolvedDialAsUserId())}
                   >
-                    <VerificationStatusIcon status={status} size={22} />
                     <span className="dial-picker-option-body">
                       <span className="dial-picker-number">{formatPhoneDisplay(o.phone)}</span>
-                      <span className="dial-picker-meta">
-                        {[o.contactName, o.attemptLabel ?? o.label, o.origin].filter(Boolean).join(" · ") ||
-                          "Contato"}
-                        {situation ? ` · ${situation}` : ""}
-                      </span>
-                      {counterSummary ? (
-                        <span className="dial-picker-meta dial-picker-meta--counters">{counterSummary}</span>
+                      <span className="dial-picker-meta dial-picker-meta--status">{statusLine}</span>
+                      {dateLine ? (
+                        <span className="dial-picker-meta dial-picker-meta--dates">{dateLine}</span>
                       ) : null}
                     </span>
-                    {o.attemptsAtLimit ? (
-                      <span className="dial-picker-option-check" aria-label="Limite de tentativas atingido">
+                    {atLimit ? (
+                      <span className="dial-picker-option-check" aria-label="Limite de ligações atingido">
                         <Check size={20} strokeWidth={2.5} />
                       </span>
                     ) : null}
