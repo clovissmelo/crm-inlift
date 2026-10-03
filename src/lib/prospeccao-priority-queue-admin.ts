@@ -46,26 +46,12 @@ export function slugifyPriorityName(name: string): string {
 }
 
 export function sortPrioritiesForDisplay(rows: ProspeccaoPriorityTypeRow[]): ProspeccaoPriorityTypeRow[] {
-  const start = rows.filter((r) => r.queue_anchor === "start");
-  const end = rows.filter((r) => r.queue_anchor === "end");
-  const middle = rows.filter((r) => r.queue_anchor !== "start" && r.queue_anchor !== "end");
-  middle.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
-  start.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
-  end.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
-  return [...start, ...middle, ...end];
+  return rows.slice().sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
 }
 
-/** Primeiro contato = 1; meio = 10,20,…; retorno = 100000 */
+/** Preserva as ordens definidas pelo admin (sem reatribuir início/fim). */
 export function normalizePrioritySortOrders(rows: ProspeccaoPriorityTypeRow[]): ProspeccaoPriorityTypeRow[] {
-  const sorted = sortPrioritiesForDisplay(rows);
-  let mid = 10;
-  return sorted.map((r) => {
-    if (r.queue_anchor === "start") return { ...r, sort_order: 1 };
-    if (r.queue_anchor === "end") return { ...r, sort_order: 100_000 };
-    const next = { ...r, sort_order: mid };
-    mid += 10;
-    return next;
-  });
+  return rows.slice();
 }
 
 export function ruleKindSummary(row: ProspeccaoPriorityTypeRow): string {

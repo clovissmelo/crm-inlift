@@ -11,7 +11,6 @@ import {
   normalizePrioritySortOrders,
   parseRuleParams,
   PROSPECCAO_RULE_KIND_LABELS,
-  ruleKindSummary,
   sortPrioritiesForDisplay,
   type CreatableRuleKind
 } from "@/lib/prospeccao-priority-queue-admin";
@@ -737,11 +736,6 @@ export function ProspeccaoStrategyAdmin({ initialTab = "rules" }: { initialTab?:
                           )
                         }
                       />
-                      <span className="prospeccao-queue-preview">
-                        <span className="prospeccao-queue-preview__dot" style={{ background: color }} />
-                        Prévia na fila
-                      </span>
-                      <span className="prospeccao-queue-row__rule muted">{ruleKindSummary(p)}</span>
                     </div>
                     <div className="prospeccao-queue-row__desc">
                       <span className="prospeccao-queue-row__label">Descrição</span>

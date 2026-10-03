@@ -4,10 +4,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ClientContactShortcuts } from "@/components/client-contact-shortcuts";
-import {
-  ProspeccaoQueueOrderSummary,
-  type ProspeccaoQueuePrioritySummary
-} from "@/components/prospeccao-queue-order-summary";
 import { ProspeccaoPriorityBadge } from "@/components/prospeccao-priority-badge";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
 import { PageIntro } from "@/components/page-intro";
@@ -20,9 +16,7 @@ export function ProspeccaoListView({
   products,
   bdrs,
   companies,
-  priorityFilters,
-  queuePriorities,
-  canEditQueueOrder
+  priorityFilters
 }: {
   initialItems: ProspeccaoListItem[];
   initialTotal: number;
@@ -30,8 +24,6 @@ export function ProspeccaoListView({
   bdrs: User[];
   companies: Company[];
   priorityFilters: Array<{ slug: string; name: string }>;
-  queuePriorities: ProspeccaoQueuePrioritySummary[];
-  canEditQueueOrder: boolean;
 }) {
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
@@ -90,11 +82,6 @@ export function ProspeccaoListView({
   return (
     <div>
       <PageIntro>Leads para contato</PageIntro>
-      <ProspeccaoQueueOrderSummary
-        priorities={queuePriorities}
-        canEdit={canEditQueueOrder}
-        onOrderSaved={() => void load()}
-      />
       <FilterBar>
         <FilterInput
           label="Busca"

@@ -1,27 +1,6 @@
 import { listProspeccaoPriorityTypes } from "@/lib/call-strategy/priorities-config";
 import { all, get, nowIso, run } from "@/lib/db";
-import {
-  normalizePrioritySortOrders,
-  serializeRuleParams,
-  slugifyPriorityName,
-  type CreatableRuleKind
-} from "@/lib/prospeccao-priority-queue-admin";
-
-export async function persistNormalizedPrioritySortOrders(): Promise<void> {
-  const items = await listProspeccaoPriorityTypes();
-  const normalized = normalizePrioritySortOrders(items);
-  const now = nowIso();
-  for (const row of normalized) {
-    await run(
-      `
-        UPDATE prospeccao_priority_types
-        SET sort_order = @sortOrder, updated_at = @now
-        WHERE id = @id
-      `,
-      { id: row.id, sortOrder: row.sort_order, now }
-    );
-  }
-}
+import { serializeRuleParams, slugifyPriorityName, type CreatableRuleKind } from "@/lib/prospeccao-priority-queue-admin";
 
 async function ensureUniqueSlug(base: string): Promise<string> {
   let slug = base || "prioridade";
@@ -59,6 +38,9 @@ export async function createProspeccaoPriorityType(input: {
   const slug = await ensureUniqueSlug(baseSlug);
   const ruleParams = serializeRuleParams(input.rule_params ?? {});
   const now = nowIso();
+  const existing = await listProspeccaoPriorityTypes();
+  const maxSort = existing.reduce((m, r) => Math.max(m, r.sort_order), 0);
+  const sortOrder = maxSort > 0 ? maxSort + 10 : 10;
 
   const result = await run(
     `
@@ -66,7 +48,7 @@ export async function createProspeccaoPriorityType(input: {
         slug, name, description, color, sort_order, rule_kind, rule_params,
         queue_anchor, is_system, status, created_at, updated_at
       ) VALUES (
-        @slug, @name, @description, @color, 500, @ruleKind, @ruleParams,
+        @slug, @name, @description, @color, @sortOrder, @ruleKind, @ruleParams,
         'none', false, 'active', @now, @now
       )
     `,
@@ -77,17 +59,16 @@ export async function createProspeccaoPriorityType(input: {
       color: input.color,
       ruleKind: input.rule_kind,
       ruleParams,
+      sortOrder,
       now
     }
   );
 
-  await persistNormalizedPrioritySortOrders();
   return result.lastInsertRowid ?? 0;
 }
 
 export async function deleteProspeccaoPriorityType(id: number): Promise<void> {
   await run(`DELETE FROM prospeccao_priority_types WHERE id = @id`, { id });
-  await persistNormalizedPrioritySortOrders();
 }
 
 export async function getProspeccaoPriorityTypeById(id: number) {
