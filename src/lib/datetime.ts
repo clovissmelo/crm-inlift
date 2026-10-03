@@ -1,4 +1,4 @@
-const TZ = "America/Sao_Paulo";
+export const TZ = "America/Sao_Paulo";
 
 export function nowInSpIso() {
   return new Date().toISOString();

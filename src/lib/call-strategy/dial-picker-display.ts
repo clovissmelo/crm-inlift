@@ -1,11 +1,24 @@
-import { formatSpDateTime } from "@/lib/datetime";
+import { TZ } from "@/lib/datetime";
 
-export function formatDialHistoryDateLine(times: string[]): string | null {
-  if (times.length === 0) return null;
-  const labels = times.map((t) => formatSpDateTime(t));
-  if (labels.length === 1) return labels[0]!;
-  if (labels.length === 2) return `${labels[0]} e ${labels[1]}`;
-  return `${labels.slice(0, -1).join(", ")} e ${labels[labels.length - 1]}`;
+export const DIAL_PICKER_RECENT_CALLS = 3;
+
+/** Ex.: 02/10/2026 20:59 (sem vírgula entre data e hora). */
+export function formatDialPickerCallTime(iso: string): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: TZ,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  })
+    .format(new Date(iso))
+    .replace(", ", " ");
+}
+
+export function sortDialHistoryNewestFirst(times: string[]): string[] {
+  return [...times].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 }
 
 export function dialPickerStatusLine(callCount: number): string {

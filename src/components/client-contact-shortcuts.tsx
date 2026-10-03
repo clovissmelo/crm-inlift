@@ -12,8 +12,10 @@ import { apiErrorText } from "@/lib/api-error-text";
 import { EmailApproachModal } from "@/components/email-approach-modal";
 import type { PhoneDialContextItem } from "@/lib/call-strategy/eligible-phones";
 import {
+  DIAL_PICKER_RECENT_CALLS,
   dialPickerStatusLine,
-  formatDialHistoryDateLine
+  formatDialPickerCallTime,
+  sortDialHistoryNewestFirst
 } from "@/lib/call-strategy/dial-picker-display";
 import { telLink, formatPhoneDisplay, isMobileBr, phoneDigits } from "@/lib/format";
 
@@ -160,6 +162,7 @@ export function ClientContactShortcuts({
   const [dialError, setDialError] = useState<string | null>(null);
   const [pickerOptions, setPickerOptions] = useState<ContactDialOption[]>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
+  const [expandedDialHistory, setExpandedDialHistory] = useState<Set<string>>(() => new Set());
 
   const waNumber = whatsapp || phone;
   const hasEmail = Boolean(email?.trim());
@@ -217,6 +220,20 @@ export function ClientContactShortcuts({
     setDialError(null);
     setPickerOptions([]);
     setPickerLoading(false);
+    setExpandedDialHistory(new Set());
+  }
+
+  function dialHistoryKey(o: ContactDialOption, index: number): string {
+    return String(o.clientPhoneId ?? o.contactId ?? o.phone ?? index);
+  }
+
+  function toggleDialHistoryExpanded(key: string) {
+    setExpandedDialHistory((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   function closeIdentityPicker() {
@@ -454,7 +471,7 @@ export function ClientContactShortcuts({
             <p className="dial-picker-head-text">
               <strong>Qual número ligar?</strong>
               <br />
-              Escolha abaixo. O ✓ verde indica que aquele número já atingiu o limite de ligações configurado.
+              Escolha abaixo o número para fazer a ligação.
             </p>
           </div>
           {pickerLoading ? <p className="muted">Carregando telefones…</p> : null}
@@ -467,21 +484,63 @@ export function ClientContactShortcuts({
               const isBad = status === "invalid_number" || status === "wrong_contact";
               const callCount = o.dialHistoryAt?.length ?? 0;
               const statusLine = dialPickerStatusLine(callCount);
-              const dateLine = formatDialHistoryDateLine(o.dialHistoryAt ?? []);
+              const historyKey = dialHistoryKey(o, i);
+              const historyExpanded = expandedDialHistory.has(historyKey);
+              const sortedTimes = sortDialHistoryNewestFirst(o.dialHistoryAt ?? []);
+              const visibleTimes = historyExpanded
+                ? sortedTimes
+                : sortedTimes.slice(0, DIAL_PICKER_RECENT_CALLS);
+              const hasMoreHistory = !historyExpanded && sortedTimes.length > DIAL_PICKER_RECENT_CALLS;
               const atLimit = dialOptionAtCallLimit(o);
+              const disabled = dialing || pickerLoading;
               return (
                 <li key={`${o.clientPhoneId ?? o.contactId ?? "x"}-${o.phone}-${i}`}>
-                  <button
-                    type="button"
-                    className={`dial-picker-option${isBad ? " dial-picker-option--bad" : ""}`}
-                    disabled={dialing || pickerLoading}
-                    onClick={() => void startCall(o, true, resolvedDialAsUserId())}
+                  <div
+                    role="button"
+                    tabIndex={disabled ? -1 : 0}
+                    className={`dial-picker-option${isBad ? " dial-picker-option--bad" : ""}${disabled ? " dial-picker-option--disabled" : ""}`}
+                    aria-disabled={disabled}
+                    onClick={() => {
+                      if (disabled) return;
+                      void startCall(o, true, resolvedDialAsUserId());
+                    }}
+                    onKeyDown={(e) => {
+                      if (disabled) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        void startCall(o, true, resolvedDialAsUserId());
+                      }
+                    }}
                   >
                     <span className="dial-picker-option-body">
                       <span className="dial-picker-number">{formatPhoneDisplay(o.phone)}</span>
                       <span className="dial-picker-meta dial-picker-meta--status">{statusLine}</span>
-                      {dateLine ? (
-                        <span className="dial-picker-meta dial-picker-meta--dates">{dateLine}</span>
+                      {visibleTimes.length > 0 ? (
+                        <span className="dial-picker-call-history">
+                          {visibleTimes.map((at, idx) => {
+                            const isLast = idx === visibleTimes.length - 1;
+                            return (
+                              <span key={`${at}-${idx}`} className="dial-picker-meta dial-picker-meta--dates">
+                                {formatDialPickerCallTime(at)}
+                                {hasMoreHistory && isLast ? (
+                                  <>
+                                    {" "}
+                                    <button
+                                      type="button"
+                                      className="dial-picker-more"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleDialHistoryExpanded(historyKey);
+                                      }}
+                                    >
+                                      mais
+                                    </button>
+                                  </>
+                                ) : null}
+                              </span>
+                            );
+                          })}
+                        </span>
                       ) : null}
                     </span>
                     {atLimit ? (
@@ -489,7 +548,7 @@ export function ClientContactShortcuts({
                         <Check size={20} strokeWidth={2.5} />
                       </span>
                     ) : null}
-                  </button>
+                  </div>
                 </li>
               );
             })}
