@@ -40,6 +40,8 @@ const createSchema = z.object({
   flow_id: z.number().int().positive().optional()
 });
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 export const maxDuration = 60;
 
 export async function GET() {
@@ -47,7 +49,10 @@ export async function GET() {
   const denied = await requireAdminApi(user);
   if (denied) return denied;
   const runs = await listLeadGenerationRunsForDisplay(40);
-  return Response.json({ runs });
+  return Response.json(
+    { runs },
+    { headers: { "Cache-Control": "no-store, max-age=0" } }
+  );
 }
 
 export async function POST(request: Request) {

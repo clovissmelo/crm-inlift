@@ -11,6 +11,8 @@ import {
   recomputeRunCountsFromItems
 } from "@/lib/lead-generation/runs-repo";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 export const maxDuration = 60;
 
 type Params = { params: Promise<{ id: string }> };

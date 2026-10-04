@@ -4,7 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
+import { MainOverlayHostProvider } from "@/components/main-overlay-host";
+import { closeLeadGenOverlays } from "@/lib/lead-generation/lead-gen-overlay-control";
 import clsx from "clsx";
 import {
   Building2,
@@ -108,11 +110,32 @@ function isAdminHubPath(pathname: string) {
   );
 }
 
+function handleSidebarNavClick(
+  e: MouseEvent<HTMLAnchorElement>,
+  href: Route,
+  active: boolean,
+  router: ReturnType<typeof useRouter>
+) {
+  closeLeadGenOverlays();
+  if (active) {
+    e.preventDefault();
+    return;
+  }
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+  e.preventDefault();
+  router.push(href);
+}
+
 function NavLinkItem({ item, pathname }: { item: NavItem; pathname: string }) {
+  const router = useRouter();
   const Icon = item.icon;
   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
   return (
-    <Link href={item.href} className={clsx("nav-link", active && "active")}>
+    <Link
+      href={item.href}
+      className={clsx("nav-link", active && "active")}
+      onClick={(e) => handleSidebarNavClick(e, item.href, active, router)}
+    >
       <Icon size={18} aria-hidden />
       <span className="nav-link-label">{item.label}</span>
     </Link>
@@ -135,6 +158,10 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [overlayHost, setOverlayHost] = useState<HTMLDivElement | null>(null);
+  const overlayHostRef = useCallback((node: HTMLDivElement | null) => {
+    setOverlayHost(node);
+  }, []);
   const crumbParts = pageCrumbSegments(pathname);
   const userIsAdmin = isAdmin(user);
   const resolvedMenuAccess = parseMenuAccessFromClient(menuAccess);
@@ -152,11 +179,17 @@ export function AppShell({
   }, [pathname, resolvedMenuAccess, router, userIsAdmin]);
 
   return (
+    <MainOverlayHostProvider host={overlayHost}>
     <div className="app-layout">
       <aside className={clsx("sidebar", mobileNavOpen && "is-nav-open")}>
         <div className="sidebar-header">
           <div className="brand">
-            <Link href="/dashboard" className="sidebar-brand-link" aria-label="CRM Inlift — início">
+            <Link
+              href="/dashboard"
+              className="sidebar-brand-link"
+              aria-label="CRM Inlift — início"
+              onClick={(e) => handleSidebarNavClick(e, "/dashboard", pathname === "/dashboard", router)}
+            >
               <Image
                 src="/inlift-logo.png"
                 alt="INLIFT GROUP"
@@ -189,6 +222,14 @@ export function AppShell({
                       key={item.href}
                       href={item.href}
                       className={clsx("nav-link", isAdminHubPath(pathname) && "active")}
+                      onClick={(e) =>
+                        handleSidebarNavClick(
+                          e,
+                          item.href,
+                          isAdminHubPath(pathname),
+                          router
+                        )
+                      }
                     >
                       <Shield size={18} aria-hidden />
                       <span className="nav-link-label">{item.label}</span>
@@ -231,9 +272,10 @@ export function AppShell({
         </header>
         <main className="page-content">
           <Api4comCallProvider user={user}>{children}</Api4comCallProvider>
-          <div id="app-main-overlay-root" className="app-main-overlay-root" aria-hidden />
         </main>
+        <div ref={overlayHostRef} id="app-main-overlay-root" className="app-main-overlay-root" aria-hidden />
       </div>
     </div>
+    </MainOverlayHostProvider>
   );
 }
