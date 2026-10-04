@@ -1,4 +1,4 @@
-import type { DashboardWhatsAppReport } from "@/lib/dashboard-stats";
+import type { DashboardWhatsAppReport } from "@/lib/dashboard-stats-types";
 import {
   openWhatsAppShare,
   prepareWhatsAppMessage,

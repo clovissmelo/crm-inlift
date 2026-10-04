@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DashboardStatsPayload } from "@/lib/dashboard-stats";
+import type { DashboardStatsPayload } from "@/lib/dashboard-stats-types";
 import { ArrowUpRight, Calendar, Forward, Gem, Target, UserCheck } from "lucide-react";
 import { FilterBar, FilterBarButton, FilterSelect } from "@/components/filter-bar";
 import {
