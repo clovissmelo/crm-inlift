@@ -131,6 +131,22 @@
   width: auto;
 }
 
+.call-script-nav-row--with-skip .call-script-btn-back {
+  flex: 0 1 38%;
+}
+
+.call-script-btn-skip {
+  flex: 0 0 auto;
+  min-width: 4.5rem;
+  padding: 1rem 0.85rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.call-script-nav-row--with-skip .call-script-btn-next {
+  flex: 1 1 0;
+}
+
 .call-script-btn-choice {
   width: 100%;
   padding: 0.85rem 1rem;

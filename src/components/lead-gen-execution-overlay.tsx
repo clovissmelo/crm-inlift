@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { LeadGenExecutionTechPanel } from "@/components/lead-gen-execution-tech-panel";
 import { sortActivityFeedDesc } from "@/lib/lead-generation/activity-feed";
+import { isGoogleQuotaPauseMessage } from "@/lib/lead-generation/quota";
 import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
 
 export type LeadGenActivityLine = {
@@ -78,9 +79,11 @@ type Props = {
   phaseLine: string | null;
   activity: LeadGenActivityLine[];
   cancelling: boolean;
+  finalizingNow?: boolean;
   onClose: () => void;
   onCancel: () => void;
   onResume?: () => void;
+  onFinalizeNow?: () => void;
   onRefresh?: () => void;
   onForceTick?: () => void;
   refreshBusy?: boolean;
@@ -94,9 +97,11 @@ export function LeadGenExecutionOverlay({
   phaseLine,
   activity,
   cancelling,
+  finalizingNow = false,
   onClose,
   onCancel,
   onResume,
+  onFinalizeNow,
   onRefresh,
   onForceTick,
   refreshBusy,
@@ -144,7 +149,27 @@ export function LeadGenExecutionOverlay({
 
         {active ? <ProgressBar run={run} /> : null}
 
-        {run.error_message ? <p className="alert alert-error">{run.error_message}</p> : null}
+        {run.error_message ? (
+          isGoogleQuotaPauseMessage(run.error_message) && onFinalizeNow ? (
+            <div className="lead-gen-limit-alert alert alert-error">
+              <p className="lead-gen-limit-alert__text">{run.error_message}</p>
+              <p className="muted lead-gen-limit-alert__hint">
+                Finalize agora para concluir com os leads já gerados nesta execução ({counts.created ?? 0} novo
+                {(counts.created ?? 0) === 1 ? "" : "s"}), sem precisar retomar amanhã.
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary lead-gen-limit-alert__action"
+                disabled={finalizingNow || cancelling}
+                onClick={onFinalizeNow}
+              >
+                {finalizingNow ? "Finalizando…" : "Finalizar agora"}
+              </button>
+            </div>
+          ) : (
+            <p className="alert alert-error">{run.error_message}</p>
+          )
+        ) : null}
 
         <ul className="lead-gen-overlay-stats muted">
           <li>ANP: {counts.anp_found ?? 0}</li>

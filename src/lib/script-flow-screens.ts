@@ -47,7 +47,14 @@ export type ScriptScreenBlock =
   | ScriptScheduleReturnBlock;
 
 export type ScriptScreenNavigation =
-  | { mode: "sequential"; next: string | null; /** true = “Fim do fluxo” (não segue ordem das telas) */ nextIsEnd?: boolean }
+  | {
+      mode: "sequential";
+      next: string | null;
+      /** true = “Fim do fluxo” (não segue ordem das telas) */
+      nextIsEnd?: boolean;
+      /** BDR pode avançar sem preencher campos desta tela. */
+      allow_skip?: boolean;
+    }
   | { mode: "branch"; question: string; choices: ScriptFlowBranchChoice[] };
 
 export type ScriptScreen = {
@@ -115,6 +122,10 @@ export function inputFieldsOnScreen(screen: ScriptScreen): ScriptFlowCaptureFiel
 
 export function screenHasFillableFields(screen: ScriptScreen): boolean {
   return screenHasNotesBlock(screen) || screenHasContactRegisterBlock(screen);
+}
+
+export function screenAllowsSkip(screen: ScriptScreen): boolean {
+  return screen.navigation.mode === "sequential" && Boolean(screen.navigation.allow_skip);
 }
 
 export const SCRIPT_BLOCK_LABELS: Record<ScriptScreenBlock["kind"], string> = {
@@ -581,7 +592,8 @@ export function draftsToScreenFlow(drafts: ScriptScreenDraft[]): ScriptCallFlow 
       navigation = {
         mode: "sequential",
         next: navigation.next,
-        ...(navigation.nextIsEnd ? { nextIsEnd: true } : {})
+        ...(navigation.nextIsEnd ? { nextIsEnd: true } : {}),
+        ...(navigation.allow_skip ? { allow_skip: true } : {})
       };
     } else {
       navigation = {

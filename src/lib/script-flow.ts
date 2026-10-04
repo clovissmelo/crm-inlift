@@ -20,6 +20,7 @@ export {
   screenFlowToDrafts,
   screenHasNotesBlock,
   screenHasFillableFields,
+  screenAllowsSkip,
   screenHasContactRegisterBlock,
   contactRegisterFields,
   inputFieldsOnScreen,

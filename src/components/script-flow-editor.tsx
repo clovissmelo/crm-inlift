@@ -169,6 +169,36 @@ export function ScriptFlowEditor({ body, onBodyChange, testSplitActive, onTestTo
     return implicit;
   }
 
+  function sequentialNavPatch(
+    patch: Partial<{ next: string | null; nextIsEnd: boolean; allow_skip: boolean }>
+  ) {
+    if (!selected) return;
+    const prev =
+      selected.navigation.mode === "sequential"
+        ? selected.navigation
+        : { mode: "sequential" as const, next: null as string | null };
+    updateSelected({
+      navigation: {
+        mode: "sequential",
+        next: patch.next !== undefined ? patch.next : prev.next,
+        ...(patch.nextIsEnd !== undefined
+          ? patch.nextIsEnd
+            ? { nextIsEnd: true }
+            : {}
+          : prev.nextIsEnd
+            ? { nextIsEnd: true }
+            : {}),
+        ...(patch.allow_skip !== undefined
+          ? patch.allow_skip
+            ? { allow_skip: true }
+            : {}
+          : prev.allow_skip
+            ? { allow_skip: true }
+            : {})
+      }
+    });
+  }
+
   function setNavigationMode(mode: "sequential" | "branch") {
     if (!selected) return;
     if (mode === "branch") {
@@ -191,7 +221,8 @@ export function ScriptFlowEditor({ body, onBodyChange, testSplitActive, onTestTo
         navigation: {
           mode: "sequential",
           next: prev?.next ?? null,
-          ...(prev?.nextIsEnd ? { nextIsEnd: true } : {})
+          ...(prev?.nextIsEnd ? { nextIsEnd: true } : {}),
+          ...(prev?.allow_skip ? { allow_skip: true } : {})
         }
       });
     }
@@ -565,14 +596,10 @@ export function ScriptFlowEditor({ body, onBodyChange, testSplitActive, onTestTo
                     onChange={(e) => {
                       const v = e.target.value;
                       if (!v) {
-                        updateSelected({
-                          navigation: { mode: "sequential", next: null, nextIsEnd: true }
-                        });
+                        sequentialNavPatch({ next: null, nextIsEnd: true });
                         return;
                       }
-                      updateSelected({
-                        navigation: { mode: "sequential", next: v, nextIsEnd: false }
-                      });
+                      sequentialNavPatch({ next: v, nextIsEnd: false });
                     }}
                   >
                     <option value="">Fim do fluxo</option>
@@ -584,6 +611,22 @@ export function ScriptFlowEditor({ body, onBodyChange, testSplitActive, onTestTo
                         </option>
                       ))}
                   </select>
+                  <label className="script-flow-allow-skip" style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "flex-start" }}>
+                    <input
+                      type="checkbox"
+                      checked={
+                        selected.navigation.mode === "sequential" && Boolean(selected.navigation.allow_skip)
+                      }
+                      onChange={(e) => sequentialNavPatch({ allow_skip: e.target.checked })}
+                      style={{ marginTop: 3 }}
+                    />
+                    <span>
+                      Permitir pular esta tela
+                      <span className="muted script-flow-field-hint" style={{ display: "block", marginTop: 4 }}>
+                        Exibe o botão <strong>Pular</strong> na ligação para avançar sem salvar os campos.
+                      </span>
+                    </span>
+                  </label>
                 </div>
               ) : selected.navigation.mode === "branch" ? (
                 <>

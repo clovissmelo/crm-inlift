@@ -37,7 +37,7 @@ export type CallScriptLogEntry = {
   at: string;
   step_id: string;
   step_title: string;
-  action: "next" | "choice" | "restart" | "capture";
+  action: "next" | "choice" | "restart" | "capture" | "skip";
   choice_label?: string | null;
   next_step_id?: string | null;
   capture_notes?: CallScriptCaptureNote[];
@@ -163,6 +163,7 @@ export function formatCallScriptLogInline(log: CallScriptLogEntry[]): string | n
       if (ret) return `${title} → Próximo (retorno agendado)`;
       return `${title} → Próximo`;
     }
+    if (e.action === "skip") return `${title} → Pulou`;
     if (e.action === "restart") return "Reinício do roteiro";
     return title;
   });
@@ -185,6 +186,9 @@ export function formatCallScriptLogForNotes(log: CallScriptLogEntry[]): string |
     }
     if (e.action === "next") {
       return `· ${title} → Próximo`;
+    }
+    if (e.action === "skip") {
+      return `· ${title} → Pulou (sem preencher)`;
     }
     if (e.action === "restart") {
       return `· Reinício do roteiro`;

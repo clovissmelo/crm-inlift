@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, PanelRightClose, PanelRightOpen } from "lucide-react";
 import {
   contactLayerFromScriptLog,
@@ -16,6 +16,7 @@ import {
   inputFieldsOnScreen,
   parseCallScriptBody,
   screenHasFillableFields,
+  screenAllowsSkip,
   renderStepContent,
   screenCreatesContact,
   screenHasScheduleBlock,
@@ -269,7 +270,7 @@ export function CallScriptGuidePanel({
 
   function goNext(
     next: string | null,
-    action: "next" | "choice" | "capture",
+    action: "next" | "choice" | "capture" | "skip",
     choiceLabel?: string,
     captureNotes?: CallScriptLogEntry["capture_notes"],
     scheduledMeetingAt?: string | null,
@@ -374,6 +375,12 @@ export function CallScriptGuidePanel({
     return notes;
   }
 
+  function skipSequential() {
+    if (!screen || !flow || !stepId || !screenAllowsSkip(screen)) return;
+    const next = sequentialNext(flow, stepId);
+    goNext(next, "skip");
+  }
+
   function advanceSequential() {
     if (!screen || !flow || !stepId) return;
     const next = sequentialNext(flow, stepId);
@@ -401,6 +408,24 @@ export function CallScriptGuidePanel({
 
   const seqNext = screen && flow && stepId ? sequentialNext(flow, stepId) : null;
   const hasNextScreen = Boolean(seqNext && flow?.screens[seqNext]);
+  const canSkipStep = Boolean(screen && screenAllowsSkip(screen));
+
+  function renderNavRow(nextButton: ReactNode) {
+    return (
+      <div className={`call-script-nav-row${canSkipStep ? " call-script-nav-row--with-skip" : ""}`}>
+        <button type="button" className="btn call-script-btn-back" disabled={!canGoBack} onClick={goBack}>
+          <ChevronLeft size={18} aria-hidden />
+          Voltar
+        </button>
+        {canSkipStep ? (
+          <button type="button" className="btn call-script-btn-skip" onClick={skipSequential}>
+            Pular
+          </button>
+        ) : null}
+        {nextButton}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -587,11 +612,7 @@ export function CallScriptGuidePanel({
                   </div>
                 </>
               ) : hasNextScreen || screenHasFillableFields(screen) ? (
-                <div className="call-script-nav-row">
-                  <button type="button" className="btn call-script-btn-back" disabled={!canGoBack} onClick={goBack}>
-                    <ChevronLeft size={18} aria-hidden />
-                    Voltar
-                  </button>
+                renderNavRow(
                   <button type="button" className="btn btn-primary call-script-btn-next" onClick={() => advanceSequential()}>
                     {screenHasFillableFields(screen)
                       ? hasNextScreen
@@ -600,7 +621,7 @@ export function CallScriptGuidePanel({
                       : "Próximo"}
                     <ChevronRight size={18} aria-hidden />
                   </button>
-                </div>
+                )
               ) : (
                 <>
                   {handoffPending ? (
@@ -608,11 +629,7 @@ export function CallScriptGuidePanel({
                       Abrindo complemento de registro…
                     </p>
                   ) : null}
-                  <div className="call-script-nav-row">
-                    <button type="button" className="btn call-script-btn-back" disabled={!canGoBack} onClick={goBack}>
-                      <ChevronLeft size={18} aria-hidden />
-                      Voltar
-                    </button>
+                  {renderNavRow(
                     <button
                       type="button"
                       className="btn btn-primary call-script-btn-next"
@@ -622,7 +639,7 @@ export function CallScriptGuidePanel({
                       Concluir e registrar
                       <ChevronRight size={18} aria-hidden />
                     </button>
-                  </div>
+                  )}
                 </>
               )}
             </>

@@ -26,6 +26,7 @@ import {
   useNovosLeadsPageSync,
   type NovosLeadsPageSyncPayload
 } from "@/hooks/use-novos-leads-page-sync";
+import { isGoogleQuotaPauseMessage } from "@/lib/lead-generation/quota";
 import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
 import { formatRunResultsSummary } from "@/lib/lead-generation/run-outcome";
 import type { LeadGenCounts } from "@/lib/lead-generation/types";
@@ -180,6 +181,7 @@ export function AdminNovosLeadsWizard() {
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [finalizingNow, setFinalizingNow] = useState(false);
   const [leadsRequested, setLeadsRequested] = useState(1);
   const [execOverlayOpen, setExecOverlayOpen] = useState(false);
   const [backgroundRunNotice, setBackgroundRunNotice] = useState(false);
@@ -829,6 +831,39 @@ export function AdminNovosLeadsWizard() {
     void tickActiveRun(runId);
   }
 
+  async function finalizeRunNow(runId = activeRunId ?? listActiveRun?.id) {
+    if (!runId) return;
+    setFinalizingNow(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/lead-generation/runs/${runId}/finalize-now`, {
+        method: "POST",
+        cache: "no-store"
+      });
+      let data: { error?: string; run?: RunDetail } = {};
+      try {
+        data = (await res.json()) as typeof data;
+      } catch {
+        setError("Resposta inválida ao finalizar. Tente atualizar a página.");
+        return;
+      }
+      if (!res.ok) {
+        setError(data.error ?? "Não foi possível finalizar agora");
+        return;
+      }
+      if (data.run) {
+        applyRunRow(data.run);
+      } else {
+        await fetchRunDetail(runId);
+      }
+      setBackgroundRunNotice(false);
+      void loadMeta();
+      void pullPageSyncNow({ motor: false, watchId: runId, feed: true });
+    } finally {
+      setFinalizingNow(false);
+    }
+  }
+
   const manualRefreshRun = useCallback(
     async (runId: number) => {
       setRefreshBusy(true);
@@ -939,6 +974,7 @@ export function AdminNovosLeadsWizard() {
               }
               activity={activityFeed}
               cancelling={cancelling}
+              finalizingNow={finalizingNow}
               onClose={closeExecOverlay}
               onCancel={() => {
                 if (shownRun.id > 0) void cancelRun(shownRun.id);
@@ -949,6 +985,11 @@ export function AdminNovosLeadsWizard() {
                 }
               }}
               onResume={shownRun.status === "paused" ? () => void resumeRun(shownRun.id) : undefined}
+              onFinalizeNow={
+                shownRun.status === "paused" && isGoogleQuotaPauseMessage(shownRun.error_message)
+                  ? () => void finalizeRunNow(shownRun.id)
+                  : undefined
+              }
               onRefresh={() => void manualRefreshRun(shownRun.id)}
               onForceTick={() => forceTickRun(shownRun.id)}
               refreshBusy={refreshBusy}

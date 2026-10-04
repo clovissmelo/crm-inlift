@@ -192,6 +192,29 @@
   margin: 0;
 }
 
+.lead-gen-limit-alert {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.lead-gen-limit-alert__text {
+  margin: 0;
+  font-weight: 600;
+}
+
+.lead-gen-limit-alert__hint {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.lead-gen-limit-alert__action {
+  margin-top: 0.15rem;
+}
+
 .lead-gen-overlay-stats {
   display: flex;
   flex-wrap: wrap;

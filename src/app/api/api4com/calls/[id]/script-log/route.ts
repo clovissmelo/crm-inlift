@@ -7,7 +7,7 @@ type Params = { params: Promise<{ id: string }> };
 const bodySchema = z.object({
   step_id: z.string().min(1),
   step_title: z.string().min(1),
-  action: z.enum(["next", "choice", "restart", "capture"]),
+  action: z.enum(["next", "choice", "restart", "capture", "skip"]),
   choice_label: z.string().optional().nullable(),
   next_step_id: z.string().optional().nullable(),
   capture_notes: z
@@ -23,7 +23,7 @@ const logEntrySchema = z.object({
   at: z.string(),
   step_id: z.string(),
   step_title: z.string(),
-  action: z.enum(["next", "choice", "restart", "capture"]),
+  action: z.enum(["next", "choice", "restart", "capture", "skip"]),
   choice_label: z.string().optional().nullable(),
   next_step_id: z.string().optional().nullable(),
   capture_notes: z

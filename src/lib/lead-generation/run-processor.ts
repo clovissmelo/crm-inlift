@@ -266,6 +266,49 @@ async function dropRemainingPending(runId: number) {
   await run("DELETE FROM lead_generation_items WHERE run_id = @runId AND status = 'pending'", { runId });
 }
 
+/** Descarta fila não concluída (pendente ou em processamento) antes de encerrar a execução. */
+async function dropRemainingQueue(runId: number) {
+  await run(
+    `
+      DELETE FROM lead_generation_items
+      WHERE run_id = @runId AND status IN ('pending', 'processing')
+    `,
+    { runId }
+  );
+}
+
+/** Encerra agora com os leads já criados (ex.: limite diário Google). */
+export async function finalizeLeadGenerationRunNow(
+  runId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const runRow = await getLeadGenerationRun(runId);
+  if (!runRow) return { ok: false, error: "Não encontrado" };
+  if (!["queued", "running", "paused"].includes(runRow.status)) {
+    return { ok: false, error: "Execução já finalizada." };
+  }
+
+  await dropRemainingQueue(runId);
+  let { counts } = await recomputeCounts(runId, runRow);
+  counts = bumpProgressTracking(counts, "finalizing");
+  counts.google_matched = (counts.created ?? 0) + (counts.ambiguous ?? 0);
+  counts.enriched = counts.created ?? 0;
+
+  await updateRun(runId, {
+    status: "running",
+    phase: "finalizing",
+    error_message: null,
+    counts_json: counts,
+    progress_pct: computeRunProgressPct({
+      phase: "finalizing",
+      status: "running",
+      max_stations: runRow.max_stations,
+      counts_json: counts
+    })
+  });
+  await tickFinalizing(runId);
+  return { ok: true };
+}
+
 async function createdCountForRun(runId: number) {
   const byStatus = await countItemsByStatus(runId);
   return byStatus.created ?? 0;
