@@ -5,6 +5,8 @@ import { parseCallScriptBody } from "@/lib/script-flow";
 import { CONTACT_ORIGIN } from "@/lib/contact-origin";
 import { syncClientPhonesFromContacts } from "@/lib/call-strategy/client-phones";
 import { tryReenterProspeccaoAfterNewPhone } from "@/lib/call-strategy/queue-eval";
+import { contactLayerFromScriptLog } from "@/lib/call-script-log";
+import { setContactAsPrimaryPhone } from "@/lib/contacts";
 import {
   contactPayloadFromCaptureNotes,
   mergeProfileTags,
@@ -55,13 +57,33 @@ export async function enrichScriptLogEntryWithContactCreate(
 
   if (prior?.created_contact_id) {
     const updatedId = await updateContactFromCapture(prior.created_contact_id, call.client_id, payload, tag);
-    if (updatedId) return { ...entry, created_contact_id: updatedId };
+    if (updatedId) {
+      await maybeMarkCapturedContactPrimary(call.client_id, updatedId, previousLog);
+      return { ...entry, created_contact_id: updatedId };
+    }
     return entry;
   }
 
   const createdId = await insertContactFromCapture(call.client_id, payload, tag);
-  if (createdId) return { ...entry, created_contact_id: createdId };
+  if (createdId) {
+    await maybeMarkCapturedContactPrimary(call.client_id, createdId, previousLog);
+    return { ...entry, created_contact_id: createdId };
+  }
   return entry;
+}
+
+async function maybeMarkCapturedContactPrimary(
+  clientId: number,
+  contactId: number,
+  log: CallScriptLogEntry[]
+) {
+  if (contactLayerFromScriptLog(log) !== "decisor") return;
+  try {
+    await setContactAsPrimaryPhone(contactId);
+    await syncClientPhonesFromContacts(clientId);
+  } catch {
+    /* telefone ausente ou contato inválido */
+  }
 }
 
 async function insertContactFromCapture(

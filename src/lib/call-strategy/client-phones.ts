@@ -143,16 +143,16 @@ export function isPhoneEligibleNow(
   return true;
 }
 
-export function phoneAttemptLabel(
-  phone: ClientPhoneRow,
-  settings: CallStrategySettings,
-  extraUnregisteredEnded = 0
-): string {
+/** Próxima tentativa no ciclo (só contadores que esgotam o número). */
+export function phoneAttemptLabel(phone: ClientPhoneRow, settings: CallStrategySettings): string {
   const max = settings.max_no_contact_attempts ?? settings.max_no_answer_attempts;
-  const used =
-    Math.max(phone.cycle_no_contact_count, phone.cycle_invalid_count, phone.cycle_wrong_number_count) +
-    Math.max(0, extraUnregisteredEnded);
-  return `Tentativa ${Math.min(used + 1, max)} de ${max}`;
+  const used = Math.max(
+    phone.cycle_no_contact_count,
+    phone.cycle_invalid_count,
+    phone.cycle_wrong_number_count
+  );
+  if (used >= max) return `${max} de ${max} no limite`;
+  return `Tentativa ${used + 1} de ${max}`;
 }
 
 export async function refreshClientPhoneSummary(clientId: number): Promise<string | null> {

@@ -18,7 +18,9 @@ import { get, nowIso, run } from "@/lib/db";
 import { completeFollowUp } from "@/lib/follow-ups";
 import { approachCreateSchema } from "@/lib/validators";
 import { recordDialAttemptFromApproach } from "@/lib/call-strategy/record-attempt";
+import { syncClientPhonesFromContacts } from "@/lib/call-strategy/client-phones";
 import { exitProspeccaoCommercial } from "@/lib/call-strategy/queue-eval";
+import { setContactAsPrimaryPhone } from "@/lib/contacts";
 
 export async function POST(request: Request) {
   const user = await requireApiUser();
@@ -165,6 +167,18 @@ export async function POST(request: Request) {
 
     if (data.follow_up_id) {
       await completeFollowUp(data.follow_up_id, user.id, approachId);
+    }
+
+    if (registrationStatus === "final" && data.spoke_with_decision_maker === true) {
+      const primaryContactId = data.linked_contact_id ?? data.contact_id;
+      if (primaryContactId) {
+        try {
+          await setContactAsPrimaryPhone(primaryContactId);
+          await syncClientPhonesFromContacts(data.client_id);
+        } catch {
+          /* sem telefone ou contato inválido */
+        }
+      }
     }
 
     if (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ClientPanelHead } from "@/components/client-section-title";
 import { formatSpDateTime } from "@/lib/datetime";
 import { formatPhoneDisplay } from "@/lib/format";
 import type { PhoneDialContextItem } from "@/lib/call-strategy/eligible-phones";
@@ -29,6 +30,7 @@ export function ClientDialPhonesPanel({ clientId }: { clientId: number }) {
   const [loading, setLoading] = useState(true);
   const [reason, setReason] = useState("");
   const [reactivateId, setReactivateId] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,8 +69,15 @@ export function ClientDialPhonesPanel({ clientId }: { clientId: number }) {
   if (phones.length === 0) return <p className="muted">Sem telefone cadastrado — disponível para enriquecimento.</p>;
 
   return (
-    <div className="panel" style={{ padding: 12, marginTop: 12 }}>
-      <h4 style={{ marginTop: 0 }}>Estratégia de ligação por telefone</h4>
+    <div className="panel client-detail-section">
+      <ClientPanelHead
+        title="Estratégia de ligação por telefone"
+        collapsible
+        open={expanded}
+        onToggle={() => setExpanded((v) => !v)}
+      />
+      {!expanded ? null : (
+      <>
       {phones.map((p) => (
         <div key={p.client_phone_id} style={{ borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 8 }}>
           <strong>
@@ -117,7 +126,7 @@ export function ClientDialPhonesPanel({ clientId }: { clientId: number }) {
       ))}
       {history.length > 0 ? (
         <details style={{ marginTop: 12 }}>
-          <summary>Histórico de tentativas (estratégia)</summary>
+          <summary>Histórico de tentativas no limite (estratégia)</summary>
           <ul style={{ fontSize: "0.8125rem", paddingLeft: 18 }}>
             {history.slice(0, 30).map((h) => (
               <li key={h.id}>
@@ -126,12 +135,13 @@ export function ClientDialPhonesPanel({ clientId }: { clientId: number }) {
                 {h.phone_display ? ` · ${formatPhoneDisplay(h.phone_display)}` : ` · telefone #${h.client_phone_id}`}
                 {" · "}
                 {h.attempt_bucket}
-                {h.consumes_cycle ? "" : " (não consome ciclo)"}
               </li>
             ))}
           </ul>
         </details>
       ) : null}
+      </>
+      )}
     </div>
   );
 }

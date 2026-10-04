@@ -3,7 +3,8 @@ import { nowIso, run } from "@/lib/db";
 import { applyUserApi4comExtension } from "@/lib/api4com/user-extension";
 import { applyUserApi4comApiToken } from "@/lib/api4com/user-token";
 import { requireAdminApi } from "@/lib/admin";
-import { listUsers, setUserRoles } from "@/lib/users";
+import { setUserAccessProfiles } from "@/lib/access-profiles";
+import { getUserById, listUsers, setUserRoles } from "@/lib/users";
 import { userCreateSchema } from "@/lib/validators";
 
 export async function GET() {
@@ -51,7 +52,11 @@ export async function POST(request: Request) {
     if (data.api4com_api_token) {
       await applyUserApi4comApiToken(userId, data.roles, data.api4com_api_token);
     }
-    return Response.json({ id: userId }, { status: 201 });
+    if (data.access_profile_ids) {
+      await setUserAccessProfiles(userId, data.access_profile_ids);
+    }
+    const created = await getUserById(userId);
+    return Response.json({ id: userId, user: created }, { status: 201 });
   } catch (e) {
     if (e instanceof Error) {
       if (e.message.includes("unique")) {

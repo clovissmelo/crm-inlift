@@ -1,5 +1,6 @@
 "use client";
 
+import clsx from "clsx";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Check, Phone, Mail, MessageCircle, Smartphone } from "lucide-react";
@@ -70,8 +71,9 @@ function contactOptionsFromDialStrategy(phones: PhoneDialContextItem[]): Contact
 }
 
 function dialOptionAtCallLimit(o: ContactDialOption): boolean {
+  if (o.attemptsAtLimit) return true;
   const limit = o.maxDialAttempts ?? 3;
-  const count = o.dialHistoryAt?.length ?? 0;
+  const count = o.dialHistoryAt?.length ?? o.cycleNoContactCount ?? 0;
   return count >= limit && limit > 0;
 }
 
@@ -140,7 +142,9 @@ export function ClientContactShortcuts({
   clientId,
   contactId,
   dialOptions,
-  size = "sm"
+  size = "sm",
+  className,
+  resolveEngagement
 }: {
   clientName: string;
   contactName?: string | null;
@@ -153,6 +157,9 @@ export function ClientContactShortcuts({
   contactId?: number;
   dialOptions?: ContactDialOption[];
   size?: "sm" | "md";
+  className?: string;
+  /** Abre seletor de contexto (relacionado vs oportunidade) antes de ligar / WhatsApp / e-mail. */
+  resolveEngagement?: () => Promise<{ productId?: number | null; productName?: string | null } | void>;
 }) {
   const api4com = useApi4comSession();
   const [waOpen, setWaOpen] = useState(false);
@@ -169,10 +176,12 @@ export function ClientContactShortcuts({
   const [pickerOptions, setPickerOptions] = useState<ContactDialOption[]>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
   const [expandedDialHistory, setExpandedDialHistory] = useState<Set<string>>(() => new Set());
+  const [pendingEngagementProductId, setPendingEngagementProductId] = useState<number | null | undefined>(undefined);
 
   const waNumber = whatsapp || phone;
   const hasEmail = Boolean(email?.trim());
-  const btnClass = size === "sm" ? "btn btn-icon-sm" : "btn";
+  const btnClass = size === "sm" ? "btn btn-icon-sm" : "btn btn-icon-md";
+  const iconSize = size === "sm" ? 16 : 20;
 
   const options = useMemo(
     () => sortContactDialOptions(buildDialOptions({ phone, whatsapp, contactId, contactName, dialOptions })),
@@ -186,7 +195,12 @@ export function ClientContactShortcuts({
     return dialAsUserId;
   }
 
-  async function startCall(option: ContactDialOption, fromPicker: boolean, asUserId?: number | null) {
+  async function startCall(
+    option: ContactDialOption,
+    fromPicker: boolean,
+    asUserId?: number | null,
+    engagementProductId?: number | null
+  ) {
     if (!clientId || !api4com) return;
     const dialAs = asUserId ?? resolvedDialAsUserId();
     if (!dialAs) return;
@@ -195,7 +209,7 @@ export function ClientContactShortcuts({
     const payload: Record<string, unknown> = {
       client_id: clientId,
       contact_id: option.contactId ?? contactId ?? null,
-      product_id: productId ?? null,
+      product_id: engagementProductId ?? productId ?? null,
       phone: option.phone
     };
     if (dialAs !== api4com.userId) payload.dial_as_user_id = dialAs;
@@ -256,7 +270,8 @@ export function ClientContactShortcuts({
     setDialError(null);
   }
 
-  async function proceedToPhonePicker(asUserId: number) {
+  async function proceedToPhonePicker(asUserId: number, engagementProductId?: number | null) {
+    setPendingEngagementProductId(engagementProductId);
     setDialAsUserId(asUserId);
     setDialError(null);
     setPickerOpen(true);
@@ -290,7 +305,8 @@ export function ClientContactShortcuts({
     }
   }
 
-  async function openAdminIdentityPicker() {
+  async function openAdminIdentityPicker(engagementProductId?: number | null) {
+    setPendingEngagementProductId(engagementProductId);
     setIdentityLoading(true);
     setDialError(null);
     setIdentityPickerOpen(true);
@@ -311,16 +327,38 @@ export function ClientContactShortcuts({
     }
   }
 
-  function onCallClick() {
+  async function resolveEngagementProductId(): Promise<number | null | undefined> {
+    if (!resolveEngagement) return undefined;
+    const r = await resolveEngagement();
+    return r?.productId ?? null;
+  }
+
+  async function openWhatsApp() {
+    const pid = await resolveEngagementProductId();
+    setPendingEngagementProductId(pid);
+    setWaOpen(true);
+  }
+
+  async function openEmail() {
+    const pid = await resolveEngagementProductId();
+    setPendingEngagementProductId(pid);
+    setEmailOpen(true);
+  }
+
+  async function onCallClick() {
     if (!useApi4com || !api4com) return;
     setDialError(null);
     setDialFeedbackOpen(false);
+    const engagementProductId = await resolveEngagementProductId();
+    const runDial = (asUserId: number) => {
+      void proceedToPhonePicker(asUserId, engagementProductId);
+    };
     if (api4com.hasOwnExtension) {
-      void proceedToPhonePicker(api4com.userId);
+      runDial(api4com.userId);
       return;
     }
     if (api4com.isAdmin) {
-      void openAdminIdentityPicker();
+      void openAdminIdentityPicker(engagementProductId);
       return;
     }
     setNoExtensionOpen(true);
@@ -336,7 +374,7 @@ export function ClientContactShortcuts({
 
   return (
     <>
-      <div className="contact-shortcuts" onClick={(e) => e.stopPropagation()}>
+      <div className={clsx("contact-shortcuts", className)} onClick={(e) => e.stopPropagation()}>
         {useApi4com ? (
           <button
             type="button"
@@ -346,15 +384,15 @@ export function ClientContactShortcuts({
             disabled={dialing}
             onClick={onCallClick}
           >
-            <Phone size={16} />
+            <Phone size={iconSize} />
           </button>
         ) : tel ? (
           <a className={btnClass} href={tel} title="Ligar" aria-label="Ligar">
-            <Phone size={16} />
+            <Phone size={iconSize} />
           </a>
         ) : (
           <span className={`${btnClass} disabled`} title="Sem telefone" aria-hidden>
-            <Phone size={16} />
+            <Phone size={iconSize} />
           </span>
         )}
         {waNumber ? (
@@ -363,22 +401,22 @@ export function ClientContactShortcuts({
             className={btnClass}
             title="WhatsApp"
             aria-label="WhatsApp"
-            onClick={() => setWaOpen(true)}
+            onClick={() => void openWhatsApp()}
           >
-            <MessageCircle size={16} />
+            <MessageCircle size={iconSize} />
           </button>
         ) : (
           <span className={`${btnClass} disabled`} title="Sem WhatsApp" aria-hidden>
-            <MessageCircle size={16} />
+            <MessageCircle size={iconSize} />
           </span>
         )}
         {hasEmail ? (
-          <button type="button" className={btnClass} title="E-mail" aria-label="E-mail" onClick={() => setEmailOpen(true)}>
-            <Mail size={16} />
+          <button type="button" className={btnClass} title="E-mail" aria-label="E-mail" onClick={() => void openEmail()}>
+            <Mail size={iconSize} />
           </button>
         ) : (
           <span className={`${btnClass} disabled`} title="Sem e-mail" aria-hidden>
-            <Mail size={16} />
+            <Mail size={iconSize} />
           </span>
         )}
       </div>
@@ -387,7 +425,7 @@ export function ClientContactShortcuts({
           open={waOpen}
           onClose={() => setWaOpen(false)}
           phone={waNumber}
-          productId={productId}
+          productId={pendingEngagementProductId ?? productId}
           vars={{
             contato_nome: contactName ?? undefined,
             cliente_nome: clientName,
@@ -401,7 +439,7 @@ export function ClientContactShortcuts({
           open={emailOpen}
           onClose={() => setEmailOpen(false)}
           email={email!.trim()}
-          productId={productId}
+          productId={pendingEngagementProductId ?? productId}
           vars={{
             contato_nome: contactName ?? undefined,
             cliente_nome: clientName,
@@ -488,8 +526,9 @@ export function ClientContactShortcuts({
             {pickerOptions.map((o, i) => {
               const status = o.verification_status ?? "unverified";
               const isBad = status === "invalid_number" || status === "wrong_contact";
-              const callCount = o.dialHistoryAt?.length ?? 0;
-              const statusLine = dialPickerStatusLine(callCount);
+              const maxAttempts = o.maxDialAttempts ?? 3;
+              const callCount = o.dialHistoryAt?.length ?? o.cycleNoContactCount ?? 0;
+              const statusLine = dialPickerStatusLine(callCount, maxAttempts);
               const historyKey = dialHistoryKey(o, i);
               const historyExpanded = expandedDialHistory.has(historyKey);
               const sortedTimes = sortDialHistoryNewestFirst(o.dialHistoryAt ?? []);
@@ -509,13 +548,13 @@ export function ClientContactShortcuts({
                     aria-disabled={disabled}
                     onClick={() => {
                       if (disabled) return;
-                      void startCall(o, true, resolvedDialAsUserId());
+                      void startCall(o, true, resolvedDialAsUserId(), pendingEngagementProductId);
                     }}
                     onKeyDown={(e) => {
                       if (disabled) return;
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        void startCall(o, true, resolvedDialAsUserId());
+                        void startCall(o, true, resolvedDialAsUserId(), pendingEngagementProductId);
                       }
                     }}
                   >

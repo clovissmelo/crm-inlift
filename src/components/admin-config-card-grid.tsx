@@ -44,18 +44,10 @@ export const ADMIN_CONFIG_CARDS: AdminConfigCardItem[] = [
     iconClassName: "hub-card-icon--google-places"
   },
   {
-    id: "variaveis",
+    id: "anp",
     href: "/admin/variaveis",
-    title: "Segmentos ANP",
-    description: "Tipos de posto e filtro na base revendedores (Novos leads e Produtos).",
-    logo: <LogoSettings />,
-    iconClassName: "hub-card-icon--settings"
-  },
-  {
-    id: "anp-variaveis",
-    href: "/admin/anp-variaveis" as Route,
-    title: "Variáveis ANP",
-    description: "Simulação, provedor e notas das fontes públicas ANP.",
+    title: "ANP",
+    description: "Segmentos de posto, filtro revendedores, simulação e parâmetros das fontes públicas.",
     logo: <LogoSettings />,
     iconClassName: "hub-card-icon--settings"
   },
@@ -80,6 +72,14 @@ export const ADMIN_CONFIG_CARDS: AdminConfigCardItem[] = [
     href: "/admin/prospeccao" as Route,
     title: "Prospecção",
     description: "Prioridades operacionais e estratégia de ligações por telefone.",
+    logo: <LogoSettings />,
+    iconClassName: "hub-card-icon--settings"
+  },
+  {
+    id: "perfis-acessos",
+    href: "/admin/perfis-acessos" as Route,
+    title: "Perfis e acessos",
+    description: "Perfis de uso da ferramenta e permissões do menu lateral.",
     logo: <LogoSettings />,
     iconClassName: "hub-card-icon--settings"
   }

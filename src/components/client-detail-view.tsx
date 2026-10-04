@@ -1,19 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { Mail, Phone, Plus, RefreshCw, Search, Star, Trash2 } from "lucide-react";
+import { Mail, Phone, Plus, Search, Star, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  ClientEngagementContextModal,
+  type ClientOpportunityOption
+} from "@/components/client-engagement-context-modal";
+import type { ClientEngagementContext } from "@/lib/engagement-context";
+import { engagementLabelFromContext } from "@/lib/engagement-context";
 import { ApproachWorkflowModal } from "@/components/approach-workflow-modal";
 import { ScheduleContactModal } from "@/components/schedule-contact-modal";
 import { CadastroModal, requestCadastroDelete } from "@/components/cadastro-ui";
-import { ClientContactShortcuts, type ContactDialOption } from "@/components/client-contact-shortcuts";
+import { ClientDetailHeader } from "@/components/client-detail-header";
+import type { ContactDialOption } from "@/components/client-contact-shortcuts";
 import { MeetingFormModal } from "@/components/meeting-form-modal";
 import { ClientTimeline } from "@/components/client-timeline";
 import { ClientDialPhonesPanel } from "@/components/client-dial-phones-panel";
+import { ClientPanelHead } from "@/components/client-section-title";
+import { compactTechnicalFailureLabel } from "@/lib/technical-failure-display";
 import { ClientReconsultModal } from "@/components/client-reconsult-modal";
 import { formatSpDateTime } from "@/lib/datetime";
-import { externalWebHref, formatCnpj, instagramHref } from "@/lib/format";
+import {
+  displayContactProfileTags,
+  formatProfileTagsForInput,
+  parseProfileTagsInput
+} from "@/lib/contact-profile-tags";
+import { externalWebHref, formatCnpj, formatPhoneDisplay, instagramHref } from "@/lib/format";
 import { buildSocioDiscoverySearchUrl, isSocioJobTitle } from "@/lib/socio-discovery-search";
 import { LeadQualificationPicker } from "@/components/lead-qualification-picker";
 import { parseLeadQualification, type LeadQualification } from "@/lib/lead-qualification";
@@ -117,6 +131,7 @@ type Client = {
   bdr_user_id: number | null;
   lead_qualification?: string | null;
   in_prospeccao_queue?: boolean;
+  is_existing_customer?: boolean;
 };
 
 function hasText(value: string | null | undefined) {
@@ -167,6 +182,8 @@ export function ClientDetailView({
     engagement_status?: string;
     stage_name: string | null;
     owner_name: string | null;
+    owner_user_id: number | null;
+    row_version: number;
     created_at: string;
   }>;
   hasApproach?: boolean;
@@ -177,7 +194,15 @@ export function ClientDetailView({
   const [oppList, setOppList] = useState(opportunities);
   const [newOppProductId, setNewOppProductId] = useState("");
   const [newOppTitle, setNewOppTitle] = useState("");
+  const [newOppBdrId, setNewOppBdrId] = useState("");
   const [oppModalOpen, setOppModalOpen] = useState(false);
+  const [contextModalOpen, setContextModalOpen] = useState(false);
+  const [contextActionLabel, setContextActionLabel] = useState("ação");
+  const [engagementContext, setEngagementContext] = useState<ClientEngagementContext | null>(null);
+  const [pendingEngagedAction, setPendingEngagedAction] = useState<"approach" | "schedule" | "meeting" | null>(
+    null
+  );
+  const contextPickRef = useRef<((ctx: ClientEngagementContext) => void) | null>(null);
   const [productLinkModalOpen, setProductLinkModalOpen] = useState(false);
   const [linkProductId, setLinkProductId] = useState("");
   const [linkProductCreateOpp, setLinkProductCreateOpp] = useState(false);
@@ -203,6 +228,8 @@ export function ClientDetailView({
     parseLeadQualification(initialClient.lead_qualification)
   );
   const [savingQualification, setSavingQualification] = useState(false);
+  const [isExistingCustomer, setIsExistingCustomer] = useState(Boolean(initialClient.is_existing_customer));
+  const [savingExistingCustomer, setSavingExistingCustomer] = useState(false);
   const [deletingClient, setDeletingClient] = useState(false);
 
   const [clientDraft, setClientDraft] = useState({
@@ -270,6 +297,10 @@ export function ClientDetailView({
   }, [initialClient.in_prospeccao_queue]);
 
   useEffect(() => {
+    setIsExistingCustomer(Boolean(initialClient.is_existing_customer));
+  }, [initialClient.is_existing_customer]);
+
+  useEffect(() => {
     if (!oppModalOpen || linkedProducts.length === 0) return;
     setNewOppProductId(String(linkedProducts[0]!.product_id));
   }, [oppModalOpen, linkedProducts]);
@@ -287,8 +318,10 @@ export function ClientDetailView({
     job_title: "",
     phone: "",
     whatsapp: "",
-    email: ""
+    email: "",
+    profile_tags: [] as string[]
   });
+  const [newContactTagsText, setNewContactTagsText] = useState("");
   const [newContactSecondPhone, setNewContactSecondPhone] = useState(false);
   const [primarySavingId, setPrimarySavingId] = useState<number | null>(null);
 
@@ -301,6 +334,7 @@ export function ClientDetailView({
       body: JSON.stringify({
         ...newContact,
         whatsapp: newContactSecondPhone ? newContact.whatsapp || null : null,
+        profile_tags: newContact.profile_tags,
         verification_status: "unverified"
       })
     });
@@ -320,10 +354,12 @@ export function ClientDetailView({
         email: newContact.email || null,
         notes: null,
         verification_status: "unverified",
-        origin: CONTACT_ORIGIN.manual
+        origin: CONTACT_ORIGIN.manual,
+        profile_tags: newContact.profile_tags
       }
     ]);
-    setNewContact({ name: "", job_title: "", phone: "", whatsapp: "", email: "" });
+    setNewContact({ name: "", job_title: "", phone: "", whatsapp: "", email: "", profile_tags: [] });
+    setNewContactTagsText("");
     setNewContactSecondPhone(false);
     setAddingContact(false);
     router.refresh();
@@ -446,11 +482,32 @@ export function ClientDetailView({
     router.refresh();
   }
 
+  async function changeExistingCustomer(next: boolean) {
+    if (next === isExistingCustomer || savingExistingCustomer) return;
+    setSavingExistingCustomer(true);
+    setError(null);
+    const prev = isExistingCustomer;
+    setIsExistingCustomer(next);
+    const res = await fetch(`/api/clients/${initialClient.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_existing_customer: next })
+    });
+    setSavingExistingCustomer(false);
+    if (!res.ok) {
+      setIsExistingCustomer(prev);
+      setError("Erro ao atualizar “Já é cliente”.");
+      return;
+    }
+    router.refresh();
+  }
+
   function cancelContactsEdit() {
     setAddingContact(false);
     setContactEditDraft(null);
     setContacts(initialContacts);
-    setNewContact({ name: "", job_title: "", phone: "", whatsapp: "", email: "" });
+    setNewContact({ name: "", job_title: "", phone: "", whatsapp: "", email: "", profile_tags: [] });
+    setNewContactTagsText("");
     setNewContactSecondPhone(false);
   }
 
@@ -494,8 +551,66 @@ export function ClientDetailView({
       return;
     }
     setNewOppProductId(String(linkedProducts[0]!.product_id));
+    const defaultBdr =
+      initialClient.bdr_user_id ?? bdr?.id ?? (bdrs[0]?.id != null ? bdrs[0].id : null);
+    setNewOppBdrId(defaultBdr != null ? String(defaultBdr) : "");
     setReturnToProspeccao(true);
     setOppModalOpen(true);
+  }
+
+  const engagementProductId = useMemo(() => {
+    if (engagementContext?.kind === "opportunity") return engagementContext.productId;
+    return undefined;
+  }, [engagementContext]);
+
+  const pickEngagementContext = useCallback((actionLabel: string) => {
+    return new Promise<ClientEngagementContext>((resolve) => {
+      setContextActionLabel(actionLabel);
+      contextPickRef.current = resolve;
+      setContextModalOpen(true);
+    });
+  }, []);
+
+  const resolveEngagementForContact = useCallback(async () => {
+    const ctx = await pickEngagementContext("contato rápido");
+    setEngagementContext(ctx);
+    if (ctx.kind === "opportunity") {
+      return { productId: ctx.productId, productName: ctx.productName };
+    }
+    return { productId: null, productName: null };
+  }, [pickEngagementContext]);
+
+  function requestEngagedAction(action: "approach" | "schedule" | "meeting", label: string) {
+    setPendingEngagedAction(action);
+    setContextActionLabel(label);
+    setContextModalOpen(true);
+  }
+
+  function onEngagementContextChosen(ctx: ClientEngagementContext) {
+    setEngagementContext(ctx);
+    contextPickRef.current?.(ctx);
+    contextPickRef.current = null;
+    setContextModalOpen(false);
+    const action = pendingEngagedAction;
+    setPendingEngagedAction(null);
+    const productId = ctx.kind === "opportunity" ? ctx.productId : linkedProducts[0]?.product_id;
+    if (action === "approach") setApproachOpen(true);
+    if (action === "schedule") setScheduleContactOpen(true);
+    if (action === "meeting") {
+      setMeetingProductId(productId);
+      setMeetingOpen(true);
+    }
+  }
+
+  function closeEngagementContextModal() {
+    setContextModalOpen(false);
+    setPendingEngagedAction(null);
+    contextPickRef.current = null;
+  }
+
+  function openOppModalFromContext() {
+    closeEngagementContextModal();
+    openOppModal();
   }
 
   function openEnrollProspeccaoModal() {
@@ -548,6 +663,11 @@ export function ClientDetailView({
       setError("Vincule um produto ao cliente em Empresa.");
       return;
     }
+    const bdrId = Number(newOppBdrId) || initialClient.bdr_user_id || bdr?.id;
+    if (!bdrId) {
+      setError("Selecione a BDR responsável pela oportunidade.");
+      return;
+    }
     const res = await fetch("/api/opportunities", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -555,7 +675,8 @@ export function ClientDetailView({
         client_id: initialClient.id,
         product_id: productId,
         title: newOppTitle || undefined,
-        origin_bdr_user_id: initialClient.bdr_user_id,
+        origin_bdr_user_id: bdrId ?? undefined,
+        owner_user_id: bdrId ?? undefined,
         return_to_prospection: returnToProspeccao
       })
     });
@@ -566,6 +687,33 @@ export function ClientDetailView({
     }
     setNewOppTitle("");
     setOppModalOpen(false);
+    router.refresh();
+  }
+
+  async function patchOpportunityOwner(opp: (typeof oppList)[0], ownerUserId: number) {
+    setError(null);
+    const res = await fetch(`/api/opportunities/${opp.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ owner_user_id: ownerUserId, expected_version: opp.row_version })
+    });
+    const data = (await res.json()) as { error?: string; owner_user_id?: number | null; row_version?: number };
+    if (!res.ok) {
+      setError(data.error ?? "Erro ao atualizar BDR da oportunidade");
+      return;
+    }
+    setOppList((list) =>
+      list.map((o) =>
+        o.id === opp.id
+          ? {
+              ...o,
+              owner_user_id: ownerUserId,
+              owner_name: bdrs.find((b) => b.id === ownerUserId)?.name ?? o.owner_name,
+              row_version: data.row_version ?? o.row_version + 1
+            }
+          : o
+      )
+    );
     router.refresh();
   }
 
@@ -627,104 +775,57 @@ export function ClientDetailView({
 
   return (
     <div>
-      <h1 style={{ marginTop: 0 }}>{clientDisplayName}</h1>
-      <div className="field" style={{ marginBottom: "1rem" }}>
-        <label className="label">Qualificação do lead</label>
-        <LeadQualificationPicker
-          value={leadQualification}
-          onChange={(q) => void changeLeadQualification(q)}
-          disabled={savingQualification}
-        />
-      </div>
-
-      <div className="field" style={{ marginBottom: "1rem" }}>
-        <label className="label">Prospecção</label>
-        <p style={{ margin: "0.35rem 0 0", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem 0.75rem" }}>
-          <span>
-            Em prospecção: <strong>{inProspeccao ? "Sim" : "Não"}</strong>
-          </span>
-          {!inProspeccao ? (
-            <button type="button" className="btn" onClick={openEnrollProspeccaoModal}>
-              Colocar em prospecção
-            </button>
-          ) : null}
-        </p>
-      </div>
-
-      <div className="client-detail-actions">
-        <div className="client-detail-actions-row">
-          <div className="client-detail-actions-primary">
-            <button
-              className="btn btn-primary"
-              type="button"
-              onClick={() => setApproachOpen(true)}
-            >
-              Registrar abordagem
-            </button>
-            <button className="btn btn-primary" type="button" onClick={() => setScheduleContactOpen(true)}>
-              Agendar contato
-            </button>
-            <button
-              className="btn btn-primary"
-              type="button"
-              onClick={() => {
-                setMeetingProductId(linkedProducts[0]?.product_id);
-                setMeetingOpen(true);
-              }}
-            >
-              Agendar reunião
-            </button>
-            <button className="btn btn-primary" type="button" onClick={openOppModal}>
-              Nova oportunidade
-            </button>
-          </div>
-          {canReconsult ? (
-            <div className="client-detail-admin-tools">
-              <button
-                type="button"
-                className="btn btn-icon-sm"
-                title="Reconsultar dados"
-                aria-label="Reconsultar dados"
-                onClick={() => setReconsultOpen(true)}
-              >
-                <RefreshCw size={18} />
-              </button>
-              <button
-                type="button"
-                className="btn btn-icon-sm client-detail-delete"
-                title="Excluir cliente"
-                aria-label="Excluir cliente"
-                disabled={deletingClient}
-                onClick={() => void removeClient()}
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
-          ) : null}
-        </div>
-        <div className="client-detail-actions-row client-detail-contact-row">
-          <span className="muted client-detail-contact-label">Contato rápido</span>
-          <ClientContactShortcuts
-            clientName={clientDisplayName}
-            contactName={primaryContact?.name}
-            phone={primaryPhone}
-            whatsapp={primaryWhatsapp}
-            email={primaryEmail}
-            productId={linkedProducts[0]?.product_id}
-            productName={linkedProducts[0]?.name}
-            clientId={initialClient.id}
-            contactId={primaryContact?.id}
-            dialOptions={contactDialOptions}
-            size="sm"
-          />
-        </div>
-      </div>
+      <ClientDetailHeader
+        clientDisplayName={clientDisplayName}
+        isExistingCustomer={isExistingCustomer}
+        savingExistingCustomer={savingExistingCustomer}
+        onChangeExistingCustomer={(next) => void changeExistingCustomer(next)}
+        inProspeccao={inProspeccao}
+        leadQualification={leadQualification}
+        savingQualification={savingQualification}
+        onChangeLeadQualification={(q) => void changeLeadQualification(q)}
+        bdrName={bdr?.name ?? null}
+        contactShortcuts={{
+          clientName: clientDisplayName,
+          contactName: primaryContact?.name,
+          phone: primaryPhone,
+          whatsapp: primaryWhatsapp,
+          email: primaryEmail,
+          productId: linkedProducts[0]?.product_id,
+          productName: linkedProducts[0]?.name,
+          clientId: initialClient.id,
+          contactId: primaryContact?.id,
+          dialOptions: contactDialOptions,
+          resolveEngagement: resolveEngagementForContact
+        }}
+        onRegisterApproach={() => requestEngagedAction("approach", "registrar abordagem")}
+        onScheduleContact={() => requestEngagedAction("schedule", "agendar contato")}
+        onScheduleMeeting={() => requestEngagedAction("meeting", "agendar reunião")}
+        onNewOpportunity={openOppModal}
+        engagementContextLabel={
+          engagementContext ? engagementLabelFromContext(engagementContext) : null
+        }
+        onEnrollProspeccao={!inProspeccao ? openEnrollProspeccaoModal : undefined}
+        canReconsult={canReconsult}
+        onReconsult={() => setReconsultOpen(true)}
+        onDeleteClient={() => void removeClient()}
+        deletingClient={deletingClient}
+      />
 
       <ClientReconsultModal
         open={reconsultOpen}
         clientId={initialClient.id}
         onClose={() => setReconsultOpen(false)}
         onApplied={() => router.refresh()}
+      />
+
+      <ClientEngagementContextModal
+        open={contextModalOpen}
+        actionLabel={contextActionLabel}
+        opportunities={oppList as ClientOpportunityOption[]}
+        onClose={closeEngagementContextModal}
+        onChoose={onEngagementContextChosen}
+        onCreateOpportunity={openOppModalFromContext}
       />
 
       <MeetingFormModal
@@ -736,8 +837,12 @@ export function ClientDetailView({
         products={allProducts.filter((p) => linkedProducts.some((lp) => lp.product_id === p.id) || linkedProducts.length === 0)}
         bdrs={bdrs}
         allUsers={allUsers}
-        defaultBdrUserId={initialClient.bdr_user_id ?? bdrs[0]?.id}
-        defaultProductId={meetingProductId ?? linkedProducts[0]?.product_id}
+        defaultBdrUserId={
+          engagementContext?.kind === "opportunity" && engagementContext.ownerUserId
+            ? engagementContext.ownerUserId
+            : initialClient.bdr_user_id ?? bdrs[0]?.id
+        }
+        defaultProductId={meetingProductId ?? engagementProductId ?? linkedProducts[0]?.product_id}
         defaultContactId={primaryContact?.id}
       />
       <ApproachWorkflowModal
@@ -749,7 +854,7 @@ export function ClientDetailView({
         products={allProducts.filter((p) => linkedProducts.some((lp) => lp.product_id === p.id) || linkedProducts.length === 0)}
         defaultChannel="call"
         defaultContactId={primaryContact?.id}
-        defaultProductId={linkedProducts[0]?.product_id}
+        defaultProductId={engagementProductId ?? linkedProducts[0]?.product_id}
         followUpId={followUpId}
       />
       <ScheduleContactModal
@@ -758,7 +863,7 @@ export function ClientDetailView({
         clientId={initialClient.id}
         clientName={clientDisplayName}
         products={allProducts.filter((p) => linkedProducts.some((lp) => lp.product_id === p.id) || linkedProducts.length === 0)}
-        defaultProductId={linkedProducts[0]?.product_id}
+        defaultProductId={engagementProductId ?? linkedProducts[0]?.product_id}
         inProspeccao={inProspeccao}
         bdrUserId={initialClient.bdr_user_id}
         bdrs={bdrs.map((b) => ({ id: b.id, name: b.name }))}
@@ -891,6 +996,20 @@ export function ClientDetailView({
           <label className="label">Título (opcional)</label>
           <input className="input" value={newOppTitle} onChange={(e) => setNewOppTitle(e.target.value)} />
         </div>
+        <div className="field">
+          <label className="label">BDR responsável</label>
+          <select className="select" value={newOppBdrId} onChange={(e) => setNewOppBdrId(e.target.value)}>
+            <option value="">Selecione</option>
+            {bdrs.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+          <p className="muted" style={{ fontSize: "0.8125rem", marginTop: 6, marginBottom: 0 }}>
+            Cada oportunidade pode ter uma BDR diferente — linha de prospecção por produto.
+          </p>
+        </div>
         <label style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "flex-start" }}>
           <input
             type="checkbox"
@@ -919,19 +1038,21 @@ export function ClientDetailView({
 
       {error ? <div className="alert alert-error">{error}</div> : null}
 
-      <div className="panel">
-        <div className="client-panel-head">
-          <h3 style={{ margin: 0 }}>Empresa</h3>
-          {!editEmpresa ? (
-            <button type="button" className="btn" onClick={() => setEditEmpresa(true)}>
-              Editar
-            </button>
-          ) : (
-            <button type="button" className="btn" onClick={cancelEmpresaEdit}>
-              Cancelar
-            </button>
-          )}
-        </div>
+      <div className="panel client-detail-section">
+        <ClientPanelHead
+          title="Empresa"
+          actions={
+            !editEmpresa ? (
+              <button type="button" className="btn" onClick={() => setEditEmpresa(true)}>
+                Editar
+              </button>
+            ) : (
+              <button type="button" className="btn" onClick={cancelEmpresaEdit}>
+                Cancelar
+              </button>
+            )
+          }
+        />
 
         {!editEmpresa ? (
           <div style={{ marginTop: "0.75rem" }}>
@@ -957,7 +1078,6 @@ export function ClientDetailView({
                 </a>
               </InfoLine>
             ) : null}
-            {bdr?.name ? <InfoLine label="BDR">{bdr.name}</InfoLine> : null}
             <InfoLine label="Produtos">
               {linkedProducts.length > 0 ? linkedProducts.map((p) => p.name).join(", ") : "Nenhum"}
               <button
@@ -1079,26 +1199,48 @@ export function ClientDetailView({
         )}
       </div>
 
-      <div className="panel">
-        <div className="client-panel-head">
-          <h3 style={{ margin: 0 }}>Oportunidades</h3>
-          <button
-            type="button"
-            className="btn btn-icon-sm"
-            title="Nova oportunidade"
-            aria-label="Nova oportunidade"
-            onClick={openOppModal}
-          >
-            <Plus size={18} />
-          </button>
-        </div>
+      <div className="panel client-detail-section">
+        <ClientPanelHead
+          title="Oportunidades"
+          actions={
+            <button
+              type="button"
+              className="btn btn-icon-sm"
+              title="Nova oportunidade"
+              aria-label="Nova oportunidade"
+              onClick={openOppModal}
+            >
+              <Plus size={18} />
+            </button>
+          }
+        />
         {oppList.length === 0 ? <p className="muted" style={{ marginTop: "0.75rem" }}>Nenhuma negociação registrada.</p> : null}
         {oppList.length > 0 ? (
           <ul style={{ paddingLeft: "1.1rem", margin: "0.75rem 0 0" }}>
             {oppList.map((o) => (
-              <li key={o.id} style={{ marginBottom: 8, display: "flex", alignItems: "flex-start", gap: 8 }}>
+              <li key={o.id} style={{ marginBottom: 10, display: "flex", alignItems: "flex-start", gap: 8 }}>
                 <div style={{ flex: 1, minWidth: 0, fontSize: "0.9375rem" }}>
                   <Link href={`/oportunidades/${o.id}`}>{formatOpportunityListLine(o)}</Link>
+                  <div className="client-opp-bdr-row" style={{ marginTop: 4 }}>
+                    <span className="muted" style={{ fontSize: "0.8125rem" }}>
+                      BDR:{" "}
+                    </span>
+                    <select
+                      className="input input-sm client-opp-bdr-select"
+                      value={o.owner_user_id ?? ""}
+                      onChange={(e) => {
+                        const id = Number(e.target.value);
+                        if (id) void patchOpportunityOwner(o, id);
+                      }}
+                    >
+                      <option value="">—</option>
+                      {bdrs.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -1115,11 +1257,11 @@ export function ClientDetailView({
         ) : null}
       </div>
 
-      <div className="panel">
-        <div className="client-panel-head">
-          <h3 style={{ margin: 0 }}>Contatos</h3>
-          <div className="client-panel-head-actions">
-            {!addingContact ? (
+      <div className="panel client-detail-section">
+        <ClientPanelHead
+          title="Contatos"
+          actions={
+            !addingContact ? (
               <button type="button" className="btn" onClick={() => setAddingContact(true)}>
                 Novo
               </button>
@@ -1127,9 +1269,9 @@ export function ClientDetailView({
               <button type="button" className="btn" onClick={cancelContactsEdit}>
                 Cancelar
               </button>
-            )}
-          </div>
-        </div>
+            )
+          }
+        />
         {contacts.length === 0 && !addingContact ? (
           <p className="muted" style={{ marginTop: "0.75rem" }}>
             Nenhum contato cadastrado.
@@ -1195,6 +1337,11 @@ export function ClientDetailView({
               job_title={newContact.job_title}
               phone={newContact.phone}
               email={newContact.email}
+              profileTagsText={newContactTagsText}
+              onProfileTagsTextChange={(text) => {
+                setNewContactTagsText(text);
+                setNewContact((c) => ({ ...c, profile_tags: parseProfileTagsInput(text) }));
+              }}
               secondPhone={newContact.whatsapp}
               includeSecondPhone={newContactSecondPhone}
               onIncludeSecondPhoneChange={(open) => {
@@ -1218,11 +1365,23 @@ export function ClientDetailView({
 
       <ClientDialPhonesPanel clientId={initialClient.id} />
 
-      <div className="panel">
-        <h3 style={{ marginTop: 0 }}>Histórico</h3>
+      <div className="panel client-detail-section">
+        <ClientPanelHead title="Histórico" />
         <ClientTimeline clientId={initialClient.id} />
       </div>
     </div>
+  );
+}
+
+function LastCallSummary({ attempt }: { attempt: ContactLastCallAttempt }) {
+  const { display, fullTitle } = compactTechnicalFailureLabel(attempt.result_label);
+  return (
+    <span className="client-contact-last-call" title="Última tentativa de ligação">
+      {formatSpDateTime(attempt.occurred_at)} —{" "}
+      <span className={fullTitle ? "client-last-call-technical" : undefined} title={fullTitle ?? undefined}>
+        {display}
+      </span>
+    </span>
   );
 }
 
@@ -1247,6 +1406,8 @@ function ContactReadOnly({
 }) {
   const canBePrimary = hasText(contact.phone) || hasText(contact.whatsapp);
   const isPrimary = Boolean(contact.is_primary_phone);
+  const displayTags = displayContactProfileTags(contact);
+  const showJobTitle = hasText(contact.job_title) && !isSocioJobTitle(contact.job_title);
   const showSocioSearch = isSocioJobTitle(contact.job_title) && hasText(contact.name);
   const socioSearchHref = showSocioSearch
     ? buildSocioDiscoverySearchUrl({
@@ -1274,7 +1435,7 @@ function ContactReadOnly({
               <Search size={16} aria-hidden />
             </a>
           ) : null}
-          {hasText(contact.job_title) ? <span className="muted"> · {contact.job_title}</span> : null}
+          {showJobTitle ? <span className="muted"> · {contact.job_title}</span> : null}
           {isPrimary ? (
             <span className="badge badge-contact-primary" title="Usado em Ligar e prospecção">
               <Star size={11} aria-hidden />
@@ -1286,7 +1447,7 @@ function ContactReadOnly({
               Verificado
             </span>
           ) : null}
-          {(contact.profile_tags ?? []).map((tag) => (
+          {displayTags.map((tag) => (
             <span key={tag} className="badge badge-contact-profile-tag client-contact-badge-gap" title="Tag de perfil">
               {tag}
             </span>
@@ -1295,17 +1456,15 @@ function ContactReadOnly({
         <div className="client-contact-readonly-meta">
           {hasText(contact.phone) ? (
             <span>
-              <Phone size={14} aria-hidden /> {contact.phone}
+              <Phone size={14} aria-hidden /> {formatPhoneDisplay(contact.phone)}
             </span>
           ) : null}
           {lastCall ? (
-            <span className="client-contact-last-call" title="Última tentativa de ligação">
-              {formatSpDateTime(lastCall.occurred_at)} — {lastCall.result_label}
-            </span>
+            <LastCallSummary attempt={lastCall} />
           ) : null}
           {hasText(contact.whatsapp) && contact.whatsapp !== contact.phone ? (
             <span>
-              <Phone size={14} aria-hidden /> {contact.whatsapp}
+              <Phone size={14} aria-hidden /> {formatPhoneDisplay(contact.whatsapp)}
               <span className="muted"> (telefone adicional)</span>
             </span>
           ) : null}
@@ -1343,6 +1502,7 @@ type ContactFormPatch = {
   phone?: string;
   email?: string;
   whatsapp?: string;
+  profile_tags?: string[];
 };
 
 function ContactFormFields({
@@ -1350,6 +1510,8 @@ function ContactFormFields({
   job_title,
   phone,
   email,
+  profileTagsText,
+  onProfileTagsTextChange,
   secondPhone,
   includeSecondPhone,
   onIncludeSecondPhoneChange,
@@ -1360,6 +1522,8 @@ function ContactFormFields({
   job_title: string;
   phone: string;
   email: string;
+  profileTagsText: string;
+  onProfileTagsTextChange: (text: string) => void;
   secondPhone: string;
   includeSecondPhone: boolean;
   onIncludeSecondPhoneChange: (open: boolean) => void;
@@ -1380,6 +1544,15 @@ function ContactFormFields({
       <div className="field">
         <label className="label">Cargo</label>
         <input className="input" value={job_title} onChange={(e) => onChange({ job_title: e.target.value })} />
+      </div>
+      <div className="field">
+        <label className="label">Tags</label>
+        <input
+          className="input"
+          value={profileTagsText}
+          onChange={(e) => onProfileTagsTextChange(e.target.value)}
+          placeholder="Ex.: Sócio, Decisor — separadas por vírgula"
+        />
       </div>
       <div className="field">
         <label className="label">Telefone</label>
@@ -1429,10 +1602,12 @@ function ContactEditor({
   hideSaveButton?: boolean;
 }) {
   const [includeSecondPhone, setIncludeSecondPhone] = useState(() => hasText(contact.whatsapp));
+  const [profileTagsText, setProfileTagsText] = useState(() => formatProfileTagsForInput(contact.profile_tags));
 
   useEffect(() => {
     setIncludeSecondPhone(hasText(contact.whatsapp));
-  }, [contact.id, contact.whatsapp]);
+    setProfileTagsText(formatProfileTagsForInput(contact.profile_tags));
+  }, [contact.id, contact.whatsapp, contact.profile_tags]);
 
   return (
     <div>
@@ -1441,6 +1616,11 @@ function ContactEditor({
         job_title={contact.job_title ?? ""}
         phone={contact.phone ?? ""}
         email={contact.email ?? ""}
+        profileTagsText={profileTagsText}
+        onProfileTagsTextChange={(text) => {
+          setProfileTagsText(text);
+          onChange({ ...contact, profile_tags: parseProfileTagsInput(text) });
+        }}
         secondPhone={contact.whatsapp ?? ""}
         includeSecondPhone={includeSecondPhone}
         onIncludeSecondPhoneChange={(open) => {

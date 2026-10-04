@@ -1,5 +1,5 @@
-import { AdminAnpVariables } from "@/components/admin-anp-variables";
+import { redirect } from "next/navigation";
 
-export default function AdminAnpVariaveisPage() {
-  return <AdminAnpVariables />;
+export default function AdminAnpVariaveisRedirectPage() {
+  redirect("/admin/variaveis");
 }

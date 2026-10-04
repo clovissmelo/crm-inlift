@@ -34,6 +34,7 @@ export const userCreateSchema = z.object({
   phone: z.string().trim().optional().nullable(),
   status: z.enum(["active", "inactive"]),
   roles: z.array(z.enum(["bdr", "product_owner", "manager", "admin"])).min(1, "Selecione ao menos um perfil"),
+  access_profile_ids: z.array(z.number().int().positive()).optional(),
   password: z.string().min(8, "Senha com no mínimo 8 caracteres"),
   api4com_extension: api4comExtensionField,
   api4com_api_token: api4comApiTokenField
@@ -104,7 +105,8 @@ export const clientSchema = z.object({
   notes: z.string().trim().optional().nullable(),
   bdr_user_id: z.number().int().positive().optional().nullable(),
   product_ids: z.array(z.number().int().positive()).optional(),
-  lead_qualification: z.enum(["cold", "warm", "hot"]).optional()
+  lead_qualification: z.enum(["cold", "warm", "hot"]).optional(),
+  is_existing_customer: z.boolean().optional()
 });
 
 export const approachCreateSchema = z.object({

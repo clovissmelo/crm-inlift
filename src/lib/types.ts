@@ -18,6 +18,8 @@ export type User = {
   has_api4com_api_token?: boolean;
   created_at: string;
   last_access_at: string | null;
+  /** Perfis de acesso ao menu (Admin → Usuários). */
+  access_profile_ids?: number[];
 };
 
 export type Company = {

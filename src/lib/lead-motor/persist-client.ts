@@ -1,5 +1,6 @@
 import { get, run, nowIso } from "@/lib/db";
 import { CONTACT_ORIGIN } from "@/lib/contact-origin";
+import { pickPrimaryContactRowIndex } from "@/lib/contact-profile-tags";
 import type { EnrichmentResult } from "@/lib/lead-motor/enrichment";
 import { resolveNomeFantasia } from "@/lib/lead-motor/trade-name";
 import type { AnpStation } from "@/lib/lead-motor/anp";
@@ -76,6 +77,7 @@ export async function createClientFromLead(input: {
     phone: string | null;
     job_title: string | null;
     origin: string;
+    profile_tags?: string[];
   };
 
   const contactRows: ContactDraft[] = [];
@@ -89,7 +91,8 @@ export async function createClientFromLead(input: {
       name,
       phone: null,
       job_title: "Sócio",
-      origin: "Receita Federal"
+      origin: "Receita Federal",
+      profile_tags: ["Sócio"]
     });
   }
 
@@ -121,8 +124,9 @@ export async function createClientFromLead(input: {
     });
   }
 
-  let primarySet = false;
-  for (const c of contactRows) {
+  const primaryRowIndex = pickPrimaryContactRowIndex(contactRows);
+  for (let i = 0; i < contactRows.length; i++) {
+    const c = contactRows[i]!;
     const originLabel =
       c.origin === "Google Places"
         ? CONTACT_ORIGIN.googlePlaces
@@ -134,9 +138,10 @@ export async function createClientFromLead(input: {
     await run(
       `
         INSERT INTO contacts (
-          client_id, name, job_title, phone, verification_status, origin, is_primary_phone, created_at, updated_at
+          client_id, name, job_title, phone, verification_status, origin, is_primary_phone, profile_tags,
+          created_at, updated_at
         ) VALUES (
-          @clientId, @name, @jobTitle, @phone, 'unverified', @origin, @isPrimary, @now, @now
+          @clientId, @name, @jobTitle, @phone, 'unverified', @origin, @isPrimary, @profileTags::jsonb, @now, @now
         )
       `,
       {
@@ -145,11 +150,11 @@ export async function createClientFromLead(input: {
         jobTitle: c.job_title,
         phone: c.phone,
         origin: originLabel,
-        isPrimary: !primarySet && Boolean(c.phone),
+        isPrimary: i === primaryRowIndex,
+        profileTags: JSON.stringify(c.profile_tags ?? []),
         now: nowIso()
       }
     );
-    if (c.phone) primarySet = true;
   }
 
   return clientId;

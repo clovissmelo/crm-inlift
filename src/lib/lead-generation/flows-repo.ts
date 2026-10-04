@@ -151,6 +151,109 @@ export async function saveFlowMeta(
   await run(`UPDATE lead_generation_flows SET ${sets.join(", ")} WHERE id = @id`, params);
 }
 
+type FlowStepTemplate = {
+  step_key: FlowStepKey;
+  sort_order: number;
+  on_fail: "continue" | "stop";
+  max_api_calls: number | null;
+};
+
+const DEFAULT_STEPS_BY_INITIAL_SOURCE: Record<FlowInitialSource, FlowStepTemplate[]> = {
+  anp_retail: [
+    { step_key: "anp_retail_list", sort_order: 10, on_fail: "continue", max_api_calls: null },
+    { step_key: "validate_cnpj", sort_order: 20, on_fail: "continue", max_api_calls: null },
+    { step_key: "google_place_search", sort_order: 30, on_fail: "stop", max_api_calls: 2 },
+    { step_key: "google_place_details", sort_order: 40, on_fail: "continue", max_api_calls: 1 },
+    { step_key: "receita_cnpj", sort_order: 50, on_fail: "continue", max_api_calls: 1 },
+    { step_key: "website_enrich", sort_order: 60, on_fail: "continue", max_api_calls: null },
+    { step_key: "instagram_enrich", sort_order: 70, on_fail: "continue", max_api_calls: null },
+    { step_key: "create_crm_client", sort_order: 90, on_fail: "stop", max_api_calls: null }
+  ],
+  anp_distributor: [
+    { step_key: "anp_distributor_list", sort_order: 10, on_fail: "continue", max_api_calls: null },
+    { step_key: "validate_cnpj", sort_order: 20, on_fail: "continue", max_api_calls: null },
+    { step_key: "google_place_search", sort_order: 30, on_fail: "stop", max_api_calls: 2 },
+    { step_key: "google_place_details", sort_order: 40, on_fail: "continue", max_api_calls: 1 },
+    { step_key: "receita_cnpj", sort_order: 50, on_fail: "continue", max_api_calls: 1 },
+    { step_key: "website_enrich", sort_order: 60, on_fail: "continue", max_api_calls: null },
+    { step_key: "instagram_enrich", sort_order: 70, on_fail: "continue", max_api_calls: null },
+    { step_key: "create_crm_client", sort_order: 90, on_fail: "stop", max_api_calls: null }
+  ],
+  google_places_city: [
+    { step_key: "google_places_city_discover", sort_order: 10, on_fail: "continue", max_api_calls: 25 },
+    { step_key: "google_place_details", sort_order: 30, on_fail: "continue", max_api_calls: 1 },
+    { step_key: "validate_cnpj", sort_order: 35, on_fail: "continue", max_api_calls: null },
+    { step_key: "receita_cnpj", sort_order: 50, on_fail: "continue", max_api_calls: 1 },
+    { step_key: "website_enrich", sort_order: 60, on_fail: "continue", max_api_calls: null },
+    { step_key: "instagram_enrich", sort_order: 70, on_fail: "continue", max_api_calls: null },
+    { step_key: "create_crm_client", sort_order: 90, on_fail: "stop", max_api_calls: null }
+  ]
+};
+
+function slugifyFlowName(name: string): string {
+  const base =
+    name
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "") || "fluxo";
+  return base.slice(0, 80);
+}
+
+async function uniqueFlowSlug(base: string): Promise<string> {
+  let slug = base;
+  let n = 2;
+  while (await get<{ id: number }>("SELECT id FROM lead_generation_flows WHERE slug = @slug LIMIT 1", { slug })) {
+    slug = `${base}_${n}`.slice(0, 96);
+    n += 1;
+  }
+  return slug;
+}
+
+export async function createLeadGenerationFlow(input: {
+  name: string;
+  description?: string;
+  initial_source: FlowInitialSource;
+  active?: boolean;
+}): Promise<LeadGenerationFlowRow> {
+  const name = input.name.trim();
+  if (!name) throw new Error("Informe o nome do fluxo.");
+  const slug = await uniqueFlowSlug(slugifyFlowName(name));
+  const now = nowIso();
+  const inserted = await run(
+    `
+      INSERT INTO lead_generation_flows (slug, name, description, active, initial_source, created_at, updated_at)
+      VALUES (@slug, @name, @description, @active, @initialSource, @now, @now)
+    `,
+    {
+      slug,
+      name,
+      description: (input.description ?? "").trim(),
+      active: input.active !== false,
+      initialSource: input.initial_source,
+      now
+    }
+  );
+  const flowId = inserted.lastInsertRowid;
+  if (flowId == null) throw new Error("Não foi possível criar o fluxo.");
+  const templates = DEFAULT_STEPS_BY_INITIAL_SOURCE[input.initial_source];
+  const steps: FlowStepRow[] = templates.map((t, index) => ({
+    id: index + 1,
+    step_key: t.step_key,
+    sort_order: t.sort_order,
+    enabled: true,
+    on_fail: t.on_fail,
+    max_api_calls: t.max_api_calls,
+    config_json: {}
+  }));
+  await saveFlowSteps(flowId, steps);
+  const flow = await getLeadGenerationFlow(flowId);
+  if (!flow) throw new Error("Fluxo criado mas não encontrado.");
+  return flow;
+}
+
 export async function saveFlowSteps(flowId: number, steps: FlowStepRow[]) {
   for (const s of steps) {
     if (!isFlowStepKey(s.step_key)) continue;

@@ -1,5 +1,8 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
+import { syncClientPhonesFromContacts } from "@/lib/call-strategy/client-phones";
+import { CONTACT_ORIGIN } from "@/lib/contact-origin";
+import { setContactAsPrimaryPhone } from "@/lib/contacts";
 import { get, run, nowIso } from "@/lib/db";
 import { previewClientReconsult, type ReconsultApplyOp } from "@/lib/lead-discovery";
 import { z } from "zod";
@@ -88,13 +91,15 @@ export async function POST(request: Request, { params }: Params) {
         id: clientId
       });
     } else if (item.op === "add_contact") {
-      await run(
+      const socioTag =
+        item.job_title?.trim().toLocaleLowerCase("pt-BR") === "sócio" ? ["Sócio"] : [];
+      const insert = await run(
         `
           INSERT INTO contacts (
-            client_id, name, job_title, phone, verification_status, origin, created_at, updated_at
+            client_id, name, job_title, phone, verification_status, origin, profile_tags, created_at, updated_at
           )
           VALUES (
-            @clientId, @name, @jobTitle, @phone, 'unverified', @origin, @now, @now
+            @clientId, @name, @jobTitle, @phone, 'unverified', @origin, @profileTags::jsonb, @now, @now
           )
         `,
         {
@@ -103,9 +108,21 @@ export async function POST(request: Request, { params }: Params) {
           jobTitle: item.job_title,
           phone: item.phone,
           origin: item.origin,
+          profileTags: JSON.stringify(socioTag),
           now: nowIso()
         }
       );
+      const newContactId = Number(insert.lastInsertRowid);
+      const fromGoogle =
+        item.origin === CONTACT_ORIGIN.googlePlaces || item.origin.trim() === "Google Places";
+      if (fromGoogle && item.phone && Number.isFinite(newContactId)) {
+        try {
+          await setContactAsPrimaryPhone(newContactId);
+          await syncClientPhonesFromContacts(clientId);
+        } catch {
+          /* ignore */
+        }
+      }
     }
   }
 

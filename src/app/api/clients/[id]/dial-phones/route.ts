@@ -30,7 +30,7 @@ export async function GET(_request: Request, { params }: Params) {
       FROM phone_dial_attempts pda
       LEFT JOIN users u ON u.id = pda.user_id
       LEFT JOIN client_phones cp ON cp.id = pda.client_phone_id
-      WHERE pda.client_id = @clientId
+      WHERE pda.client_id = @clientId AND pda.consumes_cycle = true
       ORDER BY pda.created_at DESC
       LIMIT 200
     `,

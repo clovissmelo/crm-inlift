@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Api4comBdrFields } from "@/components/api4com-bdr-fields";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
+import { UserAccessProfilePicker } from "@/components/user-access-profile-picker";
 import { UserRolePicker } from "@/components/user-role-picker";
 import type { Api4comTokenPolicy } from "@/lib/api4com/token-policy-shared";
 import { ROLE_LABELS, type User, type UserRole } from "@/lib/types";
@@ -14,6 +15,7 @@ type UserForm = {
   password: string;
   status: "active" | "inactive";
   roles: UserRole[];
+  access_profile_ids: number[];
   api4com_extension: string;
   api4com_api_token: string;
 };
@@ -25,6 +27,7 @@ const emptyForm = (): UserForm => ({
   password: "",
   status: "active",
   roles: ["bdr"],
+  access_profile_ids: [],
   api4com_extension: "",
   api4com_api_token: ""
 });
@@ -40,6 +43,9 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
   const [editingHasApiToken, setEditingHasApiToken] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [api4comTokenPolicy, setApi4comTokenPolicy] = useState<Api4comTokenPolicy>("global");
+  const [accessProfileOptions, setAccessProfileOptions] = useState<
+    Array<{ id: number; name: string; access_rank: number; active: boolean }>
+  >([]);
 
   async function load() {
     setLoading(true);
@@ -54,6 +60,12 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
     void fetch("/api/api4com/token-policy")
       .then((r) => r.json())
       .then((d: { policy?: Api4comTokenPolicy }) => setApi4comTokenPolicy(d.policy === "per_bdr" ? "per_bdr" : "global"))
+      .catch(() => null);
+    void fetch("/api/admin/access-profiles")
+      .then((r) => r.json())
+      .then((d: { profiles?: Array<{ id: number; name: string; access_rank: number; active: boolean }> }) =>
+        setAccessProfileOptions(d.profiles ?? [])
+      )
       .catch(() => null);
   }, []);
 
@@ -75,6 +87,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
       password: "",
       status: user.status,
       roles: [...user.roles],
+      access_profile_ids: [...(user.access_profile_ids ?? [])],
       api4com_extension: user.api4com_extension ?? "",
       api4com_api_token: ""
     });
@@ -102,6 +115,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
       phone: form.phone || null,
       status: form.status,
       roles: form.roles,
+      access_profile_ids: form.access_profile_ids,
       api4com_extension: form.roles.includes("bdr") ? form.api4com_extension.trim() || null : null
     };
     if (api4comTokenPolicy === "per_bdr" && form.roles.includes("bdr") && form.api4com_api_token.trim()) {
@@ -277,6 +291,12 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
             selected={form.roles}
             disabled={saving}
             onChange={(roles) => setForm((f) => ({ ...f, roles }))}
+          />
+          <UserAccessProfilePicker
+            options={accessProfileOptions}
+            selectedIds={form.access_profile_ids}
+            disabled={saving}
+            onChange={(access_profile_ids) => setForm((f) => ({ ...f, access_profile_ids }))}
           />
           <div className="product-form-actions">
             <button type="button" className="btn" onClick={closeModal}>

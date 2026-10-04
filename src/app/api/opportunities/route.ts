@@ -1,5 +1,6 @@
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { closeSupersededOpenOpportunities, createOpportunity } from "@/lib/opportunity-pipeline";
+import { reenterProspeccaoProduct } from "@/lib/client-product-prospeccao";
 import { returnClientToProspeccaoQueue } from "@/lib/prospeccao-return";
 import { opportunityCreateSchema } from "@/lib/validators";
 
@@ -20,7 +21,13 @@ export async function POST(request: Request) {
   });
 
   if (data.return_to_prospection !== false) {
-    await returnClientToProspeccaoQueue(data.client_id, user.id, data.product_id);
+    await reenterProspeccaoProduct(data.client_id, data.product_id);
+    await returnClientToProspeccaoQueue(
+      data.client_id,
+      user.id,
+      data.product_id,
+      data.owner_user_id ?? data.origin_bdr_user_id ?? null
+    );
   }
 
   return Response.json({ id }, { status: 201 });

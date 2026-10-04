@@ -6,11 +6,19 @@ import { listProspeccaoPriorityTypes } from "@/lib/call-strategy/priorities-conf
 import { buildProspeccaoPriorityFilterOptions } from "@/lib/prospeccao-priority";
 import { sortPrioritiesForDisplay } from "@/lib/prospeccao-priority-queue-admin";
 import { queryProspeccaoQueue } from "@/lib/prospeccao-query";
+import type { User } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+function defaultProspeccaoBdrUserId(user: User): number | undefined {
+  if (!user.roles.includes("bdr")) return undefined;
+  if (user.roles.includes("admin") || user.roles.includes("manager")) return undefined;
+  return user.id;
+}
+
 export default async function ProspeccaoPage() {
-  await requireUser();
+  const user = await requireUser();
+  const defaultBdrUserId = defaultProspeccaoBdrUserId(user);
   const { products, bdrs, companies } = await loadCatalog();
   const priorityTypes = await listProspeccaoPriorityTypes();
   const priorityFilters = buildProspeccaoPriorityFilterOptions(priorityTypes);
@@ -24,7 +32,11 @@ export default async function ProspeccaoPage() {
     queue_anchor: p.queue_anchor ?? "none",
     sort_order: p.sort_order
   }));
-  const { items, total } = await queryProspeccaoQueue({ limit: 50, offset: 0 });
+  const { items, total } = await queryProspeccaoQueue({
+    limit: 50,
+    offset: 0,
+    bdr_user_id: defaultBdrUserId
+  });
   return (
     <Suspense fallback={<p className="muted">Carregando…</p>}>
       <ProspeccaoListView
@@ -35,6 +47,7 @@ export default async function ProspeccaoPage() {
         companies={companies}
         priorityFilters={priorityFilters}
         priorityLegend={priorityLegend}
+        defaultBdrUserId={defaultBdrUserId ?? null}
       />
     </Suspense>
   );

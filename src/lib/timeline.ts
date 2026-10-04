@@ -5,6 +5,7 @@ import {
   normalizeCallScriptLog,
   stripScriptBlockFromApproachNotes
 } from "@/lib/call-script-log";
+import { formatEngagementContextLabel } from "@/lib/engagement-context";
 import { formatSpDateTime } from "@/lib/datetime";
 import { MEETING_STATUS_LABELS, type MeetingStatus } from "@/lib/meeting-constants";
 
@@ -12,6 +13,8 @@ export type TimelineItem = {
   id: string;
   kind: string;
   title: string;
+  /** Ex.: Oportunidade: PostoCred ou Contato relacionado */
+  context_label?: string | null;
   detail: string | null;
   script_detail?: string | null;
   occurred_at: string;
@@ -118,12 +121,14 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       bdrParts = ["Classificação BDR pendente"];
     }
 
-    const detailParts = [call.product_name, ...techParts, ...bdrParts].filter(Boolean) as string[];
+    const contextLabel = formatEngagementContextLabel(call.product_name);
+    const detailParts = [...techParts, ...bdrParts].filter(Boolean) as string[];
 
     items.push({
       id: `api4com-${call.id}`,
       kind: "api4com_call",
       title,
+      context_label: contextLabel,
       detail: detailParts.join(" · ") || null,
       script_detail: scriptDetail,
       occurred_at: when,
@@ -228,8 +233,9 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       id: `approach-${a.id}`,
       kind: "approach",
       title: `Abordagem (${channelLabel})${a.result_name ? ` — ${a.result_name}` : ""}`,
+      context_label: formatEngagementContextLabel(a.product_name),
       detail:
-        [a.product_name, ...layerParts, stripScriptBlockFromApproachNotes(a.notes)].filter(Boolean).join(" · ") || null,
+        [...layerParts, stripScriptBlockFromApproachNotes(a.notes)].filter(Boolean).join(" · ") || null,
       script_detail: approachScript,
       occurred_at: a.occurred_at,
       user_name: a.user_name
@@ -245,11 +251,14 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     created_by_name: string | null;
     assigned_name: string | null;
     completed_at: string | null;
+    product_name: string | null;
   }>(
     `
       SELECT f.id, f.scheduled_at, f.status, f.notes, f.kind, f.completed_at,
-        cu.name AS created_by_name, au.name AS assigned_name
+        cu.name AS created_by_name, au.name AS assigned_name,
+        p.name AS product_name
       FROM follow_ups f
+      LEFT JOIN products p ON p.id = f.product_id
       LEFT JOIN users cu ON cu.id = f.created_by_user_id
       LEFT JOIN users au ON au.id = f.assigned_user_id
       WHERE f.client_id = @clientId
@@ -260,10 +269,12 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
 
   for (const f of followUps) {
     const label = f.kind === "meeting" ? "Reunião" : "Retorno";
+    const followContext = formatEngagementContextLabel(f.product_name);
     items.push({
       id: `follow-${f.id}-scheduled`,
       kind: "follow_up",
       title: `${label} agendado${f.status === "completed" ? " (concluído)" : ""}`,
+      context_label: followContext,
       detail: f.notes,
       occurred_at: f.scheduled_at,
       user_name: f.created_by_name
@@ -273,6 +284,7 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
         id: `follow-${f.id}-done`,
         kind: "follow_up_completed",
         title: `${label} concluído`,
+        context_label: followContext,
         detail: null,
         occurred_at: f.completed_at,
         user_name: f.assigned_name

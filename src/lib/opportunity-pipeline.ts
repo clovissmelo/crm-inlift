@@ -332,12 +332,15 @@ export async function listClientOpportunityCards(clientId: number) {
     stage_name: string | null;
     stage_color: string | null;
     owner_name: string | null;
+    owner_user_id: number | null;
+    row_version: number;
     created_at: string;
   }>(
     `
       SELECT o.id, o.product_id, p.name AS product_name, o.title, o.temperature, o.outcome,
         o.engagement_status,
         ps.name AS stage_name, ps.color AS stage_color, ow.name AS owner_name,
+        o.owner_user_id, o.row_version,
         o.created_at::text AS created_at
       FROM opportunities o
       JOIN products p ON p.id = o.product_id

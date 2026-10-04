@@ -26,10 +26,22 @@ async function attachRoles(users: UserRow[]): Promise<User[]> {
     list.push(r.role);
     byUser.set(r.user_id, list);
   }
-  return users.map((u) => sanitizeUserForClient({
-    ...u,
-    roles: byUser.get(u.id) ?? []
-  }));
+  const profileRows = await all<{ user_id: number; profile_id: number }>(
+    `SELECT user_id, profile_id FROM user_access_profiles WHERE user_id IN (${ids.join(",")})`
+  );
+  const profilesByUser = new Map<number, number[]>();
+  for (const r of profileRows) {
+    const list = profilesByUser.get(r.user_id) ?? [];
+    list.push(Number(r.profile_id));
+    profilesByUser.set(r.user_id, list);
+  }
+  return users.map((u) =>
+    sanitizeUserForClient({
+      ...u,
+      roles: byUser.get(u.id) ?? [],
+      access_profile_ids: profilesByUser.get(u.id) ?? []
+    })
+  );
 }
 
 export function sanitizeUserForClient(user: User & { api4com_api_token?: string | null }): User {

@@ -47,7 +47,7 @@ export type PhoneDialContextItem = {
   needs_review: boolean;
   pending_registration_calls: number;
   attempts_at_limit: boolean;
-  /** Ligações já feitas neste número (registradas + encerradas sem complemento). */
+  /** Tentativas registradas que consomem ciclo (mesma base do esgotamento). */
   dial_history_at: string[];
   max_dial_attempts: number;
 };
@@ -95,7 +95,7 @@ async function loadLastAttempts(clientId: number): Promise<
       SELECT DISTINCT ON (client_phone_id)
         client_phone_id, created_at, attempt_bucket, commercial_slug
       FROM phone_dial_attempts
-      WHERE client_id = @clientId
+      WHERE client_id = @clientId AND consumes_cycle = true
       ORDER BY client_phone_id, created_at DESC
     `,
     { clientId }
@@ -169,12 +169,13 @@ export async function buildClientDialStrategySummary(input: {
     };
     const counter_lines = buildCounterLines(counterState, limitsByKind);
     const maxNoContact = maxNoContactDefault;
-    const usedAttempts =
-      Math.max(p.cycle_no_contact_count, p.cycle_invalid_count, p.cycle_wrong_number_count) +
-      Math.max(0, pendingRegistration);
+    const usedAttempts = Math.max(
+      p.cycle_no_contact_count,
+      p.cycle_invalid_count,
+      p.cycle_wrong_number_count
+    );
     const dial_history_at = dialTimesByPhone.get(p.id) ?? [];
-    const attempts_at_limit =
-      p.status === "exhausted" || usedAttempts >= maxNoContact || dial_history_at.length >= maxNoContact;
+    const attempts_at_limit = p.status === "exhausted" || usedAttempts >= maxNoContact;
     const primaryKind =
       (p.last_occurrence_kind as OccurrenceKind | null) ??
       (last?.attempt_bucket as OccurrenceKind | null) ??
@@ -194,7 +195,7 @@ export async function buildClientDialStrategySummary(input: {
       position: idx + 1,
       total,
       status: p.status,
-      attempt_label: phoneAttemptLabel(p, settings, pendingRegistration),
+      attempt_label: phoneAttemptLabel(p, settings),
       cycle_no_contact_count: p.cycle_no_contact_count,
       cycle_no_answer_count: p.cycle_no_answer_count,
       cycle_invalid_count: p.cycle_invalid_count,

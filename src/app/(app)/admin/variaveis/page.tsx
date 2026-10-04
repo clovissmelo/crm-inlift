@@ -1,5 +1,5 @@
-import { AdminApiVariables } from "@/components/admin-api-variables";
+import { AdminAnpSettingsPage } from "@/components/admin-anp-settings-page";
 
 export default function AdminVariaveisPage() {
-  return <AdminApiVariables />;
+  return <AdminAnpSettingsPage />;
 }

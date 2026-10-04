@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CadastroModal } from "@/components/cadastro-ui";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
 import { PageIntro } from "@/components/page-intro";
 import { formatCnpj } from "@/lib/format";
@@ -19,7 +20,15 @@ const defaultFilters = {
   search: ""
 };
 
-export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; products: Array<{ id: number; name: string }> }) {
+export function OrganizacaoLeadsView({
+  bdrs,
+  products,
+  isAdmin = false
+}: {
+  bdrs: User[];
+  products: Array<{ id: number; name: string }>;
+  isAdmin?: boolean;
+}) {
   const [items, setItems] = useState<ClientListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -28,6 +37,9 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
   const [toProduct, setToProduct] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmProductOpen, setConfirmProductOpen] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
+  const [deletePhrase, setDeletePhrase] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +96,10 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
   }
 
   const selectedCount = selectAllResults ? total : selected.size;
+  const deleteConfirmExpected = useMemo(
+    () => (selectedCount > 0 ? `APAGAR ${selectedCount}` : ""),
+    [selectedCount]
+  );
   const targetBdrName = bdrs.find((b) => String(b.id) === toBdr)?.name ?? "";
   const targetProductName = products.find((p) => String(p.id) === toProduct)?.name ?? "";
   const productNameById = new Map(products.map((p) => [p.id, p.name]));
@@ -145,60 +161,109 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
     void load();
   }
 
+  function closeDeleteFlow() {
+    setDeleteStep(0);
+    setDeletePhrase("");
+    setDeleteBusy(false);
+  }
+
+  async function executeBulkDelete() {
+    if (deletePhrase.trim() !== deleteConfirmExpected) return;
+    setMessage(null);
+    setError(null);
+    setDeleteBusy(true);
+    const res = await fetch("/api/clients/bulk-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        select_all: selectAllResults,
+        client_ids: selectAllResults ? undefined : [...selected],
+        filters: selectAllResults ? filters : undefined,
+        confirm_phrase: deletePhrase.trim()
+      })
+    });
+    const data = (await res.json()) as {
+      error?: string;
+      deleted?: number;
+      failed?: Array<{ id: number; error: string }>;
+    };
+    setDeleteBusy(false);
+    if (!res.ok) {
+      setError(data.error ?? "Falha ao apagar leads");
+      return;
+    }
+    const failedCount = data.failed?.length ?? 0;
+    if (failedCount > 0) {
+      setMessage(
+        `${data.deleted ?? 0} lead(s) apagado(s). ${failedCount} não puderam ser excluídos (registros vinculados).`
+      );
+    } else {
+      setMessage(`${data.deleted ?? 0} lead(s) apagado(s) permanentemente.`);
+    }
+    closeDeleteFlow();
+    setSelected(new Set());
+    setSelectAllResults(false);
+    void load();
+  }
+
   return (
     <div>
       <PageIntro>Vincule ou transfira BDR e/ou produto aos leads.</PageIntro>
 
-      <FilterBar>
-        <FilterInput label="Cidade" value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} placeholder="—" />
-        <FilterInput label="UF" maxLength={2} value={filters.uf} onChange={(e) => setFilters((f) => ({ ...f, uf: e.target.value }))} placeholder="—" />
-        <FilterInput label="Segmento" value={filters.segment} onChange={(e) => setFilters((f) => ({ ...f, segment: e.target.value }))} placeholder="—" />
-        <FilterSelect label="Produto" value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}>
-          <option value="">Todos</option>
-          <option value="none">Nenhum</option>
-          {products.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </FilterSelect>
-        <FilterSelect label="BDR atual" value={filters.bdr_user_id} onChange={(e) => setFilters((f) => ({ ...f, bdr_user_id: e.target.value }))}>
-          <option value="">Todas</option>
-          <option value="none">Nenhum</option>
-          {bdrs.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </FilterSelect>
-        <FilterSelect
-          label="Já telefonado"
-          value={filters.phone_contacted}
-          onChange={(e) => setFilters((f) => ({ ...f, phone_contacted: e.target.value }))}
-        >
-          <option value="no">Não (novos)</option>
-          <option value="yes">Sim</option>
-          <option value="">Todos</option>
-        </FilterSelect>
-        <FilterInput
-          label="Lead gerado de"
-          type="date"
-          value={filters.created_from}
-          onChange={(e) => setFilters((f) => ({ ...f, created_from: e.target.value }))}
-        />
-        <FilterInput
-          label="Lead gerado até"
-          type="date"
-          value={filters.created_to}
-          onChange={(e) => setFilters((f) => ({ ...f, created_to: e.target.value }))}
-        />
-        <FilterSelect label="Telefone" value={filters.phone_availability} onChange={(e) => setFilters((f) => ({ ...f, phone_availability: e.target.value }))}>
-          <option value="">Qualquer</option>
-          <option value="mobile">Celular</option>
-          <option value="landline">Fixo</option>
-          <option value="none">Sem telefone</option>
-        </FilterSelect>
-      </FilterBar>
+      <div className="client-filters-block">
+        <FilterBar>
+          <FilterInput label="Cidade" value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} placeholder="—" />
+          <FilterInput label="UF" maxLength={2} value={filters.uf} onChange={(e) => setFilters((f) => ({ ...f, uf: e.target.value }))} placeholder="—" />
+          <FilterInput label="Segmento" value={filters.segment} onChange={(e) => setFilters((f) => ({ ...f, segment: e.target.value }))} placeholder="—" />
+          <FilterSelect label="Produto" value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))}>
+            <option value="">Todos</option>
+            <option value="none">Nenhum</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </FilterSelect>
+          <FilterSelect label="BDR atual" value={filters.bdr_user_id} onChange={(e) => setFilters((f) => ({ ...f, bdr_user_id: e.target.value }))}>
+            <option value="">Todas</option>
+            <option value="none">Nenhum</option>
+            {bdrs.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </FilterSelect>
+          <FilterSelect
+            label="Já telefonado"
+            value={filters.phone_contacted}
+            onChange={(e) => setFilters((f) => ({ ...f, phone_contacted: e.target.value }))}
+          >
+            <option value="no">Não (novos)</option>
+            <option value="yes">Sim</option>
+            <option value="">Todos</option>
+          </FilterSelect>
+        </FilterBar>
+        <FilterBar className="client-filters-more-row">
+          <FilterInput
+            label="Lead gerado de"
+            type="date"
+            value={filters.created_from}
+            onChange={(e) => setFilters((f) => ({ ...f, created_from: e.target.value }))}
+          />
+          <FilterInput
+            label="Lead gerado até"
+            type="date"
+            value={filters.created_to}
+            onChange={(e) => setFilters((f) => ({ ...f, created_to: e.target.value }))}
+          />
+          <FilterSelect label="Telefone" value={filters.phone_availability} onChange={(e) => setFilters((f) => ({ ...f, phone_availability: e.target.value }))}>
+            <option value="">Qualquer</option>
+            <option value="mobile">Celular</option>
+            <option value="landline">Fixo</option>
+            <option value="none">Sem telefone</option>
+          </FilterSelect>
+        </FilterBar>
+      </div>
 
       <div className="panel organizacao-bulk-bar">
         <div className="field organizacao-bulk-bar-field">
@@ -254,6 +319,19 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
           >
             Vincular produto
           </button>
+          {isAdmin ? (
+            <button
+              className="btn btn-danger"
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => {
+                setDeletePhrase("");
+                setDeleteStep(1);
+              }}
+            >
+              Apagar leads
+            </button>
+          ) : null}
           <label className="organizacao-bulk-select-all">
             <input
               type="checkbox"
@@ -361,6 +439,64 @@ export function OrganizacaoLeadsView({ bdrs, products }: { bdrs: User[]; product
           </div>
         </div>
       ) : null}
+
+      <CadastroModal open={deleteStep === 1} title="Apagar leads em massa" onClose={closeDeleteFlow}>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Você está prestes a excluir <strong>{selectedCount}</strong> lead(s). Esta ação é{" "}
+          <strong>permanente e irreversível</strong>.
+        </p>
+        <p className="muted">
+          Serão removidos do sistema o cadastro do lead e, em cascata, contatos, telefones, produtos vinculados,
+          oportunidades, abordagens, retornos, agendamentos, histórico de prospecção e demais registros associados a
+          esses clientes.
+        </p>
+        <p className="muted">Use apenas para corrigir importações erradas ou dados de teste.</p>
+        <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem", flexWrap: "wrap" }}>
+          <button className="btn btn-danger" type="button" onClick={() => setDeleteStep(2)}>
+            Continuar para confirmação final
+          </button>
+          <button className="btn" type="button" onClick={closeDeleteFlow}>
+            Cancelar
+          </button>
+        </div>
+      </CadastroModal>
+
+      <CadastroModal open={deleteStep === 2} title="Confirmação final" onClose={closeDeleteFlow}>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Para apagar <strong>{selectedCount}</strong> lead(s), digite exatamente{" "}
+          <code>{deleteConfirmExpected}</code> no campo abaixo.
+        </p>
+        <div className="field" style={{ marginTop: "0.75rem" }}>
+          <label className="label" htmlFor="organizacao-delete-phrase">
+            Texto de confirmação
+          </label>
+          <input
+            id="organizacao-delete-phrase"
+            className="input"
+            value={deletePhrase}
+            onChange={(e) => setDeletePhrase(e.target.value)}
+            placeholder={deleteConfirmExpected}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </div>
+        <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem", flexWrap: "wrap" }}>
+          <button
+            className="btn btn-danger"
+            type="button"
+            disabled={deleteBusy || deletePhrase.trim() !== deleteConfirmExpected}
+            onClick={() => void executeBulkDelete()}
+          >
+            {deleteBusy ? "Apagando…" : "Apagar permanentemente"}
+          </button>
+          <button className="btn" type="button" disabled={deleteBusy} onClick={() => setDeleteStep(1)}>
+            Voltar
+          </button>
+          <button className="btn" type="button" disabled={deleteBusy} onClick={closeDeleteFlow}>
+            Cancelar
+          </button>
+        </div>
+      </CadastroModal>
     </div>
   );
 }

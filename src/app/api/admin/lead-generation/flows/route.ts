@@ -3,12 +3,14 @@ import { requireApiUser } from "@/lib/auth";
 import { FLOW_STEP_CATALOG, FLOW_STEP_KEYS } from "@/lib/lead-generation/flow-modules";
 import {
   buildFlowSnapshot,
+  createLeadGenerationFlow,
   getLeadGenerationFlow,
   listLeadGenerationFlows,
   saveFlowMeta,
   saveFlowSteps,
   type FlowStepRow
 } from "@/lib/lead-generation/flows-repo";
+import type { FlowInitialSource } from "@/lib/lead-generation/flow-modules";
 import { isFlowStepKey } from "@/lib/lead-generation/flow-modules";
 import { z } from "zod";
 
@@ -18,6 +20,13 @@ const stepPatchSchema = z.object({
   enabled: z.boolean(),
   on_fail: z.enum(["continue", "stop"]),
   max_api_calls: z.number().int().min(0).max(9999).nullable().optional()
+});
+
+const postSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  initial_source: z.enum(["anp_retail", "anp_distributor", "google_places_city"]),
+  active: z.boolean().optional()
 });
 
 const patchSchema = z.object({
@@ -56,6 +65,29 @@ export async function GET(request: Request) {
     step_keys: FLOW_STEP_KEYS,
     catalog: FLOW_STEP_CATALOG
   });
+}
+
+export async function POST(request: Request) {
+  const user = await requireApiUser();
+  const denied = await requireAdminApi(user);
+  if (denied) return denied;
+
+  const parsed = postSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return Response.json({ error: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
+  }
+
+  try {
+    const flow = await createLeadGenerationFlow({
+      name: parsed.data.name,
+      description: parsed.data.description,
+      initial_source: parsed.data.initial_source as FlowInitialSource,
+      active: parsed.data.active
+    });
+    return Response.json({ flow, snapshot: buildFlowSnapshot(flow) }, { status: 201 });
+  } catch (e) {
+    return Response.json({ error: e instanceof Error ? e.message : "Erro ao criar fluxo" }, { status: 400 });
+  }
 }
 
 export async function PATCH(request: Request) {

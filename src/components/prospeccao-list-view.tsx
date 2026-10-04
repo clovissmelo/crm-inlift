@@ -19,7 +19,8 @@ export function ProspeccaoListView({
   bdrs,
   companies,
   priorityFilters,
-  priorityLegend
+  priorityLegend,
+  defaultBdrUserId = null
 }: {
   initialItems: ProspeccaoListItem[];
   initialTotal: number;
@@ -28,6 +29,8 @@ export function ProspeccaoListView({
   companies: Company[];
   priorityFilters: Array<{ slug: string; name: string }>;
   priorityLegend: ProspeccaoPriorityLegendItem[];
+  /** Quando definido, filtro BDR inicia nesta usuária (ex.: BDR logada). */
+  defaultBdrUserId?: number | null;
 }) {
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
@@ -40,7 +43,7 @@ export function ProspeccaoListView({
     uf: "",
     segment: "",
     product_id: "",
-    bdr_user_id: "",
+    bdr_user_id: defaultBdrUserId != null ? String(defaultBdrUserId) : "",
     phone_availability: "",
     prioridade: initialPrioridade,
     company_id: "",

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 import {
@@ -29,63 +29,71 @@ import {
 import { Api4comCallProvider } from "@/components/api4com-call-provider";
 import { UserMenu } from "@/components/user-menu";
 import { isAdmin } from "@/lib/admin";
+import {
+  canAccessPath,
+  MENU_DEFINITIONS,
+  MENU_SECTION_LABELS,
+  parseMenuAccessFromClient,
+  type MenuKey,
+  type ResolvedMenuAccess
+} from "@/lib/access-menu";
 import { pageCrumbSegments } from "@/lib/page-crumb";
 import type { User } from "@/lib/types";
 
-type NavItem = { href: Route; label: string; icon: typeof LayoutDashboard };
+type NavItem = { href: Route; label: string; icon: typeof LayoutDashboard; menuKey: MenuKey };
 
 type NavSection = {
   title?: string;
   items: NavItem[];
 };
 
-const navTop: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/prospeccao", label: "Leads para contato", icon: PhoneCall },
-  { href: "/funil", label: "Funil de vendas", icon: Funnel },
-  { href: "/agendamentos", label: "Agendamentos", icon: Calendar }
-];
+const MENU_ICONS: Record<MenuKey, typeof LayoutDashboard> = {
+  dashboard: LayoutDashboard,
+  prospeccao: PhoneCall,
+  funil: Funnel,
+  agendamentos: Calendar,
+  novos_leads: Sparkles,
+  organizacao_leads: Filter,
+  clientes: List,
+  abordagens: Target,
+  prospeccao_config: Settings,
+  resultado_comercial: ListChecks,
+  etapas_funil: GitBranch,
+  negocios_convertidos: Trophy,
+  empresas: Building2,
+  produtos: Package,
+  usuarios: Users,
+  admin_hub: Shield
+};
 
-function buildNavSections(admin: boolean): NavSection[] {
-  const clientesLeads: NavItem[] = [];
-  if (admin) {
-    clientesLeads.push({ href: "/admin/novos-leads", label: "Novos leads", icon: Sparkles });
+const SECTION_ORDER = ["top", "clientes_leads", "configuracao", "cadastros"] as const;
+
+function buildNavSections(menuAccess: ResolvedMenuAccess, isAdminRole: boolean): NavSection[] {
+  const allowed: Set<MenuKey> | "all" =
+    menuAccess === "all" ? "all" : menuAccess;
+
+  const sections: NavSection[] = [];
+  for (const sectionKey of SECTION_ORDER) {
+    const items: NavItem[] = [];
+    for (const def of MENU_DEFINITIONS) {
+      if (def.section !== sectionKey) continue;
+      if (def.requiresAdminRole && !isAdminRole) continue;
+      if (allowed !== "all" && !allowed.has(def.key)) continue;
+      items.push({
+        href: def.href as Route,
+        label: def.label,
+        icon: MENU_ICONS[def.key],
+        menuKey: def.key
+      });
+    }
+    if (items.length > 0) {
+      sections.push({
+        title: sectionKey === "top" ? undefined : MENU_SECTION_LABELS[sectionKey],
+        items
+      });
+    }
   }
-  clientesLeads.push(
-    { href: "/organizacao-leads", label: "Organizar leads", icon: Filter },
-    { href: "/clientes", label: "Clientes", icon: List }
-  );
-
-  const configuracao: NavItem[] = [{ href: "/abordagens", label: "Abordagem", icon: Target }];
-  if (admin) {
-    configuracao.push({ href: "/admin/prospeccao", label: "Prospecção", icon: Settings });
-  }
-  configuracao.push({ href: "/resultado-comercial", label: "Resultado Comercial", icon: ListChecks });
-  if (admin) {
-    configuracao.push({ href: "/admin/etapas-funil", label: "Etapas do Funil", icon: GitBranch });
-  }
-
-  const cadastros: NavItem[] = [];
-  cadastros.push(
-    { href: "/negocios-convertidos", label: "Negócios convertidos", icon: Trophy },
-    { href: "/empresas", label: "Nossas empresas", icon: Building2 },
-    { href: "/produtos", label: "Nossos produtos", icon: Package }
-  );
-  if (admin) {
-    cadastros.push(
-      { href: "/admin/usuarios", label: "Usuários", icon: Users },
-      { href: "/admin", label: "Admin", icon: Shield }
-    );
-  }
-
-  const sections: NavSection[] = [
-    { items: navTop },
-    { title: "Clientes e leads", items: clientesLeads },
-    { title: "Configuração", items: configuracao },
-    { title: "Cadastros", items: cadastros }
-  ];
-
-  return sections.filter((s) => s.items.length > 0);
+  return sections;
 }
 
 function isAdminHubPath(pathname: string) {
@@ -95,7 +103,8 @@ function isAdminHubPath(pathname: string) {
     pathname.startsWith("/admin/variaveis") ||
     pathname.startsWith("/admin/anp-variaveis") ||
     pathname.startsWith("/admin/fluxos-geracao") ||
-    pathname.startsWith("/admin/importacao")
+    pathname.startsWith("/admin/importacao") ||
+    pathname.startsWith("/admin/perfis-acessos")
   );
 }
 
@@ -112,24 +121,35 @@ function NavLinkItem({ item, pathname }: { item: NavItem; pathname: string }) {
 
 export function AppShell({
   user,
+  menuAccess,
   prospeccaoLeadsUpdatedAt,
   prospeccaoLeadsUpdatedLabel,
   children
 }: {
   user: User;
+  menuAccess: MenuKey[] | "all";
   prospeccaoLeadsUpdatedAt: string | null;
   prospeccaoLeadsUpdatedLabel: string | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const crumbParts = pageCrumbSegments(pathname);
   const userIsAdmin = isAdmin(user);
-  const navSections = buildNavSections(userIsAdmin);
+  const resolvedMenuAccess = parseMenuAccessFromClient(menuAccess);
+  const navSections = buildNavSections(resolvedMenuAccess, userIsAdmin);
 
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (userIsAdmin) return;
+    if (!canAccessPath(pathname, resolvedMenuAccess, userIsAdmin)) {
+      router.replace("/dashboard");
+    }
+  }, [pathname, resolvedMenuAccess, router, userIsAdmin]);
 
   return (
     <div className="app-layout">
@@ -163,7 +183,7 @@ export function AppShell({
             <div key={section.title ?? "top"}>
               {section.title ? <p className="nav-section-label">{section.title}</p> : null}
               {section.items.map((item) => {
-                if (item.href === "/admin") {
+                if (item.menuKey === "admin_hub") {
                   return (
                     <Link
                       key={item.href}

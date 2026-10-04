@@ -1,3 +1,4 @@
+import { reenterProspeccaoProduct } from "@/lib/client-product-prospeccao";
 import { get, nowIso, run } from "@/lib/db";
 import { spDayStartUtcIso } from "@/lib/datetime";
 
@@ -26,20 +27,51 @@ export async function enrollClientInProspeccaoQueue(
   const now = nowIso();
   await run(
     `
-      UPDATE clients SET in_prospeccao_queue = true, bdr_user_id = @bdrUserId, updated_at = @now
-      WHERE id = @clientId
+      UPDATE opportunities SET
+        owner_user_id = @bdrUserId,
+        origin_bdr_user_id = COALESCE(origin_bdr_user_id, @bdrUserId),
+        updated_at = @now,
+        row_version = row_version + 1
+      WHERE client_id = @clientId AND product_id = @productId AND outcome = 'open'
     `,
-    { clientId, bdrUserId, now }
+    { clientId, productId, bdrUserId, now }
   );
 
-  await returnClientToProspeccaoQueue(clientId, actorUserId, productId);
+  await reenterProspeccaoProduct(clientId, productId);
+
+  await run(
+    `
+      UPDATE clients SET in_prospeccao_queue = true, updated_at = @now
+      WHERE id = @clientId
+    `,
+    { clientId, now }
+  );
+
+  const otherBdr = await get<{ owner_user_id: number | null }>(
+    `
+      SELECT owner_user_id FROM opportunities
+      WHERE client_id = @clientId AND outcome = 'open'
+      ORDER BY updated_at DESC LIMIT 1
+    `,
+    { clientId }
+  );
+  if (otherBdr?.owner_user_id) {
+    await run("UPDATE clients SET bdr_user_id = @bdrUserId, updated_at = @now WHERE id = @clientId", {
+      clientId,
+      bdrUserId: otherBdr.owner_user_id,
+      now
+    });
+  }
+
+  await returnClientToProspeccaoQueue(clientId, actorUserId, productId, bdrUserId);
 }
 
 /** Recoloca o cliente na fila de prospecção; se já houve abordagem, agenda retorno para hoje. */
 export async function returnClientToProspeccaoQueue(
   clientId: number,
   actorUserId: number,
-  productId?: number | null
+  productId?: number | null,
+  assignedBdrUserId?: number | null
 ) {
   const now = nowIso();
   await run(
@@ -59,11 +91,25 @@ export async function returnClientToProspeccaoQueue(
   );
   if (pending) return;
 
-  const client = await get<{ bdr_user_id: number | null }>(
-    "SELECT bdr_user_id FROM clients WHERE id = @clientId",
-    { clientId }
-  );
-  const assigned = client?.bdr_user_id ?? actorUserId;
+  let assigned = assignedBdrUserId ?? null;
+  if (assigned == null && productId != null) {
+    const opp = await get<{ owner_user_id: number | null }>(
+      `
+        SELECT owner_user_id FROM opportunities
+        WHERE client_id = @clientId AND product_id = @productId AND outcome = 'open'
+        ORDER BY updated_at DESC LIMIT 1
+      `,
+      { clientId, productId }
+    );
+    assigned = opp?.owner_user_id ?? null;
+  }
+  if (assigned == null) {
+    const client = await get<{ bdr_user_id: number | null }>(
+      "SELECT bdr_user_id FROM clients WHERE id = @clientId",
+      { clientId }
+    );
+    assigned = client?.bdr_user_id ?? actorUserId;
+  }
   const scheduledAt = spDayStartUtcIso();
 
   await run(

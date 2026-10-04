@@ -3,6 +3,7 @@ import { hashPassword, jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { get, run } from "@/lib/db";
 import { applyUserApi4comExtension } from "@/lib/api4com/user-extension";
 import { applyUserApi4comApiToken } from "@/lib/api4com/user-token";
+import { setUserAccessProfiles } from "@/lib/access-profiles";
 import { deleteUser, getUserById, setUserRoles } from "@/lib/users";
 import { userUpdateSchema } from "@/lib/validators";
 
@@ -57,6 +58,10 @@ export async function PATCH(request: Request, { params }: Params) {
   } else if (data.roles) {
     await applyUserApi4comExtension(userId, roles, undefined);
   }
+  if (data.access_profile_ids) {
+    await setUserAccessProfiles(userId, data.access_profile_ids);
+  }
+
   if (data.clear_api4com_api_token) {
     await applyUserApi4comApiToken(userId, roles, null, { clear: true });
   } else if (data.api4com_api_token) {

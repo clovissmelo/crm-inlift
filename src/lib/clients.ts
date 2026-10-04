@@ -36,7 +36,8 @@ export function serializeClientForDetailPage(client: Record<string, unknown>) {
     anp_products_summary: (client.anp_products_summary as string | null) ?? null,
     bdr_user_id: client.bdr_user_id != null ? Number(client.bdr_user_id) : null,
     lead_qualification: (client.lead_qualification as string | null) ?? null,
-    in_prospeccao_queue: client.in_prospeccao_queue !== false
+    in_prospeccao_queue: client.in_prospeccao_queue !== false,
+    is_existing_customer: Boolean(client.is_existing_customer)
   };
 }
 
@@ -165,6 +166,7 @@ export async function updateClient(
     bdr_user_id?: number | null;
     product_ids?: number[];
     lead_qualification?: "cold" | "warm" | "hot";
+    is_existing_customer?: boolean;
   }
 ) {
   const cnpj = input.cnpj !== undefined ? normalizeCnpj(input.cnpj ?? "") : undefined;
@@ -188,6 +190,7 @@ export async function updateClient(
         notes = COALESCE(@notes, notes),
         bdr_user_id = COALESCE(@bdrUserId, bdr_user_id),
         lead_qualification = COALESCE(@leadQualification, lead_qualification),
+        is_existing_customer = COALESCE(@isExistingCustomer, is_existing_customer),
         updated_at = @updatedAt
       WHERE id = @id
     `,
@@ -205,6 +208,8 @@ export async function updateClient(
       notes: input.notes ?? null,
       bdrUserId: input.bdr_user_id === undefined ? null : input.bdr_user_id,
       leadQualification: input.lead_qualification ?? null,
+      isExistingCustomer:
+        input.is_existing_customer === undefined ? null : input.is_existing_customer,
       updatedAt: nowIso()
     }
   );
@@ -242,4 +247,26 @@ export async function deleteClient(id: number) {
   const client = await get<{ id: number }>("SELECT id FROM clients WHERE id = @id", { id });
   if (!client) throw new Error("Cliente não encontrado");
   await run("DELETE FROM clients WHERE id = @id", { id });
+}
+
+export async function deleteClientsByIds(ids: number[]) {
+  const unique = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
+  let deleted = 0;
+  const failed: Array<{ id: number; error: string }> = [];
+  for (const id of unique) {
+    try {
+      await deleteClient(id);
+      deleted += 1;
+    } catch (err) {
+      const pgCode = (err as { code?: string })?.code;
+      const message =
+        pgCode === "23503"
+          ? "Registros vinculados impedem a exclusão."
+          : err instanceof Error
+            ? err.message
+            : "Erro ao excluir";
+      failed.push({ id, error: message });
+    }
+  }
+  return { deleted, failed, requested: unique.length };
 }

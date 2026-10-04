@@ -1,7 +1,5 @@
 "use client";
 
-import { PageIntro } from "@/components/page-intro";
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 type Setting = {
@@ -13,7 +11,8 @@ type Setting = {
 
 const ANP_SETTING_KEYS = new Set(["lead_generation_simulation_default", "lead_discovery_provider"]);
 
-export function AdminAnpVariables() {
+/** Parâmetros técnicos ANP (simulação, provedor) — use dentro da página unificada ANP. */
+export function AdminAnpParametersSettings() {
   const [settings, setSettings] = useState<Setting[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -75,16 +74,7 @@ export function AdminAnpVariables() {
   }
 
   return (
-    <div>
-      <p className="muted" style={{ marginTop: 0 }}>
-        <Link href="/admin">← Admin</Link>
-      </p>
-      <PageIntro>
-        Parâmetros técnicos da consulta ANP e do motor de novos leads. Segmentos (filtro bandeira/tipo de posto) ficam em{" "}
-        <Link href="/admin/variaveis">Segmentos ANP</Link>; fluxos de enriquecimento em{" "}
-        <Link href="/admin/fluxos-geracao">Fluxos de geração</Link>.
-      </PageIntro>
-
+    <>
       {message ? <div className="alert alert-info">{message}</div> : null}
       {error ? <div className="alert alert-error">{error}</div> : null}
 
@@ -131,6 +121,6 @@ export function AdminAnpVariables() {
           {saving ? "Salvando…" : "Salvar"}
         </button>
       </form>
-    </div>
+    </>
   );
 }

@@ -1,0 +1,2 @@
+ALTER TABLE clients
+  ADD COLUMN IF NOT EXISTS is_existing_customer BOOLEAN NOT NULL DEFAULT false;
