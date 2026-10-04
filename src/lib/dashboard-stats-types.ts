@@ -30,6 +30,7 @@ export type DashboardWhatsAppReport = {
   meetings_scheduled: number;
   meetings_today: number;
   period_key: DashboardPeriod;
+  meetings_by_product: Array<{ product_name: string; count: number }>;
 };
 
 export type DashboardStatsPayload = {

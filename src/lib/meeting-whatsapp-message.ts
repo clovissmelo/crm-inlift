@@ -1,4 +1,4 @@
-import { prepareWhatsAppMessage, WA, waHeading } from "@/lib/whatsapp-format";
+import { prepareWhatsAppMessage, WA } from "@/lib/whatsapp-format";
 
 export type MeetingWhatsAppDetail = {
   meeting: Record<string, unknown>;
@@ -47,20 +47,20 @@ export function buildMeetingWhatsAppInvite(detail: MeetingWhatsAppDetail, client
   const contactEmail = linkedEmail?.trim() || ext?.email?.trim() || "—";
 
   const startsAt = String(m.starts_at);
-  const dateLabel = new Intl.DateTimeFormat("pt-BR", {
+  const datePart = new Intl.DateTimeFormat("pt-BR", {
     timeZone: TZ,
     day: "2-digit",
     month: "2-digit"
   }).format(new Date(startsAt));
-  const timeLabel = new Intl.DateTimeFormat("pt-BR", {
+  const timePart = new Intl.DateTimeFormat("pt-BR", {
     timeZone: TZ,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false
   }).format(new Date(startsAt));
+  const dateTimeLabel = `${datePart} ${timePart}`;
 
   const meetLink = m.meet_link ? String(m.meet_link) : null;
-  const formatLabel = meetLink ? "Online" : "Presencial";
   const linkLine = meetLink ? formatMeetLink(meetLink) : "—";
 
   const bdrUserId = m.bdr_user_id != null ? Number(m.bdr_user_id) : null;
@@ -73,31 +73,28 @@ export function buildMeetingWhatsAppInvite(detail: MeetingWhatsAppDetail, client
     .filter(Boolean);
 
   const lines: string[] = [
-    waHeading(WA.alert, "Nova Reunião Agendada"),
-    `${WA.building} Empresa: ${company}`,
-    `${WA.package} Produto: ${product}`,
+    `${WA.alert} Nova Reunião Agendada`,
+    `Empresa: ${company}`,
+    `Produto: ${product}`,
+    `BDR: ${bdrLabel}`,
     "",
     `${WA.person} Contato: ${contactName}`,
-    `${WA.mobile} Telefone: ${contactPhone}`,
-    `${WA.email} E-mail: ${contactEmail}`,
+    `Telefone: ${contactPhone}`,
+    `E-mail: ${contactEmail}`,
     "",
-    `${WA.calendar} Data: ${dateLabel}`,
-    `${WA.clock} Horário: ${timeLabel}`,
-    `${WA.laptop} Formato: ${formatLabel}`,
-    `${WA.handshake} BDR: ${bdrLabel}`,
+    `${WA.calendar} Data: ${dateTimeLabel}`,
     `${WA.link} Link: ${linkLine}`,
     "",
-    waHeading(WA.people, "Participantes")
+    `${WA.people} Participantes`
   ];
 
   if (participantNames.length === 0) {
-    lines.push("• —");
+    lines.push("* —");
   } else {
     for (const name of participantNames) {
-      lines.push(`• ${name}`);
+      lines.push(`* ${name}`);
     }
   }
 
   return prepareWhatsAppMessage(lines.join("\n"));
 }
-

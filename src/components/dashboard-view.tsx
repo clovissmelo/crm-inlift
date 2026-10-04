@@ -128,14 +128,7 @@ export function DashboardView({
       product: productLabel,
       period: periodNote,
       all_products: allProductsSelected,
-      products: allProductsSelected
-        ? productsBreakdown.map((p) => ({
-            name: p.product_name,
-            clients_available: p.clients_available,
-            leads_worked_period: p.leads_worked_period,
-            calls_made_period: p.calls_made_period
-          }))
-        : undefined
+      product_names: allProductsSelected ? productsBreakdown.map((p) => p.product_name) : undefined
     });
     setWaShareText(text);
   }

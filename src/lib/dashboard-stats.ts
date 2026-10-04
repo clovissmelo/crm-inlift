@@ -130,6 +130,7 @@ async function loadProductsBreakdown(
 
 async function loadWhatsAppReport(
   approachFilter: string,
+  meetingFilter: string,
   params: Record<string, string | number>,
   period: DashboardPeriod,
   meetingsScheduled: number,
@@ -176,6 +177,20 @@ async function loadWhatsAppReport(
 
   const bySlug = Object.fromEntries(slugRows.map((r) => [r.slug, Number(r.count)]));
 
+  const meetingRows = await all<{ product_name: string; count: string }>(
+    `
+    SELECT COALESCE(p.name, 'Sem produto') AS product_name, COUNT(*)::text AS count
+    FROM meetings m
+    JOIN clients c ON c.id = m.client_id
+    LEFT JOIN products p ON p.id = m.product_id
+    WHERE ${meetingFilter} AND m.status IN ('scheduled', 'confirmed')
+    GROUP BY p.id, p.name
+    HAVING COUNT(*) > 0
+    ORDER BY p.name ASC
+    `,
+    params
+  );
+
   return {
     leads_worked: Number(callAgg?.leads_worked ?? 0),
     calls_made: Number(callAgg?.calls_made ?? 0),
@@ -189,7 +204,11 @@ async function loadWhatsAppReport(
     return_requested: bySlug.pediu_retorno ?? 0,
     meetings_scheduled: meetingsScheduled,
     meetings_today: meetingsToday,
-    period_key: period
+    period_key: period,
+    meetings_by_product: meetingRows.map((r) => ({
+      product_name: r.product_name,
+      count: Number(r.count)
+    }))
   };
 }
 
@@ -647,6 +666,7 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
 
   const whatsapp_report = await loadWhatsAppReport(
     approachFilter,
+    meetingFilter,
     params,
     period,
     meetingsScheduledN,

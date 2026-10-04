@@ -1,28 +1,31 @@
 import type { DashboardWhatsAppReport } from "@/lib/dashboard-stats-types";
 import { prepareWhatsAppMessage, WA, waBold, waBullet, waHeading, waLabel } from "@/lib/whatsapp-format";
 
-export type DashboardWhatsAppProductLine = {
-  name: string;
-  clients_available: number;
-  leads_worked_period: number;
-  calls_made_period: number;
-};
-
 export type DashboardWhatsAppFilterLabels = {
   bdr: string;
   product: string;
   period: string;
   all_products?: boolean;
-  products?: DashboardWhatsAppProductLine[];
+  /** Nomes na ordem de exibição (filtro Todos). */
+  product_names?: string[];
 };
 
 function fmt(n: number): string {
   return String(n);
 }
 
+function fmtMeetingsTotal(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
 function pct(num: number, den: number): string {
   if (den <= 0) return "0,0%";
   return `${((100 * num) / den).toFixed(1).replace(".", ",")}%`;
+}
+
+function formatProductNamesLine(names: string[]): string {
+  if (names.length === 0) return waLabel(WA.package, "Produtos", "—");
+  return `${WA.package} Produtos: ${names.map((n) => waBold(n)).join(" • ")}`;
 }
 
 export function buildDashboardWhatsAppMessage(
@@ -41,8 +44,7 @@ export function buildDashboardWhatsAppMessage(
     gatekeeper_block,
     return_requested,
     meetings_scheduled,
-    meetings_today,
-    period_key
+    meetings_by_product
   } = report;
 
   const lines: string[] = [
@@ -51,13 +53,8 @@ export function buildDashboardWhatsAppMessage(
     waLabel(WA.calendar, "Período", labels.period)
   ];
 
-  if (labels.all_products && labels.products?.length) {
-    lines.push(`${WA.package} ${waBold("Produtos")}`);
-    for (const p of labels.products) {
-      lines.push(
-        `• ${p.name}: ${waBold(String(p.leads_worked_period))} leads · ${waBold(String(p.calls_made_period))} ligações · ${waBold(String(p.clients_available))} disponíveis`
-      );
-    }
+  if (labels.all_products) {
+    lines.push(formatProductNamesLine(labels.product_names ?? []));
   } else {
     lines.push(waLabel(WA.package, "Produto", labels.product));
   }
@@ -87,17 +84,13 @@ export function buildDashboardWhatsAppMessage(
     waBullet("Ligações atendidas", pct(calls_answered, calls_rang)),
     waBullet("Acesso ao decisor", pct(decision_maker_contacts, calls_answered)),
     waBullet("Leads → Reunião", pct(meetings_scheduled, leads_worked)),
-    ""
+    "",
+    `${WA.trophy} ${waBold(`${fmtMeetingsTotal(meetings_scheduled)} reuniões agendadas`)}`
   );
 
-  if (period_key === "today") {
-    lines.push(`${WA.trophy} ${waBold(`${fmt(meetings_today)} reuniões agendadas hoje`)}`);
-  } else if (meetings_scheduled > 0) {
-    lines.push(`${WA.trophy} ${waBold(`${fmt(meetings_scheduled)} reuniões agendadas no período`)}`);
-  } else {
-    lines.push(`${WA.trophy} ${waBold("Nenhuma reunião agendada no período")}`);
+  for (const row of meetings_by_product) {
+    lines.push(`• ${row.product_name}: ${waBold(String(row.count))}`);
   }
 
   return prepareWhatsAppMessage(lines.join("\n"));
 }
-
