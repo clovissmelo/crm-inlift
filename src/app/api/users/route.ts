@@ -3,7 +3,7 @@ import { nowIso, run } from "@/lib/db";
 import { applyUserApi4comExtension } from "@/lib/api4com/user-extension";
 import { applyUserApi4comApiToken } from "@/lib/api4com/user-token";
 import { requireAdminApi } from "@/lib/admin";
-import { setUserAccessProfiles } from "@/lib/access-profiles";
+import { resolveAdministrativeRolesFromProfileIds, setUserAccessProfiles } from "@/lib/access-profiles";
 import { getUserById, listUsers, setUserRoles } from "@/lib/users";
 import { userCreateSchema } from "@/lib/validators";
 
@@ -45,15 +45,21 @@ export async function POST(request: Request) {
     );
     const userId = result.lastInsertRowid;
     if (!userId) throw new Error("Falha ao criar usuário");
-    await setUserRoles(userId, data.roles);
+    const profileIds = data.access_profile_ids ?? [];
+    if (profileIds.length > 0) {
+      await setUserAccessProfiles(userId, profileIds);
+    }
+    const rolesFromProfiles = profileIds.length > 0 ? await resolveAdministrativeRolesFromProfileIds(profileIds) : [];
+    const roles = rolesFromProfiles.length > 0 ? rolesFromProfiles : (data.roles ?? []);
+    if (roles.length === 0) {
+      return Response.json({ error: "Selecione ao menos um perfil de acesso." }, { status: 400 });
+    }
+    await setUserRoles(userId, roles);
     if (data.api4com_extension !== undefined) {
-      await applyUserApi4comExtension(userId, data.roles, data.api4com_extension);
+      await applyUserApi4comExtension(userId, roles, data.api4com_extension);
     }
     if (data.api4com_api_token) {
-      await applyUserApi4comApiToken(userId, data.roles, data.api4com_api_token);
-    }
-    if (data.access_profile_ids) {
-      await setUserAccessProfiles(userId, data.access_profile_ids);
+      await applyUserApi4comApiToken(userId, roles, data.api4com_api_token);
     }
     const created = await getUserById(userId);
     return Response.json({ id: userId, user: created }, { status: 201 });

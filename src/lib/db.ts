@@ -142,7 +142,7 @@ export async function run<T = { changes: number; lastInsertRowid?: number }>(que
   const isInsert = /^\s*insert\s+/i.test(statement);
   /** Tabelas sem coluna `id` (PK natural / junção) — auto RETURNING id quebra no Postgres. */
   const insertWithoutIdColumn =
-    /^\s*insert\s+into\s+(user_roles|product_responsibles|client_products|meeting_internal_participants|bdr_transfer_log_clients|google_oauth_states|lead_generation_google_cache|lead_generation_daily_usage|lead_generation_ibge_uf_cache|lead_generation_run_municipalities|lead_generation_municipalities|lead_generation_commercial_zone_municipalities|client_product_prospeccao)\b/i;
+    /^\s*insert\s+into\s+(user_roles|access_profile_menu_grants|access_profile_role_grants|user_access_profiles|product_responsibles|client_products|meeting_internal_participants|bdr_transfer_log_clients|google_oauth_states|lead_generation_google_cache|lead_generation_daily_usage|lead_generation_ibge_uf_cache|lead_generation_run_municipalities|lead_generation_municipalities|lead_generation_commercial_zone_municipalities|client_product_prospeccao)\b/i;
   const upsertWithoutRowId = /\bon conflict\b/i.test(statement);
   if (isInsert && !/\breturning\b/i.test(statement)) {
     statement =

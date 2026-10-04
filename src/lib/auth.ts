@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { resolveEffectiveUserRoles } from "@/lib/access-profiles";
 import { all, get, nowIso, run } from "@/lib/db";
 import type { User, UserRole } from "@/lib/types";
 
@@ -107,7 +108,8 @@ async function getSessionUser(): Promise<User | null> {
     return null;
   }
 
-  const roles = await loadUserRoles(session.user_id);
+  const directRoles = await loadUserRoles(session.user_id);
+  const roles = await resolveEffectiveUserRoles(session.user_id, directRoles);
   return rowToUser(session, roles);
 }
 

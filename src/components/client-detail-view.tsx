@@ -1,6 +1,6 @@
 "use client";
 
-import { Mail, Phone, Plus, Search, Star, Trash2 } from "lucide-react";
+import { Mail, Pencil, Phone, Plus, Search, Star, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ClientOpportunityOption } from "@/components/client-engagement-context-modal";
@@ -205,6 +205,9 @@ export function ClientDetailView({
   const [savingProductLink, setSavingProductLink] = useState(false);
   const [returnToProspeccao, setReturnToProspeccao] = useState(false);
   const [showAllOpportunities, setShowAllOpportunities] = useState(false);
+  const [oppTitleEditId, setOppTitleEditId] = useState<number | null>(null);
+  const [oppTitleDraft, setOppTitleDraft] = useState("");
+  const [savingOppTitle, setSavingOppTitle] = useState(false);
   const [inProspeccao, setInProspeccao] = useState(Boolean(initialClient.in_prospeccao_queue ?? true));
   const [prospeccaoModalOpen, setProspeccaoModalOpen] = useState(false);
   const [prospeccaoProductId, setProspeccaoProductId] = useState("");
@@ -700,6 +703,47 @@ export function ClientDetailView({
     }
     setNewOppTitle("");
     setOppModalOpen(false);
+    router.refresh();
+  }
+
+  function startOpportunityTitleEdit(opp: (typeof oppList)[0]) {
+    setOppTitleEditId(opp.id);
+    setOppTitleDraft(opp.title.trim());
+  }
+
+  function cancelOpportunityTitleEdit() {
+    setOppTitleEditId(null);
+    setOppTitleDraft("");
+  }
+
+  async function saveOpportunityTitle(opp: (typeof oppList)[0]) {
+    const title = oppTitleDraft.trim();
+    if (!title) {
+      setError("Informe a descrição da oportunidade.");
+      return;
+    }
+    setSavingOppTitle(true);
+    setError(null);
+    const res = await fetch(`/api/opportunities/${opp.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, expected_version: opp.row_version })
+    });
+    const data = (await res.json()) as {
+      error?: string;
+      opportunity?: { title?: string; row_version?: number };
+    };
+    setSavingOppTitle(false);
+    if (!res.ok) {
+      setError(data.error ?? "Erro ao salvar descrição");
+      return;
+    }
+    const nextTitle = data.opportunity?.title?.trim() ?? title;
+    const nextVersion = data.opportunity?.row_version ?? opp.row_version + 1;
+    setOppList((list) =>
+      list.map((o) => (o.id === opp.id ? { ...o, title: nextTitle, row_version: nextVersion } : o))
+    );
+    cancelOpportunityTitleEdit();
     router.refresh();
   }
 
@@ -1247,7 +1291,53 @@ export function ClientDetailView({
                   {o.outcome === "open" && o.engagement_status === "inactive" ? (
                     <span className="client-opp-card__stage badge">Inativa</span>
                   ) : null}
-                  <p className="client-opp-card__title muted">{o.title.trim() || "Sem título"}</p>
+                  <div className="client-opp-card__title-row">
+                    {oppTitleEditId === o.id ? (
+                      <>
+                        <input
+                          className="input input-sm client-opp-card__title-input"
+                          value={oppTitleDraft}
+                          onChange={(e) => setOppTitleDraft(e.target.value)}
+                          placeholder="Descrição da oportunidade"
+                          aria-label="Descrição da oportunidade"
+                          disabled={savingOppTitle}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void saveOpportunityTitle(o);
+                            if (e.key === "Escape") cancelOpportunityTitleEdit();
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary"
+                          disabled={savingOppTitle}
+                          onClick={() => void saveOpportunityTitle(o)}
+                        >
+                          {savingOppTitle ? "…" : "Salvar"}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          disabled={savingOppTitle}
+                          onClick={cancelOpportunityTitleEdit}
+                        >
+                          Cancelar
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="client-opp-card__title muted">{o.title.trim() || "Sem descrição"}</p>
+                        <button
+                          type="button"
+                          className="btn btn-icon-sm client-opp-card__title-edit"
+                          aria-label={`Editar descrição da oportunidade ${o.product_name}`}
+                          title="Editar descrição"
+                          onClick={() => startOpportunityTitleEdit(o)}
+                        >
+                          <Pencil size={15} aria-hidden />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 <div className="client-opp-card__bdr">
                   <span className="muted client-opp-card__bdr-label">BDR</span>

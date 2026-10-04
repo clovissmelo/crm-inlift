@@ -19,13 +19,22 @@ type UserForm = {
   api4com_api_token: string;
 };
 
+function formHasBdrRole(
+  profileIds: number[],
+  options: Array<{ id: number; administrative_roles?: UserRole[] }>,
+  legacyRoles: UserRole[]
+) {
+  if (legacyRoles.includes("bdr")) return true;
+  return profileIds.some((id) => options.find((p) => p.id === id)?.administrative_roles?.includes("bdr"));
+}
+
 const emptyForm = (): UserForm => ({
   name: "",
   email: "",
   phone: "",
   password: "",
   status: "active",
-  roles: ["bdr"],
+  roles: [] as UserRole[],
   access_profile_ids: [],
   api4com_extension: "",
   api4com_api_token: ""
@@ -43,7 +52,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
   const [changingPassword, setChangingPassword] = useState(false);
   const [api4comTokenPolicy, setApi4comTokenPolicy] = useState<Api4comTokenPolicy>("global");
   const [accessProfileOptions, setAccessProfileOptions] = useState<
-    Array<{ id: number; name: string; access_rank: number; active: boolean }>
+    Array<{ id: number; name: string; access_rank: number; active: boolean; administrative_roles?: UserRole[] }>
   >([]);
 
   async function load() {
@@ -62,8 +71,16 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
       .catch(() => null);
     void fetch("/api/admin/access-profiles")
       .then((r) => r.json())
-      .then((d: { profiles?: Array<{ id: number; name: string; access_rank: number; active: boolean }> }) =>
-        setAccessProfileOptions(d.profiles ?? [])
+      .then(
+        (d: {
+          profiles?: Array<{
+            id: number;
+            name: string;
+            access_rank: number;
+            active: boolean;
+            administrative_roles?: UserRole[];
+          }>;
+        }) => setAccessProfileOptions(d.profiles ?? [])
       )
       .catch(() => null);
   }, []);
@@ -108,22 +125,23 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
     setSaving(true);
     setError(null);
 
+    const effectiveBdr = formHasBdrRole(form.access_profile_ids, accessProfileOptions, form.roles);
+
     const payload: Record<string, unknown> = {
       name: form.name,
       email: form.email,
       phone: form.phone || null,
       status: form.status,
-      roles: form.roles,
       access_profile_ids: form.access_profile_ids,
-      api4com_extension: form.roles.includes("bdr") ? form.api4com_extension.trim() || null : null
+      api4com_extension: effectiveBdr ? form.api4com_extension.trim() || null : null
     };
-    if (api4comTokenPolicy === "per_bdr" && form.roles.includes("bdr") && form.api4com_api_token.trim()) {
+    if (api4comTokenPolicy === "per_bdr" && effectiveBdr && form.api4com_api_token.trim()) {
       payload.api4com_api_token = form.api4com_api_token.trim();
     }
     if (form.password.trim()) payload.password = form.password;
 
-    if (form.roles.length === 0) {
-      setError("Selecione ao menos um perfil.");
+    if (form.access_profile_ids.length === 0) {
+      setError("Selecione ao menos um perfil de acesso.");
       setSaving(false);
       return;
     }
@@ -192,7 +210,11 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
                 <tr key={u.id}>
                   <td>{u.name}</td>
                   <td>{u.email}</td>
-                  <td>{u.roles.map((r) => ROLE_LABELS[r]).join(", ") || "—"}</td>
+                  <td>
+                    {(u.access_profile_ids ?? [])
+                      .map((id) => accessProfileOptions.find((p) => p.id === id)?.name ?? `#${id}`)
+                      .join(", ") || u.roles.map((r) => ROLE_LABELS[r]).join(", ") || "—"}
+                  </td>
                   <td>{u.status === "active" ? "Ativo" : "Inativo"}</td>
                   <td>
                     <CadastroRowActions
@@ -276,7 +298,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
               <option value="inactive">Inativo</option>
             </select>
           </div>
-          {form.roles.includes("bdr") ? (
+          {formHasBdrRole(form.access_profile_ids, accessProfileOptions, form.roles) ? (
             <Api4comBdrFields
               extension={form.api4com_extension}
               onExtensionChange={(v) => setForm((f) => ({ ...f, api4com_extension: v }))}
@@ -287,9 +309,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
             />
           ) : null}
           <UserRolePicker
-            selected={form.roles}
             disabled={saving}
-            onChange={(roles) => setForm((f) => ({ ...f, roles }))}
             accessProfileOptions={accessProfileOptions}
             selectedAccessProfileIds={form.access_profile_ids}
             onAccessProfilesChange={(access_profile_ids) => setForm((f) => ({ ...f, access_profile_ids }))}

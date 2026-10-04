@@ -2958,9 +2958,33 @@ table.data-table td.prospeccao-col-phone-count__value {
   font-size: 0.72rem;
 }
 
+.client-opp-card__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin-top: 0.35rem;
+}
+
 .client-opp-card__title {
-  margin: 0.35rem 0 0;
+  margin: 0;
   font-size: 0.8125rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.client-opp-card__title-input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.client-opp-card__title-edit {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.client-opp-card__title-edit:hover {
+  color: var(--text);
 }
 
 .client-opp-card__bdr {
@@ -5266,6 +5290,45 @@ table.data-table tbody tr.is-selected {
   gap: 0.4rem;
   font-size: 0.875rem;
   cursor: pointer;
+}
+
+.access-profile-menu-section-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.35rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.access-profile-menu-section-head .access-profile-menu-section-title {
+  margin: 0;
+}
+
+.access-profile-editor-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.35rem;
+}
+
+.access-profile-editor-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.access-profile-editor-tab.is-active {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 
 .lead-reconsult-list {

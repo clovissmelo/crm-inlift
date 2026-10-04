@@ -1,4 +1,4 @@
-import { all, get, nowIso, run } from "@/lib/db";
+import { validateAdministrativeRoles } from "@/lib/access-administrative";
 import {
   ALL_MENU_KEYS,
   isMenuKey,
@@ -6,6 +6,7 @@ import {
   type MenuKey,
   type ResolvedMenuAccess
 } from "@/lib/access-menu";
+import { all, get, nowIso, run } from "@/lib/db";
 import type { UserRole } from "@/lib/types";
 import { isAdmin } from "@/lib/admin";
 
@@ -17,6 +18,7 @@ export type AccessProfileRow = {
   access_rank: number;
   active: boolean;
   menu_keys: MenuKey[];
+  administrative_roles: UserRole[];
 };
 
 function slugifyProfileName(name: string): string {
@@ -49,10 +51,39 @@ async function uniqueProfileSlug(base: string, excludeId?: number): Promise<stri
 
 async function loadMenuKeysForProfile(profileId: number): Promise<MenuKey[]> {
   const rows = await all<{ menu_key: string }>(
-    "SELECT menu_key FROM access_profile_menu_grants WHERE profile_id = @id ORDER BY menu_key",
-    { id: profileId }
+    "SELECT menu_key FROM access_profile_menu_grants WHERE profile_id = @profileId ORDER BY menu_key",
+    { profileId }
   );
   return rows.map((r) => r.menu_key).filter(isMenuKey);
+}
+
+async function loadAdministrativeRolesForProfile(profileId: number): Promise<UserRole[]> {
+  const rows = await all<{ role: UserRole }>(
+    "SELECT role FROM access_profile_role_grants WHERE profile_id = @profileId ORDER BY role",
+    { profileId }
+  );
+  return validateAdministrativeRoles(rows.map((r) => r.role));
+}
+
+async function hydrateProfile(p: {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  access_rank: number;
+  active: boolean;
+}): Promise<AccessProfileRow> {
+  const id = Number(p.id);
+  return {
+    id,
+    slug: String(p.slug),
+    name: String(p.name),
+    description: String(p.description ?? ""),
+    access_rank: Number(p.access_rank),
+    active: Boolean(p.active),
+    menu_keys: await loadMenuKeysForProfile(id),
+    administrative_roles: await loadAdministrativeRolesForProfile(id)
+  };
 }
 
 export async function listAccessProfiles(): Promise<AccessProfileRow[]> {
@@ -66,15 +97,7 @@ export async function listAccessProfiles(): Promise<AccessProfileRow[]> {
   }>("SELECT id, slug, name, description, access_rank, active FROM access_profiles ORDER BY access_rank DESC, name ASC");
   const out: AccessProfileRow[] = [];
   for (const p of profiles) {
-    out.push({
-      id: Number(p.id),
-      slug: String(p.slug),
-      name: String(p.name),
-      description: String(p.description ?? ""),
-      access_rank: Number(p.access_rank),
-      active: Boolean(p.active),
-      menu_keys: await loadMenuKeysForProfile(Number(p.id))
-    });
+    out.push(await hydrateProfile(p));
   }
   return out;
 }
@@ -89,15 +112,7 @@ export async function getAccessProfile(id: number): Promise<AccessProfileRow | n
     active: boolean;
   }>("SELECT id, slug, name, description, access_rank, active FROM access_profiles WHERE id = @id", { id });
   if (!p) return null;
-  return {
-    id: Number(p.id),
-    slug: String(p.slug),
-    name: String(p.name),
-    description: String(p.description ?? ""),
-    access_rank: Number(p.access_rank),
-    active: Boolean(p.active),
-    menu_keys: await loadMenuKeysForProfile(Number(p.id))
-  };
+  return hydrateProfile(p);
 }
 
 export async function createAccessProfile(input: {
@@ -106,6 +121,7 @@ export async function createAccessProfile(input: {
   access_rank?: number;
   active?: boolean;
   menu_keys?: MenuKey[];
+  administrative_roles?: UserRole[];
 }): Promise<AccessProfileRow> {
   const name = input.name.trim();
   if (!name) throw new Error("Informe o nome do perfil.");
@@ -129,6 +145,7 @@ export async function createAccessProfile(input: {
   if (id == null) throw new Error("Não foi possível criar o perfil.");
   const keys = (input.menu_keys ?? []).filter(isMenuKey);
   await setAccessProfileMenuGrants(Number(id), keys);
+  await setAccessProfileAdministrativeRoles(Number(id), validateAdministrativeRoles(input.administrative_roles ?? []));
   const row = await getAccessProfile(Number(id));
   if (!row) throw new Error("Perfil criado mas não encontrado.");
   return row;
@@ -142,6 +159,7 @@ export async function updateAccessProfile(
     access_rank?: number;
     active?: boolean;
     menu_keys?: MenuKey[];
+    administrative_roles?: UserRole[];
   }
 ): Promise<AccessProfileRow> {
   const existing = await getAccessProfile(id);
@@ -168,6 +186,9 @@ export async function updateAccessProfile(
   if (input.menu_keys) {
     await setAccessProfileMenuGrants(id, input.menu_keys.filter(isMenuKey));
   }
+  if (input.administrative_roles) {
+    await setAccessProfileAdministrativeRoles(id, validateAdministrativeRoles(input.administrative_roles));
+  }
   const row = await getAccessProfile(id);
   if (!row) throw new Error("Perfil não encontrado.");
   return row;
@@ -178,12 +199,22 @@ export async function deleteAccessProfile(id: number) {
 }
 
 async function setAccessProfileMenuGrants(profileId: number, menuKeys: MenuKey[]) {
-  await run("DELETE FROM access_profile_menu_grants WHERE profile_id = @id", { id: profileId });
+  await run("DELETE FROM access_profile_menu_grants WHERE profile_id = @profileId", { profileId });
   for (const key of menuKeys) {
     if (!isMenuKey(key)) continue;
     await run(
       "INSERT INTO access_profile_menu_grants (profile_id, menu_key) VALUES (@profileId, @menuKey)",
       { profileId, menuKey: key }
+    );
+  }
+}
+
+async function setAccessProfileAdministrativeRoles(profileId: number, roles: UserRole[]) {
+  await run("DELETE FROM access_profile_role_grants WHERE profile_id = @profileId", { profileId });
+  for (const role of roles) {
+    await run(
+      "INSERT INTO access_profile_role_grants (profile_id, role) VALUES (@profileId, @role)",
+      { profileId, role }
     );
   }
 }
@@ -228,8 +259,46 @@ export async function loadUserAssignedProfiles(userId: number) {
   return out;
 }
 
+async function loadAdministrativeRolesForUserProfiles(userId: number): Promise<UserRole[]> {
+  const rows = await all<{ role: UserRole }>(
+    `
+      SELECT DISTINCT g.role
+      FROM user_access_profiles uap
+      JOIN access_profiles p ON p.id = uap.profile_id AND p.active = true
+      JOIN access_profile_role_grants g ON g.profile_id = p.id
+      WHERE uap.user_id = @userId
+      ORDER BY g.role
+    `,
+    { userId }
+  );
+  return validateAdministrativeRoles(rows.map((r) => r.role));
+}
+
+/** Papéis diretos em user_roles + papéis dos perfis de acesso ativos atribuídos ao usuário. */
+export async function resolveEffectiveUserRoles(userId: number, directRoles: UserRole[]): Promise<UserRole[]> {
+  const fromProfiles = await loadAdministrativeRolesForUserProfiles(userId);
+  return [...new Set([...directRoles, ...fromProfiles])];
+}
+
+/** União dos papéis administrativos de perfis ativos (para sincronizar user_roles ao salvar usuário). */
+export async function resolveAdministrativeRolesFromProfileIds(profileIds: number[]): Promise<UserRole[]> {
+  const unique = [...new Set(profileIds.filter((id) => Number.isInteger(id) && id > 0))];
+  if (unique.length === 0) return [];
+  const merged = new Set<UserRole>();
+  for (const profileId of unique) {
+    const p = await get<{ active: boolean }>("SELECT active FROM access_profiles WHERE id = @profileId", { profileId });
+    if (!p?.active) continue;
+    for (const role of await loadAdministrativeRolesForProfile(profileId)) {
+      merged.add(role);
+    }
+  }
+  return [...merged];
+}
+
 export async function resolveUserMenuAccess(userId: number, roles: UserRole[]): Promise<ResolvedMenuAccess> {
-  if (isAdmin({ roles })) return "all";
+  const effectiveRoles = await resolveEffectiveUserRoles(userId, roles);
+  const profileIds = await listUserAccessProfileIds(userId);
+  if (profileIds.length === 0 && isAdmin({ roles: effectiveRoles })) return "all";
   const assigned = await loadUserAssignedProfiles(userId);
   return resolveMenuKeysFromProfiles(assigned);
 }
@@ -237,3 +306,5 @@ export async function resolveUserMenuAccess(userId: number, roles: UserRole[]): 
 export function validateMenuKeys(keys: string[]): MenuKey[] {
   return keys.filter(isMenuKey);
 }
+
+export { ALL_MENU_KEYS };

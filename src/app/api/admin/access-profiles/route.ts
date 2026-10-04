@@ -1,5 +1,6 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
+import { validateAdministrativeRoles, ADMINISTRATIVE_ROLE_DEFINITIONS } from "@/lib/access-administrative";
 import { createAccessProfile, listAccessProfiles, updateAccessProfile, validateMenuKeys } from "@/lib/access-profiles";
 import { ALL_MENU_KEYS, MENU_DEFINITIONS, MENU_SECTION_LABELS } from "@/lib/access-menu";
 import { z } from "zod";
@@ -9,7 +10,8 @@ const profileBodySchema = z.object({
   description: z.string().max(2000).optional(),
   access_rank: z.number().int().min(0).max(9999).optional(),
   active: z.boolean().optional(),
-  menu_keys: z.array(z.string()).optional()
+  menu_keys: z.array(z.string()).optional(),
+  administrative_roles: z.array(z.enum(["bdr", "product_owner", "manager", "admin"])).optional()
 });
 
 const patchSchema = profileBodySchema.extend({
@@ -26,7 +28,8 @@ export async function GET() {
     profiles,
     menu_catalog: MENU_DEFINITIONS,
     menu_sections: MENU_SECTION_LABELS,
-    all_menu_keys: ALL_MENU_KEYS
+    all_menu_keys: ALL_MENU_KEYS,
+    administrative_roles_catalog: ADMINISTRATIVE_ROLE_DEFINITIONS
   });
 }
 
@@ -42,7 +45,8 @@ export async function POST(request: Request) {
   try {
     const profile = await createAccessProfile({
       ...parsed.data,
-      menu_keys: validateMenuKeys(parsed.data.menu_keys ?? [])
+      menu_keys: validateMenuKeys(parsed.data.menu_keys ?? []),
+      administrative_roles: validateAdministrativeRoles(parsed.data.administrative_roles ?? [])
     });
     return Response.json({ profile }, { status: 201 });
   } catch (e) {
@@ -65,7 +69,10 @@ export async function PATCH(request: Request) {
       description: parsed.data.description,
       access_rank: parsed.data.access_rank,
       active: parsed.data.active,
-      menu_keys: parsed.data.menu_keys ? validateMenuKeys(parsed.data.menu_keys) : undefined
+      menu_keys: parsed.data.menu_keys ? validateMenuKeys(parsed.data.menu_keys) : undefined,
+      administrative_roles: parsed.data.administrative_roles
+        ? validateAdministrativeRoles(parsed.data.administrative_roles)
+        : undefined
     });
     return Response.json({ profile });
   } catch (e) {

@@ -34,6 +34,7 @@ import {
   canAccessPath,
   MENU_DEFINITIONS,
   MENU_SECTION_LABELS,
+  MENU_SECTION_ORDER,
   parseMenuAccessFromClient,
   type MenuKey,
   type ResolvedMenuAccess
@@ -67,18 +68,15 @@ const MENU_ICONS: Record<MenuKey, typeof LayoutDashboard> = {
   admin_hub: Shield
 };
 
-const SECTION_ORDER = ["top", "clientes_leads", "configuracao", "cadastros"] as const;
-
-function buildNavSections(menuAccess: ResolvedMenuAccess, isAdminRole: boolean): NavSection[] {
+function buildNavSections(menuAccess: ResolvedMenuAccess): NavSection[] {
   const allowed: Set<MenuKey> | "all" =
     menuAccess === "all" ? "all" : menuAccess;
 
   const sections: NavSection[] = [];
-  for (const sectionKey of SECTION_ORDER) {
+  for (const sectionKey of MENU_SECTION_ORDER) {
     const items: NavItem[] = [];
     for (const def of MENU_DEFINITIONS) {
       if (def.section !== sectionKey) continue;
-      if (def.requiresAdminRole && !isAdminRole) continue;
       if (allowed !== "all" && !allowed.has(def.key)) continue;
       items.push({
         href: def.href as Route,
@@ -154,7 +152,7 @@ export function AppShell({
   const crumbParts = pageCrumbSegments(pathname);
   const userIsAdmin = isAdmin(user);
   const resolvedMenuAccess = parseMenuAccessFromClient(menuAccess);
-  const navSections = buildNavSections(resolvedMenuAccess, userIsAdmin);
+  const navSections = buildNavSections(resolvedMenuAccess);
 
   useEffect(() => {
     setMobileNavOpen(false);

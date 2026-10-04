@@ -1,8 +1,10 @@
 "use client";
 
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
+import type { AdministrativeRoleDefinition } from "@/lib/access-administrative";
 import type { MenuDefinition, MenuKey } from "@/lib/access-menu";
-import { MENU_SECTION_LABELS } from "@/lib/access-menu";
+import { MENU_SECTION_LABELS, MENU_SECTION_ORDER } from "@/lib/access-menu";
+import type { UserRole } from "@/lib/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ProfileRow = {
@@ -13,6 +15,7 @@ type ProfileRow = {
   access_rank: number;
   active: boolean;
   menu_keys: MenuKey[];
+  administrative_roles: UserRole[];
 };
 
 type ProfileForm = {
@@ -21,23 +24,29 @@ type ProfileForm = {
   access_rank: number;
   active: boolean;
   menu_keys: MenuKey[];
+  administrative_roles: UserRole[];
 };
+
+type EditorTab = "acessos" | "administrativos";
 
 const emptyForm = (): ProfileForm => ({
   name: "",
   description: "",
   access_rank: 10,
   active: true,
-  menu_keys: ["dashboard", "prospeccao", "clientes"]
+  menu_keys: ["dashboard", "prospeccao", "clientes"],
+  administrative_roles: ["bdr"]
 });
 
 export function AccessProfilesAdmin() {
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [menuCatalog, setMenuCatalog] = useState<MenuDefinition[]>([]);
+  const [adminCatalog, setAdminCatalog] = useState<AdministrativeRoleDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editorTab, setEditorTab] = useState<EditorTab>("acessos");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<ProfileForm>(emptyForm());
   const [saving, setSaving] = useState(false);
@@ -49,6 +58,7 @@ export function AccessProfilesAdmin() {
     const data = (await res.json()) as {
       profiles?: ProfileRow[];
       menu_catalog?: MenuDefinition[];
+      administrative_roles_catalog?: AdministrativeRoleDefinition[];
       error?: string;
     };
     setLoading(false);
@@ -58,6 +68,7 @@ export function AccessProfilesAdmin() {
     }
     setProfiles(data.profiles ?? []);
     setMenuCatalog(data.menu_catalog ?? []);
+    setAdminCatalog(data.administrative_roles_catalog ?? []);
   }, []);
 
   useEffect(() => {
@@ -77,6 +88,7 @@ export function AccessProfilesAdmin() {
   function openCreate() {
     setEditingId(null);
     setForm(emptyForm());
+    setEditorTab("acessos");
     setError(null);
     setModalOpen(true);
   }
@@ -88,8 +100,10 @@ export function AccessProfilesAdmin() {
       description: row.description,
       access_rank: row.access_rank,
       active: row.active,
-      menu_keys: [...row.menu_keys]
+      menu_keys: [...row.menu_keys],
+      administrative_roles: [...row.administrative_roles]
     });
+    setEditorTab("acessos");
     setError(null);
     setModalOpen(true);
   }
@@ -98,6 +112,7 @@ export function AccessProfilesAdmin() {
     setModalOpen(false);
     setEditingId(null);
     setForm(emptyForm());
+    setEditorTab("acessos");
   }
 
   function toggleMenuKey(key: MenuKey) {
@@ -106,6 +121,42 @@ export function AccessProfilesAdmin() {
       if (set.has(key)) set.delete(key);
       else set.add(key);
       return { ...f, menu_keys: [...set] };
+    });
+  }
+
+  function sectionKeys(section: string): MenuKey[] {
+    return (menuBySection.get(section) ?? []).map((i) => i.key);
+  }
+
+  function sectionState(section: string): "all" | "some" | "none" {
+    const keys = sectionKeys(section);
+    if (keys.length === 0) return "none";
+    const selected = keys.filter((k) => form.menu_keys.includes(k)).length;
+    if (selected === 0) return "none";
+    if (selected === keys.length) return "all";
+    return "some";
+  }
+
+  function toggleSection(section: string) {
+    const keys = sectionKeys(section);
+    const state = sectionState(section);
+    setForm((f) => {
+      const set = new Set(f.menu_keys);
+      if (state === "all") {
+        for (const k of keys) set.delete(k);
+      } else {
+        for (const k of keys) set.add(k);
+      }
+      return { ...f, menu_keys: [...set] };
+    });
+  }
+
+  function toggleAdministrativeRole(role: UserRole) {
+    setForm((f) => {
+      const set = new Set(f.administrative_roles);
+      if (set.has(role)) set.delete(role);
+      else set.add(role);
+      return { ...f, administrative_roles: [...set] };
     });
   }
 
@@ -123,7 +174,8 @@ export function AccessProfilesAdmin() {
       description: form.description.trim(),
       access_rank: form.access_rank,
       active: form.active,
-      menu_keys: form.menu_keys
+      menu_keys: form.menu_keys,
+      administrative_roles: form.administrative_roles
     };
     const res = await fetch("/api/admin/access-profiles", {
       method: editingId ? "PATCH" : "POST",
@@ -161,7 +213,7 @@ export function AccessProfilesAdmin() {
 
       <CadastroPageHeader
         title="Perfis de acesso"
-        description="Defina o que cada perfil enxerga no menu. Usuários com vários perfis usam o de maior nível de acesso; empates somam as permissões."
+        description="Cada perfil define o menu lateral (aba Acessos) e papéis operacionais (aba Administrativos). Atribua perfis em Usuários."
         onNew={openCreate}
         newLabel="Novo perfil"
       />
@@ -175,7 +227,8 @@ export function AccessProfilesAdmin() {
               <tr>
                 <th>Nome</th>
                 <th>Nível</th>
-                <th>Itens de menu</th>
+                <th>Menu</th>
+                <th>Administrativos</th>
                 <th>Situação</th>
                 <th style={{ width: 140 }} />
               </tr>
@@ -194,6 +247,9 @@ export function AccessProfilesAdmin() {
                   <td>{p.access_rank}</td>
                   <td className="muted" style={{ fontSize: "0.8125rem" }}>
                     {p.menu_keys.length} item(ns)
+                  </td>
+                  <td className="muted" style={{ fontSize: "0.8125rem" }}>
+                    {p.administrative_roles.length > 0 ? `${p.administrative_roles.length} papel(is)` : "—"}
                   </td>
                   <td>{p.active ? "Ativo" : "Inativo"}</td>
                   <td>
@@ -255,7 +311,7 @@ export function AccessProfilesAdmin() {
               disabled={saving}
             />
             <p className="muted" style={{ fontSize: "0.8125rem", marginTop: "0.35rem" }}>
-              Quanto maior, mais prioritário quando o usuário tiver mais de um perfil.
+              Quanto maior, mais prioritário quando o usuário tiver mais de um perfil (itens de menu do perfil vencedor).
             </p>
           </div>
           <label className="label" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -268,40 +324,114 @@ export function AccessProfilesAdmin() {
             Ativo
           </label>
 
-          <div className="field" style={{ marginTop: "1rem" }}>
-            <span className="label">Acesso ao menu</span>
-            {[...menuBySection.entries()].map(([section, items]) => (
-              <div key={section} className="access-profile-menu-section">
-                <p className="access-profile-menu-section-title">{MENU_SECTION_LABELS[section] ?? section}</p>
-                <ul className="access-profile-menu-grid">
-                  {items.map((item) => {
-                    const checked = form.menu_keys.includes(item.key);
-                    return (
-                      <li key={item.key}>
-                        <label className="access-profile-menu-check">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            disabled={saving || Boolean(item.requiresAdminRole)}
-                            onChange={() => toggleMenuKey(item.key)}
-                          />
-                          <span>
-                            {item.label}
-                            {item.requiresAdminRole ? (
-                              <span className="muted" style={{ fontSize: "0.75rem" }}>
-                                {" "}
-                                (requer função admin)
-                              </span>
-                            ) : null}
-                          </span>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
+          <div className="access-profile-editor-tabs" role="tablist" aria-label="Configuração do perfil">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={editorTab === "acessos"}
+              className={`access-profile-editor-tab${editorTab === "acessos" ? " is-active" : ""}`}
+              onClick={() => setEditorTab("acessos")}
+              disabled={saving}
+            >
+              Acessos
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={editorTab === "administrativos"}
+              className={`access-profile-editor-tab${editorTab === "administrativos" ? " is-active" : ""}`}
+              onClick={() => setEditorTab("administrativos")}
+              disabled={saving}
+            >
+              Administrativos
+            </button>
           </div>
+
+          {editorTab === "acessos" ? (
+            <div className="field" style={{ marginTop: "0.75rem" }} role="tabpanel">
+              <span className="label">Menu lateral</span>
+              <p className="muted" style={{ fontSize: "0.8125rem", marginTop: 0 }}>
+                Mesma estrutura da barra lateral. Marque a seção inteira ou item a item.
+              </p>
+              {MENU_SECTION_ORDER.map((section) => {
+                const items = menuBySection.get(section) ?? [];
+                if (items.length === 0) return null;
+                const state = sectionState(section);
+                const sectionLabel = section === "top" ? "Principal" : (MENU_SECTION_LABELS[section] ?? section);
+                return (
+                  <div key={section} className="access-profile-menu-section">
+                    <label className="access-profile-menu-section-head">
+                      <input
+                        type="checkbox"
+                        checked={state === "all"}
+                        ref={(el) => {
+                          if (el) el.indeterminate = state === "some";
+                        }}
+                        disabled={saving}
+                        onChange={() => toggleSection(section)}
+                      />
+                      <span className="access-profile-menu-section-title">{sectionLabel}</span>
+                    </label>
+                    <ul className="access-profile-menu-grid">
+                      {items.map((item) => {
+                        const checked = form.menu_keys.includes(item.key);
+                        return (
+                          <li key={item.key}>
+                            <label className="access-profile-menu-check">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={saving}
+                                onChange={() => toggleMenuKey(item.key)}
+                              />
+                              <span>
+                                {item.label}
+                                {item.requiresAdministrativeRole === "admin" ? (
+                                  <span className="muted" style={{ fontSize: "0.75rem" }}>
+                                    {" "}
+                                    (exige papel Administrador)
+                                  </span>
+                                ) : null}
+                              </span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="field" style={{ marginTop: "0.75rem" }} role="tabpanel">
+              <span className="label">Papéis administrativos</span>
+              <p className="muted" style={{ fontSize: "0.8125rem", marginTop: 0 }}>
+                Capacidades operacionais (BDR, dono de produto/empresa, gestor, administrador do sistema).
+              </p>
+              <ul className="user-role-grid" style={{ marginTop: "0.75rem" }}>
+                {(adminCatalog.length > 0 ? adminCatalog : []).map((def) => {
+                  const on = form.administrative_roles.includes(def.role);
+                  return (
+                    <li key={def.role}>
+                      <button
+                        type="button"
+                        className={`user-role-card${on ? " is-selected" : ""}`}
+                        disabled={saving}
+                        onClick={() => toggleAdministrativeRole(def.role)}
+                        aria-pressed={on}
+                      >
+                        <span className={`product-owner-check${on ? " is-on" : ""}`} aria-hidden />
+                        <span className="user-role-card-text">
+                          <span className="user-role-card-title">{def.label}</span>
+                          <span className="user-role-card-hint">{def.hint}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem", flexWrap: "wrap" }}>
             <button type="button" className="btn" disabled={saving} onClick={closeModal}>
