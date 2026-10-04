@@ -4,6 +4,24 @@
   gap: 1.25rem;
 }
 
+.dash-wa-share-btn {
+  padding: 0.5rem 0.65rem;
+  border-color: rgba(37, 99, 235, 0.55);
+  background: rgba(37, 99, 235, 0.22);
+  color: #dbeafe;
+}
+
+.dash-wa-share-btn:hover:not(:disabled) {
+  border-color: rgba(59, 130, 246, 0.75);
+  background: rgba(37, 99, 235, 0.35);
+  color: #eff6ff;
+}
+
+.dash-wa-share-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .dash-kpi-row {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

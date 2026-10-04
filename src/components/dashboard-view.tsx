@@ -3,8 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DashboardStatsPayload } from "@/lib/dashboard-stats";
-import { ArrowUpRight, Calendar, Gem, Target, UserCheck } from "lucide-react";
-import { FilterBar, FilterSelect } from "@/components/filter-bar";
+import { ArrowUpRight, Calendar, Forward, Gem, Target, UserCheck } from "lucide-react";
+import { FilterBar, FilterBarButton, FilterSelect } from "@/components/filter-bar";
+import {
+  buildDashboardWhatsAppMessage,
+  openDashboardWhatsAppShare
+} from "@/lib/dashboard-whatsapp-message";
 import { LeadQualificationIcon } from "@/components/lead-qualification-picker";
 import { LEAD_QUALIFICATION_LABELS, LEAD_QUALIFICATION_ORDER } from "@/lib/lead-qualification";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
@@ -100,6 +104,19 @@ export function DashboardView({
 
   const periodNote = periodFootnote(period);
 
+  const bdrLabel = bdrUserId ? (bdrs.find((b) => String(b.id) === bdrUserId)?.name ?? "BDR") : "Todas";
+  const productLabel = productId ? (products.find((p) => String(p.id) === productId)?.name ?? "Produto") : "Todos";
+
+  function shareWhatsAppReport() {
+    if (!stats?.whatsapp_report) return;
+    const text = buildDashboardWhatsAppMessage(stats.whatsapp_report, {
+      bdr: bdrLabel,
+      product: productLabel,
+      period: periodNote
+    });
+    openDashboardWhatsAppShare(text);
+  }
+
   return (
     <div className="dashboard-home">
       <FilterBar>
@@ -135,6 +152,16 @@ export function DashboardView({
             </option>
           ))}
         </FilterSelect>
+        <FilterBarButton
+          accent
+          className="dash-wa-share-btn"
+          title="Enviar fechamento comercial no WhatsApp"
+          aria-label="Enviar fechamento comercial no WhatsApp"
+          disabled={loading || !stats?.whatsapp_report}
+          onClick={shareWhatsAppReport}
+        >
+          <Forward size={16} aria-hidden />
+        </FilterBarButton>
       </FilterBar>
 
       {loading ? <p className="muted">Carregando…</p> : null}

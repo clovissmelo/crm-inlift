@@ -58,6 +58,23 @@ export type DashboardStatsPayload = {
   }>;
   period: DashboardPeriod;
   activity_metrics_available: boolean;
+  whatsapp_report: DashboardWhatsAppReport;
+};
+
+export type DashboardWhatsAppReport = {
+  leads_worked: number;
+  calls_made: number;
+  calls_rang: number;
+  calls_answered: number;
+  decision_maker_contacts: number;
+  call_error: number;
+  call_no_answer: number;
+  no_interest: number;
+  gatekeeper_block: number;
+  return_requested: number;
+  meetings_scheduled: number;
+  meetings_today: number;
+  period_key: DashboardPeriod;
 };
 
 function buildFilters(input: DashboardStatsFilters) {
@@ -116,6 +133,71 @@ async function runQueriesLimited(tasks: Array<() => Promise<unknown>>, concurren
   const workers = Math.min(concurrency, tasks.length);
   await Promise.all(Array.from({ length: workers }, () => worker()));
   return results;
+}
+
+async function loadWhatsAppReport(
+  approachFilter: string,
+  params: Record<string, string | number>,
+  period: DashboardPeriod,
+  meetingsScheduled: number,
+  meetingsToday: number,
+  decisionMakerContacts: number
+): Promise<DashboardWhatsAppReport> {
+  const callAgg = await get<{
+    leads_worked: string;
+    calls_made: string;
+    calls_rang: string;
+    calls_answered: string;
+    call_error: string;
+    call_no_answer: string;
+  }>(
+    `
+    SELECT
+      COUNT(DISTINCT a.client_id)::text AS leads_worked,
+      COUNT(*)::text AS calls_made,
+      COUNT(*) FILTER (WHERE tr.slug IS NOT NULL AND tr.slug <> 'call_failed')::text AS calls_rang,
+      COUNT(*) FILTER (WHERE tr.answered = true OR tr.slug = 'answered')::text AS calls_answered,
+      COUNT(*) FILTER (WHERE tr.slug = 'call_failed')::text AS call_error,
+      COUNT(*) FILTER (WHERE tr.slug IN ('no_answer', 'busy'))::text AS call_no_answer
+    FROM approaches a
+    JOIN clients c ON c.id = a.client_id
+    LEFT JOIN api4com_calls ac ON ac.approach_id = a.id
+    LEFT JOIN call_technical_result_types tr ON tr.id = ac.technical_result_type_id
+    WHERE ${approachFilter} AND a.channel = 'call'
+  `,
+    params
+  );
+
+  const slugRows = await all<{ slug: string; count: string }>(
+    `
+    SELECT rt.slug, COUNT(*)::text AS count
+    FROM approaches a
+    JOIN clients c ON c.id = a.client_id
+    JOIN approach_result_types rt ON rt.id = a.result_type_id
+    WHERE ${approachFilter} AND a.channel = 'call'
+      AND rt.slug IN ('sem_interesse', 'falou_outra_pessoa', 'pediu_retorno', 'reuniao_agendada')
+    GROUP BY rt.slug
+  `,
+    params
+  );
+
+  const bySlug = Object.fromEntries(slugRows.map((r) => [r.slug, Number(r.count)]));
+
+  return {
+    leads_worked: Number(callAgg?.leads_worked ?? 0),
+    calls_made: Number(callAgg?.calls_made ?? 0),
+    calls_rang: Number(callAgg?.calls_rang ?? 0),
+    calls_answered: Number(callAgg?.calls_answered ?? 0),
+    decision_maker_contacts: decisionMakerContacts,
+    call_error: Number(callAgg?.call_error ?? 0),
+    call_no_answer: Number(callAgg?.call_no_answer ?? 0),
+    no_interest: bySlug.sem_interesse ?? 0,
+    gatekeeper_block: bySlug.falou_outra_pessoa ?? 0,
+    return_requested: bySlug.pediu_retorno ?? 0,
+    meetings_scheduled: meetingsScheduled,
+    meetings_today: meetingsToday,
+    period_key: period
+  };
 }
 
 export async function loadDashboardStats(input: DashboardStatsFilters = {}): Promise<DashboardStatsPayload> {
@@ -566,6 +648,19 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
     .sort((a, b) => a.at.localeCompare(b.at))
     .slice(0, 6);
 
+  const meetingsScheduledN = Number(meetingsScheduled?.count ?? 0);
+  const meetingsTodayN = Number(meetingsTodayRow?.count ?? 0);
+  const decisionMakerN = Number(decisionMakerRow?.count ?? 0);
+
+  const whatsapp_report = await loadWhatsAppReport(
+    approachFilter,
+    params,
+    period,
+    meetingsScheduledN,
+    meetingsTodayN,
+    decisionMakerN
+  );
+
   return {
     total_clients: Number(totalRow?.count ?? 0),
     clients_with_verified_phone: Number(verifiedRow?.count ?? 0),
@@ -606,7 +701,8 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
     qualification: qualMap,
     focus_items,
     period,
-    activity_metrics_available: approachesTotal > 0
+    activity_metrics_available: approachesTotal > 0,
+    whatsapp_report
   };
 }
 
