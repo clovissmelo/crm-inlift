@@ -2,19 +2,25 @@
  * npx tsx scripts/trade-name.test.ts
  */
 import assert from "node:assert/strict";
-import { resolveNomeFantasia, stripCorporateLegalSuffix } from "../src/lib/lead-motor/trade-name";
+import {
+  normalizeTradeName,
+  resolveNomeFantasia,
+  stripCorporateLegalSuffix
+} from "../src/lib/lead-motor/trade-name";
 
 assert.equal(stripCorporateLegalSuffix("AUTO POSTO ACRELANDIA LTDA"), "AUTO POSTO ACRELANDIA");
 assert.equal(stripCorporateLegalSuffix("FOO S/A"), "FOO");
 assert.equal(stripCorporateLegalSuffix("FOO S.A."), "FOO");
 assert.equal(stripCorporateLegalSuffix("FOO SA"), "FOO");
 
+assert.equal(normalizeTradeName("AUTO POSTO ACRELANDIA LTDA"), "POSTO ACRELANDIA");
+
 assert.equal(
   resolveNomeFantasia({
     receitaNomeFantasia: "",
     razaoSocial: "AUTO POSTO ACRELANDIA LTDA"
   }),
-  "AUTO POSTO ACRELANDIA"
+  "POSTO ACRELANDIA"
 );
 
 assert.equal(
@@ -30,7 +36,7 @@ assert.equal(
     receitaNomeFantasia: "AUTO POSTO ACRELANDIA LTDA",
     razaoSocial: "AUTO POSTO ACRELANDIA LTDA"
   }),
-  "AUTO POSTO ACRELANDIA"
+  "POSTO ACRELANDIA"
 );
 
 console.log("trade-name.test.ts OK");

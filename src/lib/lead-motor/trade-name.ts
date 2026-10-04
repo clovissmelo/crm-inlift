@@ -24,13 +24,22 @@ export function stripCorporateLegalSuffix(name: string): string {
   return s.trim();
 }
 
+/** Remove prefixo "AUTO " comum em razões de postos (nome fantasia derivado). */
+export function stripAutoPrefix(name: string): string {
+  return name.trim().replace(/^AUTO\s+/i, "").trim();
+}
+
+export function normalizeTradeName(name: string): string {
+  return stripAutoPrefix(stripCorporateLegalSuffix(name));
+}
+
 function normalizeNameCompare(s: string): string {
   return s.trim().replace(/\s+/g, " ").toUpperCase();
 }
 
 /**
  * Nome fantasia para CRM: Receita quando existir e for distinto da razão;
- * senão razão social sem LTDA / S.A. / S/A / SA no final.
+ * senão razão social sem LTDA / S.A. / S/A / SA no final e sem prefixo AUTO.
  */
 export function resolveNomeFantasia(input: {
   receitaNomeFantasia?: string;
@@ -39,9 +48,9 @@ export function resolveNomeFantasia(input: {
   const razao = safeStr(input.razaoSocial);
   const receita = safeStr(input.receitaNomeFantasia);
   if (receita && normalizeNameCompare(receita) !== normalizeNameCompare(razao)) {
-    return receita;
+    return normalizeTradeName(receita);
   }
-  const stripped = stripCorporateLegalSuffix(razao);
-  if (stripped) return stripped;
-  return receita || razao;
+  const normalized = normalizeTradeName(razao);
+  if (normalized) return normalized;
+  return normalizeTradeName(receita || razao);
 }
