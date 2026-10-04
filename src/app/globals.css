@@ -433,6 +433,17 @@ a.app-text-link:hover {
   min-width: 0;
 }
 
+.whatsapp-share-textarea {
+  font-family: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  min-height: 14rem;
+}
+
+.whatsapp-share-copy-btn {
+  align-self: flex-start;
+}
+
 .copy-field-btn {
   flex-shrink: 0;
   align-self: stretch;
@@ -5126,12 +5137,6 @@ table.data-table tbody tr.is-selected {
   border-color: rgba(59, 130, 246, 0.75);
   background: rgba(37, 99, 235, 0.35);
   color: #eff6ff;
-}
-
-.meeting-detail-wa-hint {
-  margin: 0.75rem 0 0;
-  font-size: 0.8125rem;
-  color: #93c5fd;
 }
 
 .meeting-cancel-panel {

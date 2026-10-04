@@ -5,10 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DashboardStatsPayload } from "@/lib/dashboard-stats-types";
 import { ArrowUpRight, Calendar, Forward, Gem, Target, UserCheck } from "lucide-react";
 import { FilterBar, FilterBarButton, FilterSelect } from "@/components/filter-bar";
-import {
-  buildDashboardWhatsAppMessage,
-  openDashboardWhatsAppShare
-} from "@/lib/dashboard-whatsapp-message";
+import { WhatsAppShareModal } from "@/components/whatsapp-share-modal";
+import { buildDashboardWhatsAppMessage } from "@/lib/dashboard-whatsapp-message";
 import { LeadQualificationIcon } from "@/components/lead-qualification-picker";
 import { LEAD_QUALIFICATION_LABELS, LEAD_QUALIFICATION_ORDER } from "@/lib/lead-qualification";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
@@ -65,7 +63,7 @@ export function DashboardView({
   const [stats, setStats] = useState<DashboardStatsPayload | null>(initialStats);
   const [loading, setLoading] = useState(!initialStats && !initialError);
   const [error, setError] = useState<string | null>(initialError);
-  const [waShareHint, setWaShareHint] = useState<string | null>(null);
+  const [waShareText, setWaShareText] = useState<string | null>(null);
   const skipInitialFetch = useRef(Boolean(initialStats || initialError));
 
   const load = useCallback(async () => {
@@ -110,20 +108,14 @@ export function DashboardView({
     : "Todos os BDRs";
   const productLabel = productId ? (products.find((p) => String(p.id) === productId)?.name ?? "Produto") : "Todos";
 
-  async function shareWhatsAppReport() {
+  function shareWhatsAppReport() {
     if (!stats?.whatsapp_report) return;
     const text = buildDashboardWhatsAppMessage(stats.whatsapp_report, {
       bdr: bdrLabel,
       product: productLabel,
       period: periodNote
     });
-    const { copied } = await openDashboardWhatsAppShare(text);
-    if (copied) {
-      setWaShareHint("Relatório copiado. No WhatsApp, cole com Ctrl+V para manter ícones e negrito.");
-      window.setTimeout(() => setWaShareHint(null), 8000);
-    } else {
-      setWaShareHint(null);
-    }
+    setWaShareText(text);
   }
 
   return (
@@ -171,8 +163,6 @@ export function DashboardView({
           <Forward size={16} aria-hidden />
         </FilterBarButton>
       </FilterBar>
-
-      {waShareHint ? <p className="dash-wa-share-hint">{waShareHint}</p> : null}
 
       {loading ? <p className="muted">Carregando…</p> : null}
       {error ? <div className="alert alert-error">{error}</div> : null}
@@ -307,6 +297,13 @@ export function DashboardView({
           />
         </>
       ) : null}
+
+      <WhatsAppShareModal
+        open={waShareText != null}
+        title="Fechamento comercial"
+        text={waShareText ?? ""}
+        onClose={() => setWaShareText(null)}
+      />
     </div>
   );
 }

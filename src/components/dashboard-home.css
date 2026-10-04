@@ -22,12 +22,6 @@
   cursor: not-allowed;
 }
 
-.dash-wa-share-hint {
-  margin: -0.35rem 0 0;
-  font-size: 0.8125rem;
-  color: #93c5fd;
-}
-
 .dash-kpi-row {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

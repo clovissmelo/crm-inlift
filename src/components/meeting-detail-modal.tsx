@@ -6,7 +6,8 @@ import { useState } from "react";
 import { CadastroModal } from "@/components/cadastro-ui";
 import { formatSpDateTime } from "@/lib/datetime";
 import { MEETING_STATUS_LABELS, type MeetingStatus } from "@/lib/meeting-constants";
-import { buildMeetingWhatsAppInvite, openMeetingWhatsAppShare } from "@/lib/meeting-whatsapp-message";
+import { WhatsAppShareModal } from "@/components/whatsapp-share-modal";
+import { buildMeetingWhatsAppInvite } from "@/lib/meeting-whatsapp-message";
 
 export type MeetingDetailPayload = {
   meeting: Record<string, unknown>;
@@ -56,9 +57,9 @@ export function MeetingDetailModal({
 }: Props) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
-  const [waShareHint, setWaShareHint] = useState<string | null>(null);
+  const [waShareText, setWaShareText] = useState<string | null>(null);
 
-  if (!open) return null;
+  if (!open && waShareText == null) return null;
 
   const m = detail?.meeting;
   const title = m ? String(m.title ?? "Reunião") : "";
@@ -75,8 +76,14 @@ export function MeetingDetailModal({
     setCancelReason("");
   }
 
+  function closeMeetingModal() {
+    setWaShareText(null);
+    onClose();
+  }
+
   return (
-    <CadastroModal open={open} title={loading ? "Carregando…" : title} onClose={onClose} wide>
+    <>
+    <CadastroModal open={open} title={loading ? "Carregando…" : title} onClose={closeMeetingModal} wide>
       {loading || !detail ? (
         <p className="muted">Carregando detalhes…</p>
       ) : (
@@ -223,25 +230,14 @@ export function MeetingDetailModal({
             </div>
           ) : null}
 
-          {waShareHint ? <p className="meeting-detail-wa-hint">{waShareHint}</p> : null}
-
           <div className="meeting-detail-actions">
             <button
               type="button"
               className="btn meeting-detail-wa-btn"
-              title="Enviar convite no WhatsApp"
-              aria-label="Enviar convite no WhatsApp"
+              title="Copiar convite para o WhatsApp"
+              aria-label="Copiar convite para o WhatsApp"
               onClick={() => {
-                void (async () => {
-                  const text = buildMeetingWhatsAppInvite(detail, clientName);
-                  const { copied } = await openMeetingWhatsAppShare(text);
-                  if (copied) {
-                    setWaShareHint("Convite copiado. No WhatsApp, cole com Ctrl+V para manter os ícones.");
-                    window.setTimeout(() => setWaShareHint(null), 8000);
-                  } else {
-                    setWaShareHint(null);
-                  }
-                })();
+                setWaShareText(buildMeetingWhatsAppInvite(detail, clientName));
               }}
             >
               <Forward size={16} aria-hidden />
@@ -263,7 +259,7 @@ export function MeetingDetailModal({
                   Editar agendamento
                 </button>
               ) : null}
-              <button type="button" className="btn" onClick={onClose}>
+              <button type="button" className="btn" onClick={closeMeetingModal}>
                 Fechar
               </button>
             </div>
@@ -271,5 +267,12 @@ export function MeetingDetailModal({
         </div>
       )}
     </CadastroModal>
+    <WhatsAppShareModal
+      open={waShareText != null}
+      title="Convite de reunião"
+      text={waShareText ?? ""}
+      onClose={() => setWaShareText(null)}
+    />
+    </>
   );
 }

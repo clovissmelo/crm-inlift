@@ -47,29 +47,3 @@ export function prepareWhatsAppMessage(body: string): string {
   return normalized;
 }
 
-export type WhatsAppShareResult = {
-  copied: boolean;
-  /** Texto foi passado na URL (fallback quando não dá para copiar). */
-  prefilled: boolean;
-};
-
-export async function openWhatsAppShare(text: string): Promise<WhatsAppShareResult> {
-  const prepared = prepareWhatsAppMessage(text);
-  let copied = false;
-
-  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(prepared);
-      copied = true;
-    } catch {
-      copied = false;
-    }
-  }
-
-  // No desktop, api.whatsapp.com costuma corromper emoji/negrito na query ?text=
-  const url = copied ? "https://wa.me/" : `https://wa.me/?text=${encodeURIComponent(prepared)}`;
-
-  window.open(url, "_blank", "noopener,noreferrer");
-
-  return { copied, prefilled: !copied };
-}
