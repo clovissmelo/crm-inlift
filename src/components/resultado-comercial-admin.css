@@ -51,3 +51,15 @@
   justify-content: flex-end;
   padding-top: 0.25rem;
 }
+
+.resultado-simulator-setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.resultado-simulator-back {
+  margin-bottom: 0.75rem;
+}

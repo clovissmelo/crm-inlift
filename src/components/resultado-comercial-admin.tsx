@@ -19,7 +19,7 @@ import {
   LEAD_QUALIFICATION_ORDER,
   type LeadQualification
 } from "@/lib/lead-qualification";
-import { ResultadoComercialTestModal } from "@/components/resultado-comercial-test-modal";
+import { ResultadoComercialSimulatorPanel } from "@/components/resultado-comercial-simulator-panel";
 import "./resultado-comercial-admin.css";
 
 type ResultRow = {
@@ -85,7 +85,7 @@ export function ResultadoComercialAdmin({
     allowed_next_actions: ["none"]
   });
   const [resultSaving, setResultSaving] = useState(false);
-  const [testResult, setTestResult] = useState<ResultRow | null>(null);
+  const [simulatorOpen, setSimulatorOpen] = useState(false);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/approach-result-types").then((res) => res.json());
@@ -225,6 +225,14 @@ export function ResultadoComercialAdmin({
         title={commercialOnly ? "Resultados Comerciais" : "Resultado comercial"}
         onNew={openResultCreate}
         newLabel="Novo resultado"
+        headerActions={
+          <button type="button" className="btn btn-result-test" onClick={() => setSimulatorOpen(true)}>
+            <span className="btn-result-test-icon" aria-hidden>
+              ▶
+            </span>
+            Testar
+          </button>
+        }
       />
       <div className="panel table-wrap">
         <table className="data-table">
@@ -239,7 +247,7 @@ export function ResultadoComercialAdmin({
               <th>Perg. decisor</th>
               <th>Verif. tel.</th>
               <th>Próximos passos</th>
-              <th style={{ width: canDelete ? 180 : 100 }} />
+              <th style={{ width: canDelete ? 120 : 80 }} />
             </tr>
           </thead>
           <tbody>
@@ -257,7 +265,6 @@ export function ResultadoComercialAdmin({
                 <td>
                   <CadastroRowActions
                     canDelete={canDelete}
-                    onTest={() => setTestResult(r)}
                     onEdit={() => openResultEdit(r)}
                     onDelete={() => removeResult(r)}
                   />
@@ -434,11 +441,7 @@ export function ResultadoComercialAdmin({
         </form>
       </CadastroModal>
 
-      <ResultadoComercialTestModal
-        open={testResult != null}
-        result={testResult}
-        onClose={() => setTestResult(null)}
-      />
+      <ResultadoComercialSimulatorPanel open={simulatorOpen} onClose={() => setSimulatorOpen(false)} />
     </div>
   );
 }

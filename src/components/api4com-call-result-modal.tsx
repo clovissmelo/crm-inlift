@@ -139,7 +139,16 @@ function spInputToIso(date: string, time: string) {
 }
 
 export type CallRegistrationSimulation = {
-  initialCommercialResultId: number;
+  /** Pré-seleciona um resultado comercial (teste pontual). */
+  initialCommercialResultId?: number;
+  /** Cenário de telefonia escolhido no simulador admin. */
+  telephony?: {
+    technicalSlug: string;
+    technicalDisplayName: string;
+    answeredAt: string | null;
+    durationSeconds: number;
+  };
+  productId?: number;
 };
 
 type ResultFormProps = {
@@ -320,8 +329,9 @@ export function Api4comCallResultForm({
         setCompatMap(classJson.contact_commercial_compat ?? {});
         setResultTypes(activeResults);
 
-        const mockProductId = products[0]?.id ?? null;
+        const mockProductId = simulation.productId ?? products[0]?.id ?? null;
         const now = new Date().toISOString();
+        const tel = simulation.telephony;
         const mockCall: CallDetail = {
           id: -1,
           api4com_call_id: "simulation",
@@ -331,12 +341,12 @@ export function Api4comCallResultForm({
           phone_dialed: "5511999990000",
           started_at: now,
           ended_at: now,
-          duration_seconds: 36,
+          duration_seconds: tel?.durationSeconds ?? 36,
           hangup_cause_code: null,
           hangup_cause_label: "NORMAL_CLEARING",
-          answered_at: now,
-          technical_display_name: "Atendeu",
-          technical_slug: "answered",
+          answered_at: tel?.answeredAt ?? now,
+          technical_display_name: tel?.technicalDisplayName ?? "Atendeu",
+          technical_slug: tel?.technicalSlug ?? "answered",
           client_name: "Empresa Exemplo Ltda",
           contact_name: "Clóvis Melo",
           record_url: null
@@ -368,14 +378,14 @@ export function Api4comCallResultForm({
           }
         };
         applyCallContext(ctxData, activeResults, techTypes, contacts, commercialRaw);
-        setResultTypeId(String(simulation.initialCommercialResultId));
-        setContactOutcomeId("");
-        setContactLayerChoice(null);
-        setContactLayerLocked(false);
-        setContactLocked(false);
-        setResultLockedByIntegration(false);
-        setTechnicalSlug("answered");
-        setTechnicalLabel("Atendeu");
+        if (simulation.initialCommercialResultId != null) {
+          setResultTypeId(String(simulation.initialCommercialResultId));
+          setContactOutcomeId("");
+          setContactLayerChoice(null);
+          setContactLayerLocked(false);
+          setContactLocked(false);
+          setResultLockedByIntegration(false);
+        }
         setStep("result");
         return;
       }
@@ -1015,6 +1025,19 @@ export function Api4comCallResultForm({
             necessário preencher resultado comercial.
           </p>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+            {isSimulation ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() =>
+                  setSimulationFeedback(
+                    "Encerramento automático simulado — registro técnico e tentativa sem contato, sem gravação no banco."
+                  )
+                }
+              >
+                Simular encerramento automático
+              </button>
+            ) : null}
             <button type="button" className="btn" onClick={onClose}>
               Fechar
             </button>

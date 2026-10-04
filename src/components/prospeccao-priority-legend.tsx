@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import type { Route } from "next";
 import { Info } from "lucide-react";
 import { ProspeccaoPriorityBadge } from "@/components/prospeccao-priority-badge";
 import {
@@ -36,10 +34,6 @@ export function ProspeccaoPriorityLegend({
         aria-label="Legenda de prioridades"
       >
         <h2 className="prospeccao-priority-legend__title">Prioridades</h2>
-        <p className="muted prospeccao-priority-legend__intro">
-          Ordem de ligação e significado de cada faixa. Textos vêm do cadastro em{" "}
-          <Link href={"/admin/prospeccao?tab=queue" as Route}>Prospecção → Fila</Link>.
-        </p>
         <ul className="prospeccao-priority-legend__list">
           {priorities.map((p) => {
             const text = prospeccaoPriorityLegendText(p);

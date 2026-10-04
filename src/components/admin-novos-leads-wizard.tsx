@@ -2,7 +2,7 @@
 
 import "./lead-gen-execution.css";
 import Link from "next/link";
-import { Trash2 } from "lucide-react";
+import { Play, Trash2 } from "lucide-react";
 import {
   AdminNovosLeadsCityPicker,
   type CitySelectionPayload,
@@ -1021,7 +1021,14 @@ export function AdminNovosLeadsWizard() {
               disabled={starting || shownRunActive || anpPreviewLoading}
               onClick={() => void openAnpPreviewModal()}
             >
-              {anpPreviewLoading ? "Consultando ANP…" : "Solicitar leads"}
+              {anpPreviewLoading ? (
+                "Consultando ANP…"
+              ) : (
+                <>
+                  <Play size={17} strokeWidth={2.5} fill="currentColor" aria-hidden className="lead-gen-start-btn-icon" />
+                  Solicitar leads
+                </>
+              )}
             </button>
             {shownRunActive && shownRun ? (
               <button

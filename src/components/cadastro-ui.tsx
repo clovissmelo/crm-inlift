@@ -6,12 +6,15 @@ export function CadastroPageHeader({
   title,
   description,
   onNew,
-  newLabel = "Novo"
+  newLabel = "Novo",
+  headerActions
 }: {
   title: string;
   description?: string;
   onNew: () => void;
   newLabel?: string;
+  /** Botões à esquerda do primário (ex.: simulador). */
+  headerActions?: ReactNode;
 }) {
   return (
     <div className="cadastro-page-header">
@@ -19,9 +22,12 @@ export function CadastroPageHeader({
         <span className="sr-only">{title}</span>
         {description ? <p className="page-intro muted" style={{ marginBottom: description ? "0.75rem" : undefined }}>{description}</p> : null}
       </div>
-      <button type="button" className="btn btn-primary" onClick={onNew}>
-        {newLabel}
-      </button>
+      <div className="cadastro-page-header-actions">
+        {headerActions}
+        <button type="button" className="btn btn-primary" onClick={onNew}>
+          {newLabel}
+        </button>
+      </div>
     </div>
   );
 }
