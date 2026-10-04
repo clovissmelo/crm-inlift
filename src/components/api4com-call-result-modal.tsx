@@ -45,6 +45,10 @@ import {
   callRequiresComplementRegistration,
   callTelephonyResultLabel
 } from "@/lib/api4com/call-registration";
+import {
+  buildSimulatedRegisteredCallTimelineItem,
+  type SimulatedClientTimelineItem
+} from "@/lib/simulation-client-timeline-preview";
 
 type CallDetail = {
   id: number;
@@ -161,7 +165,11 @@ export type CallRegistrationSimulation = {
   };
   productId?: number;
   scriptFlowLog?: CallScriptLogEntry[];
+  /** Após validar o complemento, devolve prévia do histórico do cliente. */
+  onRegistrationComplete?: (item: SimulatedClientTimelineItem) => void;
 };
+
+export type { SimulatedClientTimelineItem };
 
 type ResultFormProps = {
   callId: number | null;
@@ -909,13 +917,40 @@ export function Api4comCallResultForm({
     setError(null);
     setFieldErrors({});
 
+    const finalNotes = buildSessionNotes();
+
     if (isSimulation && registrationStatus === "final") {
-      setSimulationFeedback("Validação concluída — nenhum dado foi gravado.");
+      const commercialRow = resultTypes.find((r) => String(r.id) === resultTypeId);
+      const contactRow = contactTypes.find((c) => String(c.id) === contactOutcomeId);
+      let nextScheduledAtIso: string | null = null;
+      if (
+        (nextType === "schedule_return" || nextType === "schedule_meeting") &&
+        nextDate &&
+        nextTime
+      ) {
+        nextScheduledAtIso = spInputToIso(nextDate, nextTime);
+      }
+      const preview = buildSimulatedRegisteredCallTimelineItem({
+        phoneDialed: call.phone_dialed,
+        durationSeconds: call.duration_seconds,
+        technicalLabel: callTelephonyResultLabel(technicalSlug ?? call.technical_slug, technicalLabel),
+        productName: productDisplayName,
+        commercialResultName: commercialRow?.name ?? "—",
+        contactOutcomeName: contactRow?.name ?? "—",
+        contactedPersonName: contactedPersonName.trim() || null,
+        spokeWithDecisionMaker: spokeWithDecisionMaker,
+        notes: finalNotes || null,
+        scriptFlowLog: call.script_flow_log,
+        nextType,
+        nextScheduledAtIso,
+        userName: "Simulação",
+        occurredAt: call.ended_at ?? call.started_at ?? new Date().toISOString()
+      });
+      simulation?.onRegistrationComplete?.(preview);
+      setSimulationFeedback(null);
       setLoading(false);
       return;
     }
-
-    const finalNotes = buildSessionNotes();
 
     const resolvedProductId = effectiveProductId ?? call.product_id;
 
@@ -1279,7 +1314,7 @@ export function Api4comCallResultForm({
               style={{ width: "100%" }}
               disabled={loading || !call?.client_id || resultTypes.length === 0}
             >
-              {loading ? "Salvando…" : "Finalizar atendimento"}
+              {loading ? "Salvando…" : isSimulation ? "Simular registro no histórico" : "Finalizar atendimento"}
             </button>
           </div>
         </form>

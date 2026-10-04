@@ -4,6 +4,10 @@ import { Mail, MessageCircle, Phone } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
 import { FilterBar, FilterSelect } from "@/components/filter-bar";
+import {
+  ResultadoComercialSimulatorPanel,
+  type SimulatorDraftScript
+} from "@/components/resultado-comercial-simulator-panel";
 import { ScriptFlowEditor } from "@/components/script-flow-editor";
 import { PLACEHOLDER_HELP } from "@/lib/message-templates";
 import {
@@ -68,6 +72,8 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
   const [scriptSaving, setScriptSaving] = useState(false);
   const [scriptSaveNotice, setScriptSaveNotice] = useState<string | null>(null);
   const [flowEditorKey, setFlowEditorKey] = useState(0);
+  const [simulatorOpen, setSimulatorOpen] = useState(false);
+  const [simulatorDraft, setSimulatorDraft] = useState<SimulatorDraftScript | null>(null);
 
   const load = useCallback(async () => {
     const s = await fetch("/api/message-scripts?all=1").then((res) => res.json());
@@ -113,6 +119,20 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
     setScriptSaveNotice(null);
     setError(null);
     setScriptModal(true);
+  }
+
+  function testScriptFromModal() {
+    if (scriptForm.script_type !== "call") return;
+    if (!parseCallScriptBody(scriptForm.body)) {
+      setError("Configure ao menos uma etapa no fluxo de ligação.");
+      return;
+    }
+    setError(null);
+    setSimulatorDraft({
+      body: normalizeCallScriptBodyForSave(scriptForm.body),
+      productId: scriptForm.product_id ? Number(scriptForm.product_id) : null
+    });
+    setSimulatorOpen(true);
   }
 
   async function saveScript(e: React.FormEvent) {
@@ -304,16 +324,33 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
               </p>
             </>
           )}
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
             <button type="button" className="btn" onClick={() => setScriptModal(false)}>
               Cancelar
             </button>
+            {scriptForm.script_type === "call" ? (
+              <button type="button" className="btn btn-result-test" onClick={testScriptFromModal}>
+                <span className="btn-result-test-icon" aria-hidden>
+                  ▶
+                </span>
+                Testar
+              </button>
+            ) : null}
             <button className="btn btn-primary" type="submit" disabled={scriptSaving}>
               {scriptSaving ? "Salvando…" : "Salvar"}
             </button>
           </div>
         </form>
       </CadastroModal>
+
+      <ResultadoComercialSimulatorPanel
+        open={simulatorOpen}
+        draftScript={simulatorDraft}
+        onClose={() => {
+          setSimulatorOpen(false);
+          setSimulatorDraft(null);
+        }}
+      />
     </div>
   );
 }

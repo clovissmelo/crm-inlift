@@ -1,11 +1,13 @@
 "use client";
 
 import clsx from "clsx";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Api4comCallResultForm,
-  type CallRegistrationSimulation
+  type CallRegistrationSimulation,
+  type SimulatedClientTimelineItem
 } from "@/components/api4com-call-result-modal";
+import { formatSpDateTime } from "@/lib/datetime";
 import { CallScriptGuidePanel, type ActiveCallForScript } from "@/components/call-script-guide-panel";
 import { CallSidePanelShell } from "@/components/call-side-panel-shell";
 import {
@@ -20,7 +22,7 @@ import type { CallScriptLogEntry } from "@/lib/call-script-log";
 import type { Product } from "@/lib/types";
 import "./resultado-comercial-admin.css";
 
-type Phase = "setup" | "script" | "register";
+type Phase = "setup" | "script" | "register" | "history";
 
 function telephonyScenario(tech: TechnicalResultTypeRow) {
   const now = new Date().toISOString();
@@ -37,12 +39,20 @@ function telephonyScenario(tech: TechnicalResultTypeRow) {
   };
 }
 
+export type SimulatorDraftScript = {
+  body: string;
+  productId: number | null;
+};
+
 export function ResultadoComercialSimulatorPanel({
   open,
-  onClose
+  onClose,
+  draftScript = null
 }: {
   open: boolean;
   onClose: () => void;
+  /** Roteiro ainda não salvo (ex.: editor em Abordagens). */
+  draftScript?: SimulatorDraftScript | null;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [phase, setPhase] = useState<Phase>("setup");
@@ -55,6 +65,14 @@ export function ResultadoComercialSimulatorPanel({
   const [runId, setRunId] = useState(0);
   const [skipScript, setSkipScript] = useState(false);
   const [scriptLog, setScriptLog] = useState<CallScriptLogEntry[]>([]);
+  const [historyPreview, setHistoryPreview] = useState<SimulatedClientTimelineItem | null>(null);
+  const draftLaunchKeyRef = useRef<string | null>(null);
+
+  const handleRegistrationComplete = useCallback((item: SimulatedClientTimelineItem) => {
+    setHistoryPreview(item);
+    setPhase("history");
+    setCollapsed(false);
+  }, []);
 
   const reset = useCallback(() => {
     setPhase("setup");
@@ -62,10 +80,14 @@ export function ResultadoComercialSimulatorPanel({
     setRunId(0);
     setSkipScript(false);
     setScriptLog([]);
+    setHistoryPreview(null);
   }, []);
 
   useEffect(() => {
-    if (!open) reset();
+    if (!open) {
+      draftLaunchKeyRef.current = null;
+      reset();
+    }
   }, [open, reset]);
 
   useEffect(() => {
@@ -77,6 +99,9 @@ export function ResultadoComercialSimulatorPanel({
       const items = (pData as { products?: Product[] }).products ?? [];
       setProducts(items);
       setProductId((prev) => {
+        if (draftScript?.productId != null && items.some((p) => p.id === draftScript.productId)) {
+          return String(draftScript.productId);
+        }
         if (prev && items.some((p) => String(p.id) === prev)) return prev;
         return items[0] ? String(items[0].id) : "";
       });
@@ -90,10 +115,16 @@ export function ResultadoComercialSimulatorPanel({
         );
       }
     });
-  }, [open]);
+  }, [open, draftScript?.productId]);
 
   useEffect(() => {
     if (!open) return;
+    if (draftScript?.body?.trim()) {
+      setScriptBody(normalizeCallScriptBodyForSave(draftScript.body));
+      if (draftScript.productId != null) setProductId(String(draftScript.productId));
+      setScriptReady(true);
+      return;
+    }
     setScriptReady(false);
     const pid = productId ? Number(productId) : null;
     const params = new URLSearchParams({ type: "call" });
@@ -106,7 +137,22 @@ export function ResultadoComercialSimulatorPanel({
       })
       .catch(() => setScriptBody(null))
       .finally(() => setScriptReady(true));
-  }, [open, productId]);
+  }, [open, productId, draftScript?.body, draftScript?.productId]);
+
+  useEffect(() => {
+    if (!open || !draftScript?.body?.trim() || !scriptReady) return;
+    if (technicalTypes.length === 0) return;
+    const launchKey = `${draftScript.body.length}:${draftScript.productId ?? ""}`;
+    if (draftLaunchKeyRef.current === launchKey) return;
+    draftLaunchKeyRef.current = launchKey;
+    setTechnicalSlug((prev) =>
+      technicalTypes.some((t) => t.slug === "answered") ? "answered" : prev
+    );
+    setScriptLog([]);
+    setRunId((n) => n + 1);
+    setPhase("script");
+    setCollapsed(false);
+  }, [open, draftScript?.body, draftScript?.productId, scriptReady, technicalTypes.length]);
 
   const selectedTech = useMemo(
     () => technicalTypes.find((t) => t.slug === technicalSlug),
@@ -119,9 +165,10 @@ export function ResultadoComercialSimulatorPanel({
     return {
       telephony: telephonyScenario(selectedTech),
       productId: pid && Number.isFinite(pid) ? pid : undefined,
-      scriptFlowLog: scriptLog
+      scriptFlowLog: scriptLog,
+      onRegistrationComplete: handleRegistrationComplete
     };
-  }, [phase, selectedTech, productId, scriptLog]);
+  }, [phase, selectedTech, productId, scriptLog, handleRegistrationComplete]);
 
   const mockScriptCall = useMemo((): ActiveCallForScript | null => {
     if (phase !== "script") return null;
@@ -183,11 +230,59 @@ export function ResultadoComercialSimulatorPanel({
     );
   }
 
+  if (phase === "history" && historyPreview) {
+    return (
+      <CallSidePanelShell
+        title="HISTÓRICO DO CLIENTE"
+        meta="Simulação — como ficaria após salvar o atendimento"
+        ariaLabel="Prévia do histórico do cliente"
+        collapsed={collapsed}
+        collapsedLabel="Simulador"
+        onCollapse={() => setCollapsed(true)}
+        onExpand={() => setCollapsed(false)}
+        footer={
+          <div className="resultado-simulator-setup-actions">
+            <button type="button" className="btn" onClick={onClose}>
+              Fechar
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setHistoryPreview(null);
+                setPhase("setup");
+              }}
+            >
+              Nova simulação
+            </button>
+          </div>
+        }
+      >
+        <p className="muted" style={{ marginTop: 0, fontSize: "0.8125rem" }}>
+          Nada foi gravado no banco. Abaixo, o mesmo formato do histórico na ficha do cliente.
+        </p>
+        <ul className="sim-client-timeline-preview">
+          <li className="sim-client-timeline-preview-item">
+            <div className="sim-client-timeline-preview-meta">
+              {formatSpDateTime(historyPreview.occurred_at)}
+              {historyPreview.user_name ? ` · ${historyPreview.user_name}` : ""}
+            </div>
+            <strong>{historyPreview.title}</strong>
+            {historyPreview.detail ? <div className="muted">{historyPreview.detail}</div> : null}
+            {historyPreview.script_detail ? (
+              <div className="muted sim-client-timeline-preview-script">{historyPreview.script_detail}</div>
+            ) : null}
+          </li>
+        </ul>
+      </CallSidePanelShell>
+    );
+  }
+
   if (phase === "register" && simulationConfig) {
     return (
       <CallSidePanelShell
         title="COMPLEMENTO DE REGISTRO"
-        meta="Simulador — mesmo fluxo da ligação real"
+        meta="Simulador — registro comercial (última etapa)"
         ariaLabel="Simulador de complemento de registro"
         collapsed={collapsed}
         collapsedLabel="Simulador"

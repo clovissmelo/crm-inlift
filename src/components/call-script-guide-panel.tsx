@@ -464,9 +464,28 @@ export function CallScriptGuidePanel({
                   </button>
                 </div>
               ) : (
-                <p className="muted" style={{ fontSize: "0.875rem", margin: 0 }}>
-                  {handoffPending ? "Abrindo complemento de registro…" : "Concluindo roteiro…"}
-                </p>
+                <>
+                  {handoffPending ? (
+                    <p className="muted" style={{ fontSize: "0.875rem", margin: "0 0 8px" }}>
+                      Abrindo complemento de registro…
+                    </p>
+                  ) : null}
+                  <div className="call-script-nav-row">
+                    <button type="button" className="btn call-script-btn-back" disabled={!canGoBack} onClick={goBack}>
+                      <ChevronLeft size={18} aria-hidden />
+                      Voltar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary call-script-btn-next"
+                      disabled={handoffPending}
+                      onClick={() => goNext(step.type === "linear" ? step.next : null, "next")}
+                    >
+                      Concluir e registrar
+                      <ChevronRight size={18} aria-hidden />
+                    </button>
+                  </div>
+                </>
               )}
             </>
           )}
