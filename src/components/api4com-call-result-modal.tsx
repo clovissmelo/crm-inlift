@@ -22,10 +22,12 @@ import type { TechnicalResultTypeRow } from "@/lib/classifications/technical-res
 import {
   contactLayerFromScriptLog,
   formatCallScriptLogForNotes,
+  meetingScheduleFromScriptLog,
   normalizeCallScriptLog,
   personFromScriptLog,
   type CallScriptLogEntry
 } from "@/lib/call-script-log";
+import { isoToSpDateAndTime } from "@/lib/datetime";
 import { ApproachMinimalScheduleField } from "@/components/approach-minimal-schedule-field";
 import { type ApproachNextActionKey } from "@/lib/approach-next-actions";
 import {
@@ -210,6 +212,7 @@ export function Api4comCallResultForm({
   const [contactOutcomeId, setContactOutcomeId] = useState("");
   const autoSettleRef = useRef<number | null>(null);
   const scriptContactPrefillKeyRef = useRef("");
+  const scriptMeetingPrefillRef = useRef("");
   const [technicalSlug, setTechnicalSlug] = useState<string | null>(null);
   const [technicalLabel, setTechnicalLabel] = useState("");
   const [contactedPersonName, setContactedPersonName] = useState("");
@@ -537,6 +540,7 @@ export function Api4comCallResultForm({
   useEffect(() => {
     autoSettleRef.current = null;
     scriptContactPrefillKeyRef.current = "";
+    scriptMeetingPrefillRef.current = "";
   }, [callId, simulation?.scriptFlowLog]);
 
   const modalTitle =
@@ -694,6 +698,27 @@ export function Api4comCallResultForm({
     setPersonFieldsFromScript(true);
     setPersonFieldsEditing(false);
   }, [call, call?.script_flow_log, contactLayerChoice, contextLoading]);
+
+  useEffect(() => {
+    if (!call || contextLoading || !callWasAnswered) return;
+    const iso = meetingScheduleFromScriptLog(normalizeCallScriptLog(call.script_flow_log));
+    const key = `${call.id}:${iso ?? ""}`;
+    if (!iso) {
+      scriptMeetingPrefillRef.current = "";
+      return;
+    }
+    if (scriptMeetingPrefillRef.current === key) return;
+    scriptMeetingPrefillRef.current = key;
+    const reuniao = resultTypes.find((r) => r.slug === "reuniao_agendada");
+    if (reuniao) {
+      setResultTypeId(String(reuniao.id));
+      setResultLockedByIntegration(false);
+    }
+    setNextType("schedule_meeting");
+    const { date, time } = isoToSpDateAndTime(iso);
+    setNextDate(date);
+    setNextTime(time);
+  }, [call, call?.script_flow_log, callWasAnswered, contextLoading, resultTypes]);
 
   const effectiveProductId = useMemo(() => {
     if (call?.product_id != null) return call.product_id;

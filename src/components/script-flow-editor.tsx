@@ -6,8 +6,8 @@ import { TemplatePlaceholderHelp } from "@/components/template-placeholder-help"
 import {
   DEFAULT_CAPTURE_FIELDS,
   draftsToFlow,
+  ensureInternalStepIds,
   flowToDrafts,
-  normalizeDraftStepIds,
   parseCallScriptBody,
   serializeCallScriptFlow,
   type ScriptFlowCaptureField,
@@ -18,52 +18,53 @@ type Props = {
   onBodyChange: (body: string) => void;
 };
 
-function newStepId(existing: ScriptFlowStepDraft[]) {
-  let n = 1;
-  while (existing.some((s) => s.id === String(n))) n++;
-  return String(n);
-}
-
-function nextSuggestedId(existing: ScriptFlowStepDraft[]) {
-  return newStepId(existing);
+function newInternalStepId(existing: ScriptFlowStepDraft[]) {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const id = `step_${Math.random().toString(36).slice(2, 10)}`;
+    if (!existing.some((s) => s.id === id)) return id;
+  }
+  return `step_${Date.now()}`;
 }
 
 export function ScriptFlowEditor({ body, onBodyChange }: Props) {
   const parsed = useMemo(() => parseCallScriptBody(body), [body]);
   const [drafts, setDrafts] = useState<ScriptFlowStepDraft[]>(() => {
     const base = parsed ? flowToDrafts(parsed) : flowToDrafts({ v: 1, start: "1", steps: {} });
-    return normalizeDraftStepIds(base);
+    return ensureInternalStepIds(base);
   });
   const [selectedId, setSelectedId] = useState<string | null>(drafts[0]?.id ?? null);
 
   useEffect(() => {
     if (drafts.length === 0) return;
-    const normalized = normalizeDraftStepIds(drafts);
-    const idsDiffer = normalized.some((d, i) => d.id !== drafts[i]?.id);
-    if (idsDiffer) {
-      setSelectedId((prev) => {
-        const idx = drafts.findIndex((d) => d.id === prev);
-        return idx >= 0 ? normalized[idx]!.id : (normalized[0]?.id ?? null);
-      });
-      setDrafts(normalized);
-      return;
-    }
-    const flow = draftsToFlow(normalized);
+    const flow = draftsToFlow(drafts);
     onBodyChange(serializeCallScriptFlow(flow));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- serializa rascunho → body JSON
   }, [drafts]);
 
   const selected = drafts.find((d) => d.id === selectedId) ?? drafts[0] ?? null;
   const stepIds = drafts.map((d) => d.id);
-  const suggestedId = nextSuggestedId(drafts);
+  const selectedOrder = selected ? drafts.findIndex((d) => d.id === selected.id) + 1 : 1;
 
   function updateSelected(patch: Partial<ScriptFlowStepDraft>) {
     if (!selected) return;
     setDrafts((list) => list.map((d) => (d.id === selected.id ? { ...d, ...patch } : d)));
   }
 
+  function moveStepToOrder(internalId: string, targetOrder: number) {
+    setDrafts((list) => {
+      const fromIdx = list.findIndex((d) => d.id === internalId);
+      if (fromIdx < 0) return list;
+      const toIdx = Math.max(0, Math.min(list.length - 1, targetOrder - 1));
+      if (fromIdx === toIdx) return list;
+      const copy = [...list];
+      const [item] = copy.splice(fromIdx, 1);
+      copy.splice(toIdx, 0, item!);
+      return copy;
+    });
+  }
+
   function addStep() {
-    const id = newStepId(drafts);
+    const id = newInternalStepId(drafts);
     const next: ScriptFlowStepDraft = {
       id,
       type: "linear",
@@ -100,8 +101,10 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
   }
 
   function stepLabel(id: string) {
-    const d = drafts.find((x) => x.id === id);
-    return d?.title?.trim() || id;
+    const idx = drafts.findIndex((x) => x.id === id);
+    const d = idx >= 0 ? drafts[idx] : undefined;
+    const title = d?.title?.trim() || "Etapa";
+    return idx >= 0 ? `${title} (ordem ${idx + 1})` : title;
   }
 
   return (
@@ -141,34 +144,24 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
               </button>
             </div>
             <div className="field">
-              <label className="label" htmlFor="script-step-id">
-                ID (único)
+              <label className="label" htmlFor="script-step-order">
+                Ordem
               </label>
               <input
-                id="script-step-id"
+                id="script-step-order"
                 className="input"
-                value={selected.id}
-                placeholder={String(suggestedId)}
+                type="number"
+                min={1}
+                max={drafts.length}
+                value={selectedOrder}
                 onChange={(e) => {
-                  const newId = e.target.value.replace(/\s+/g, "");
-                  setDrafts((list) =>
-                    list.map((d) => {
-                      if (d.id === selected.id) return { ...d, id: newId };
-                      if ((d.type === "linear" || d.type === "capture") && d.next === selected.id) {
-                        return { ...d, next: newId };
-                      }
-                      if (d.type === "branch" && d.choices) {
-                        return {
-                          ...d,
-                          choices: d.choices.map((c) => (c.next === selected.id ? { ...c, next: newId } : c))
-                        };
-                      }
-                      return d;
-                    })
-                  );
-                  setSelectedId(newId);
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n)) moveStepToOrder(selected.id, Math.round(n));
                 }}
               />
+              <span className="muted script-flow-field-hint">
+                A posição na lista à esquerda. Links “Ir para” usam id interno automático.
+              </span>
             </div>
             <div className="field">
               <label className="label" htmlFor="script-step-title">
@@ -367,7 +360,7 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                     .filter((id) => id !== selected.id)
                     .map((id) => (
                       <option key={id} value={id}>
-                        {stepLabel(id)} ({id})
+                        {stepLabel(id)}
                       </option>
                     ))}
                 </select>
@@ -386,8 +379,8 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                   />
                 </div>
                 <p className="muted script-flow-field-hint">
-                  Em cada opção você pode definir o que preenche automaticamente em{" "}
-                  <strong>Contato na ligação</strong> no complemento de registro.
+                  Em cada opção: <strong>Contato na ligação</strong> no registro e, se marcar{" "}
+                  <strong>Agendar reunião</strong>, o operador informa data/hora na ligação (resultado Reunião agendada).
                 </p>
                 {(selected.choices ?? []).map((choice, idx) => (
                   <div key={idx} className="filters-row script-flow-branch-row">
@@ -425,6 +418,30 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                         <option value="ninguem">Ninguém</option>
                       </select>
                     </div>
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        alignSelf: "flex-end",
+                        marginBottom: 8,
+                        fontSize: "0.8125rem"
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={choice.schedule_meeting === true}
+                        onChange={(e) => {
+                          const choices = [...(selected.choices ?? [])];
+                          choices[idx] = {
+                            ...choices[idx]!,
+                            schedule_meeting: e.target.checked ? true : undefined
+                          };
+                          updateSelected({ choices });
+                        }}
+                      />
+                      <span>Agendar reunião</span>
+                    </label>
                     <div className="field" style={{ flex: 1 }}>
                       <label className="label">Ir para</label>
                       <select
@@ -441,7 +458,7 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                           .filter((id) => id !== selected.id)
                           .map((id) => (
                             <option key={id} value={id}>
-                              {stepLabel(id)} ({id})
+                              {stepLabel(id)}
                             </option>
                           ))}
                       </select>

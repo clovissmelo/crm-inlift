@@ -125,6 +125,10 @@
   text-align: left;
 }
 
+.call-script-meeting-pick {
+  margin-top: 0.5rem;
+}
+
 .call-script-panel-foot {
   flex-shrink: 0;
   padding: 0.75rem 1.25rem;

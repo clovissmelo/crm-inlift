@@ -52,6 +52,24 @@ export function spLocalDateTimeToIso(date: string, time: string) {
   return new Date(`${date}T${time}:00-03:00`).toISOString();
 }
 
+/** Valores para inputs `date` e `time` (fuso SP) a partir de ISO UTC. */
+export function isoToSpDateAndTime(iso: string): { date: string; time: string } {
+  const d = new Date(iso);
+  const date = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(d);
+  const time = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(d);
+  return { date, time };
+}
+
 export function meetingEndIso(startsAtIso: string, durationMinutes: number) {
   return new Date(new Date(startsAtIso).getTime() + durationMinutes * 60_000).toISOString();
 }

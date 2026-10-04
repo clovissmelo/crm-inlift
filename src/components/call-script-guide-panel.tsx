@@ -7,14 +7,17 @@ import {
   normalizeCallScriptLog,
   type CallScriptLogEntry
 } from "@/lib/call-script-log";
+import { ApproachMinimalScheduleField } from "@/components/approach-minimal-schedule-field";
 import {
   branchChoiceContactLayer,
+  branchChoiceScheduleMeeting,
   captureFieldRegistrationLabel,
   parseCallScriptBody,
   renderStepContent,
   type ScriptFlow,
   type ScriptFlowStep
 } from "@/lib/script-flow";
+import { spLocalDateTimeToIso } from "@/lib/datetime";
 import { CallDialContextBanner } from "@/components/call-dial-context-banner";
 import "./call-script-guide.css";
 
@@ -79,11 +82,22 @@ export function CallScriptGuidePanel({
   const [stepId, setStepId] = useState<string | null>(null);
   const [logCount, setLogCount] = useState(savedLog.length);
   const [captureDraft, setCaptureDraft] = useState<Record<string, string>>({});
+  const [pendingMeeting, setPendingMeeting] = useState<{ next: string | null; label: string } | null>(null);
+  const [meetingDate, setMeetingDate] = useState("");
+  const [meetingTime, setMeetingTime] = useState("");
+  const [meetingInvalid, setMeetingInvalid] = useState(false);
 
   useEffect(() => {
     handoffSentRef.current = false;
     setHandoffPending(false);
   }, [call.id]);
+
+  useEffect(() => {
+    setPendingMeeting(null);
+    setMeetingDate("");
+    setMeetingTime("");
+    setMeetingInvalid(false);
+  }, [stepId]);
 
   useEffect(() => {
     setLogCount(savedLog.length);
@@ -230,7 +244,8 @@ export function CallScriptGuidePanel({
     next: string | null,
     action: "next" | "choice" | "capture",
     choiceLabel?: string,
-    captureNotes?: CallScriptLogEntry["capture_notes"]
+    captureNotes?: CallScriptLogEntry["capture_notes"],
+    scheduledMeetingAt?: string | null
   ) {
     if (!step || !stepId) return;
     const payload: Omit<CallScriptLogEntry, "at"> = {
@@ -239,7 +254,8 @@ export function CallScriptGuidePanel({
       action,
       choice_label: choiceLabel ?? null,
       next_step_id: next,
-      capture_notes: captureNotes
+      capture_notes: captureNotes,
+      scheduled_meeting_at: scheduledMeetingAt ?? null
     };
     if (action === "choice" && choiceLabel?.trim() && step.type === "branch") {
       const layer = branchChoiceContactLayer(step, choiceLabel.trim());
@@ -280,6 +296,26 @@ export function CallScriptGuidePanel({
     setStepId(flow.start);
   }
 
+  function onBranchChoice(next: string | null, label: string) {
+    if (step?.type === "branch" && branchChoiceScheduleMeeting(step, label)) {
+      setPendingMeeting({ next, label });
+      return;
+    }
+    goNext(next, "choice", label);
+  }
+
+  function confirmPendingMeeting() {
+    if (!pendingMeeting) return;
+    if (!meetingDate.trim() || !meetingTime.trim()) {
+      setMeetingInvalid(true);
+      return;
+    }
+    setMeetingInvalid(false);
+    const iso = spLocalDateTimeToIso(meetingDate, meetingTime);
+    goNext(pendingMeeting.next, "choice", pendingMeeting.label, undefined, iso);
+    setPendingMeeting(null);
+  }
+
   return (
     <>
       <div className="call-script-backdrop" aria-hidden />
@@ -314,18 +350,44 @@ export function CallScriptGuidePanel({
               <p className="call-script-step-content">{renderStepContent(step.content, vars)}</p>
               {step.type === "branch" ? (
                 <>
-                  <div className="call-script-actions">
-                    {step.choices.map((choice) => (
-                      <button
-                        key={choice.label}
-                        type="button"
-                        className="btn btn-primary call-script-btn-choice"
-                        onClick={() => goNext(choice.next, "choice", choice.label)}
-                      >
-                        {choice.label}
-                      </button>
-                    ))}
-                  </div>
+                  {pendingMeeting ? (
+                    <div className="call-script-meeting-pick">
+                      <p className="muted" style={{ fontSize: "0.875rem", margin: "0 0 8px" }}>
+                        Opção: <strong>{pendingMeeting.label}</strong> — informe data e hora da reunião.
+                      </p>
+                      <ApproachMinimalScheduleField
+                        mode="meeting"
+                        nextDate={meetingDate}
+                        nextTime={meetingTime}
+                        onNextDateChange={setMeetingDate}
+                        onNextTimeChange={setMeetingTime}
+                        invalidSchedule={meetingInvalid}
+                      />
+                      <div className="call-script-nav-row">
+                        <button type="button" className="btn" onClick={() => setPendingMeeting(null)}>
+                          Voltar
+                        </button>
+                        <button type="button" className="btn btn-primary call-script-btn-next" onClick={confirmPendingMeeting}>
+                          Confirmar reunião
+                          <ChevronRight size={18} aria-hidden />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="call-script-actions">
+                      {step.choices.map((choice) => (
+                        <button
+                          key={choice.label}
+                          type="button"
+                          className="btn btn-primary call-script-btn-choice"
+                          onClick={() => onBranchChoice(choice.next, choice.label)}
+                        >
+                          {choice.label}
+                          {choice.schedule_meeting ? " · agendar" : null}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </>
               ) : step.type === "capture" ? (
                 <>

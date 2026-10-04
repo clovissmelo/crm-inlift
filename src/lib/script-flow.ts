@@ -15,6 +15,8 @@ export type ScriptFlowBranchChoice = {
   label: string;
   next: string | null;
   contact_layer?: ScriptFlowContactLayer;
+  /** Na ligação, pede data/hora antes de seguir (preenche reunião no registro). */
+  schedule_meeting?: boolean;
 };
 
 export type ScriptFlowBranchStep = {
@@ -172,38 +174,30 @@ export function flowToDrafts(flow: ScriptFlow): ScriptFlowStepDraft[] {
   });
 }
 
-/** IDs sequenciais (1…n) na ordem da lista — alinha sidebar, JSON e campo ID. */
-export function normalizeDraftStepIds(drafts: ScriptFlowStepDraft[]): ScriptFlowStepDraft[] {
-  if (drafts.length === 0) return drafts;
-  const idMap = new Map<string, string>();
-  drafts.forEach((d, i) => idMap.set(d.id, String(i + 1)));
-
-  const mapNext = (next: string | null | undefined): string | null => {
-    if (!next?.trim()) return null;
-    return idMap.get(next) ?? null;
-  };
-
+/** Garante id interno único por etapa (não altera ordem nem links). */
+export function ensureInternalStepIds(drafts: ScriptFlowStepDraft[]): ScriptFlowStepDraft[] {
+  const used = new Set<string>();
   return drafts.map((d, i) => {
-    const newId = String(i + 1);
-    if (d.type === "branch") {
-      return {
-        ...d,
-        id: newId,
-        choices: (d.choices ?? []).map((c) => ({ ...c, next: mapNext(c.next) }))
-      };
+    let id = d.id.trim();
+    if (!id) id = `_step${i + 1}`;
+    if (used.has(id)) {
+      let n = 2;
+      while (used.has(`${id}_${n}`)) n++;
+      id = `${id}_${n}`;
     }
-    return { ...d, id: newId, next: mapNext(d.next) };
+    used.add(id);
+    return id === d.id ? d : { ...d, id };
   });
 }
 
 export function normalizeCallScriptBodyForSave(body: string): string {
   const flow = parseCallScriptBody(body);
   if (!flow) return body;
-  return serializeCallScriptFlow(draftsToFlow(normalizeDraftStepIds(flowToDrafts(flow))));
+  return serializeCallScriptFlow(draftsToFlow(ensureInternalStepIds(flowToDrafts(flow))));
 }
 
 export function draftsToFlow(drafts: ScriptFlowStepDraft[]): ScriptFlow {
-  const ordered = normalizeDraftStepIds(drafts);
+  const ordered = ensureInternalStepIds(drafts);
   const steps: Record<string, ScriptFlowStep> = {};
   for (let i = 0; i < ordered.length; i++) {
     const d = ordered[i]!;
@@ -217,13 +211,14 @@ export function draftsToFlow(drafts: ScriptFlowStepDraft[]): ScriptFlow {
         choices: (d.choices ?? []).filter((c) => c.label.trim()).map((c) => ({
           label: c.label.trim(),
           next: c.next,
-          ...(c.contact_layer ? { contact_layer: c.contact_layer } : {})
+          ...(c.contact_layer ? { contact_layer: c.contact_layer } : {}),
+          ...(c.schedule_meeting ? { schedule_meeting: true } : {})
         }))
       };
     } else if (d.type === "capture") {
       let next = d.next ?? null;
-      if (!next && i < drafts.length - 1) {
-        const followingId = drafts[i + 1]!.id.trim() || `step-${i + 2}`;
+      if (!next && i < ordered.length - 1) {
+        const followingId = ordered[i + 1]!.id.trim() || `step-${i + 2}`;
         next = followingId;
       }
       const fields = (d.fields ?? DEFAULT_CAPTURE_FIELDS)
@@ -243,8 +238,8 @@ export function draftsToFlow(drafts: ScriptFlowStepDraft[]): ScriptFlow {
       };
     } else {
       let next = d.next ?? null;
-      if (!next && i < drafts.length - 1) {
-        const followingId = drafts[i + 1]!.id.trim() || `step-${i + 2}`;
+      if (!next && i < ordered.length - 1) {
+        const followingId = ordered[i + 1]!.id.trim() || `step-${i + 2}`;
         next = followingId;
       }
       steps[id] = {
@@ -269,6 +264,11 @@ export function branchChoiceContactLayer(
 ): ScriptFlowContactLayer | undefined {
   const choice = step.choices.find((c) => c.label === choiceLabel);
   return choice?.contact_layer;
+}
+
+export function branchChoiceScheduleMeeting(step: ScriptFlowBranchStep, choiceLabel: string): boolean {
+  const choice = step.choices.find((c) => c.label === choiceLabel);
+  return choice?.schedule_meeting === true;
 }
 
 /** Modelo PostoCred — editável em Abordagens. */

@@ -37,9 +37,19 @@ export type CallScriptLogEntry = {
   capture_notes?: CallScriptCaptureNote[];
   /** Copiado da opção do roteiro — preenche contato no complemento. */
   contact_layer?: "decisor" | "outra" | "ninguem";
+  /** Reunião agendada na etapa do roteiro (ISO UTC). */
+  scheduled_meeting_at?: string | null;
 };
 
 /** Última escolha do roteiro que define contato na ligação (Decisor / Outra / Ninguém). */
+export function meetingScheduleFromScriptLog(log: CallScriptLogEntry[]): string | null {
+  for (let i = log.length - 1; i >= 0; i--) {
+    const at = log[i]!.scheduled_meeting_at?.trim();
+    if (at) return at;
+  }
+  return null;
+}
+
 export function contactLayerFromScriptLog(log: CallScriptLogEntry[]): "decisor" | "outra" | "ninguem" | null {
   for (let i = log.length - 1; i >= 0; i--) {
     const e = log[i]!;
@@ -71,7 +81,13 @@ export function formatCallScriptLogAnswers(log: CallScriptLogEntry[]): string | 
   const parts: string[] = [];
   if (choices.length > 0) {
     parts.push(
-      ...choices.map((e) => `${(e.step_title || e.step_id).trim()}: ${e.choice_label!.trim()}`)
+      ...choices.map((e) => {
+        const title = (e.step_title || e.step_id).trim();
+        const label = e.choice_label!.trim();
+        return e.scheduled_meeting_at?.trim()
+          ? `${title}: ${label} (reunião agendada)`
+          : `${title}: ${label}`;
+      })
     );
   }
   for (const e of captures) {
@@ -113,7 +129,10 @@ export function formatCallScriptLogInline(log: CallScriptLogEntry[]): string | n
   if (!log.length) return null;
   const parts = log.map((e) => {
     const title = e.step_title?.trim() || e.step_id;
-    if (e.action === "choice" && e.choice_label) return `${title}: ${e.choice_label}`;
+    if (e.action === "choice" && e.choice_label) {
+      const meet = e.scheduled_meeting_at?.trim();
+      return meet ? `${title}: ${e.choice_label} (reunião ${meet})` : `${title}: ${e.choice_label}`;
+    }
     if (e.action === "capture") {
       const block = formatCaptureNotes(e.capture_notes);
       return block ? `${title}: ${block}` : `${title} (anotações)`;
@@ -130,7 +149,10 @@ export function formatCallScriptLogForNotes(log: CallScriptLogEntry[]): string |
   const lines = log.map((e) => {
     const title = e.step_title?.trim() || e.step_id;
     if (e.action === "choice" && e.choice_label) {
-      return `· ${title}: ${e.choice_label}`;
+      const meet = e.scheduled_meeting_at?.trim();
+      return meet
+        ? `· ${title}: ${e.choice_label} — reunião agendada`
+        : `· ${title}: ${e.choice_label}`;
     }
     if (e.action === "capture") {
       const block = formatCaptureNotes(e.capture_notes);

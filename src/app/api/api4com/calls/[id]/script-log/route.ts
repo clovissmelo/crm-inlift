@@ -13,7 +13,8 @@ const bodySchema = z.object({
   capture_notes: z
     .array(z.object({ label: z.string(), value: z.string(), field_key: z.string().optional() }))
     .optional(),
-  contact_layer: z.enum(["decisor", "outra", "ninguem"]).optional()
+  contact_layer: z.enum(["decisor", "outra", "ninguem"]).optional(),
+  scheduled_meeting_at: z.string().optional().nullable()
 });
 
 const logEntrySchema = z.object({
@@ -26,7 +27,8 @@ const logEntrySchema = z.object({
   capture_notes: z
     .array(z.object({ label: z.string(), value: z.string(), field_key: z.string().optional() }))
     .optional(),
-  contact_layer: z.enum(["decisor", "outra", "ninguem"]).optional()
+  contact_layer: z.enum(["decisor", "outra", "ninguem"]).optional(),
+  scheduled_meeting_at: z.string().optional().nullable()
 });
 
 const replaceBodySchema = z.object({
