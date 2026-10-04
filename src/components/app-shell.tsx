@@ -231,6 +231,7 @@ export function AppShell({
         </header>
         <main className="page-content">
           <Api4comCallProvider user={user}>{children}</Api4comCallProvider>
+          <div id="app-main-overlay-root" className="app-main-overlay-root" aria-hidden />
         </main>
       </div>
     </div>

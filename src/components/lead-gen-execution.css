@@ -18,10 +18,23 @@
   gap: 0.5rem;
 }
 
-.lead-gen-overlay {
-  position: fixed;
+/* Dentro de #app-main-overlay-root (portal): cobre só a área principal, não a sidebar. */
+.app-main-overlay-root {
+  position: absolute;
   inset: 0;
   z-index: 200;
+  pointer-events: none;
+}
+
+.app-main-overlay-root:empty {
+  display: none;
+}
+
+.lead-gen-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
   display: flex;
   align-items: center;
   justify-content: center;

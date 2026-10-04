@@ -489,6 +489,7 @@ a.app-text-link:hover {
 }
 
 .page-content {
+  position: relative;
   padding: 1.5rem;
   flex: 1;
 }

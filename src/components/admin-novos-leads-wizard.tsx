@@ -2,7 +2,7 @@
 
 import "./lead-gen-execution.css";
 import Link from "next/link";
-import { Play, Trash2 } from "lucide-react";
+import { Info, Play, Trash2, X } from "lucide-react";
 import {
   AdminNovosLeadsCityPicker,
   type CitySelectionPayload,
@@ -17,6 +17,12 @@ import {
   LeadGenExecutionOverlay,
   type LeadGenActivityLine
 } from "@/components/lead-gen-execution-overlay";
+import { LeadGenOverlayLayer } from "@/components/lead-gen-overlay-layer";
+import {
+  NOVOS_LEADS_META_REFRESH_MS,
+  novosLeadsPollIntervalMs,
+  resolveNovosLeadsPollTarget
+} from "@/lib/lead-generation/novos-leads-live-sync";
 import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
 import { formatRunResultsSummary } from "@/lib/lead-generation/run-outcome";
 import type { LeadGenCounts } from "@/lib/lead-generation/types";
@@ -188,6 +194,7 @@ export function AdminNovosLeadsWizard() {
   const [anpPreviewLoading, setAnpPreviewLoading] = useState(false);
   const [anpPreviewData, setAnpPreviewData] = useState<AnpPreviewPayload | null>(null);
   const [anpPreviewError, setAnpPreviewError] = useState<string | null>(null);
+  const [summaryRunId, setSummaryRunId] = useState<number | null>(null);
 
   const [flowPreview, setFlowPreview] = useState<{
     name: string;
@@ -302,6 +309,20 @@ export function AdminNovosLeadsWizard() {
   }, [loadMeta]);
 
   useEffect(() => {
+    if (!onNovosLeadsPage) return;
+    const refreshList = () => {
+      if (document.visibilityState === "hidden") return;
+      void loadMeta();
+    };
+    const t = window.setInterval(refreshList, NOVOS_LEADS_META_REFRESH_MS);
+    window.addEventListener("focus", refreshList);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener("focus", refreshList);
+    };
+  }, [onNovosLeadsPage, loadMeta]);
+
+  useEffect(() => {
     if (selectedProduct?.lead_gen_segment_slug) {
       setSegment(selectedProduct.lead_gen_segment_slug);
     }
@@ -353,16 +374,45 @@ export function AdminNovosLeadsWizard() {
   }, []);
 
   const fetchRunDetail = useCallback(
-    async (id: number, tab?: typeof resultTab) => {
-      const q = tab ? `?tab=${tab}` : "";
+    async (id: number, tab?: typeof resultTab, opts?: { feed?: boolean }) => {
+      const params = new URLSearchParams();
+      if (tab) params.set("tab", tab);
+      if (opts?.feed) params.set("feed", "1");
+      const q = params.toString() ? `?${params.toString()}` : "";
       const res = await fetch(`/api/admin/lead-generation/runs/${id}${q}`);
       if (!res.ok) return;
-      const data = (await res.json()) as { run: RunDetail; items?: typeof resultItems };
+      const data = (await res.json()) as {
+        run: RunDetail;
+        items?: typeof resultItems;
+        activity?: LeadGenActivityLine[];
+        phase_line?: string | null;
+      };
       applyRunRow(data.run);
       if (data.items) setResultItems(data.items as typeof resultItems);
+      if (opts?.feed) {
+        if (data.activity) setActivityFeed(data.activity);
+        if (data.phase_line !== undefined) setPhaseLine(data.phase_line);
+      }
     },
     [applyRunRow]
   );
+
+  const summaryRun = useMemo(
+    () => (summaryRunId != null ? runs.find((r) => r.id === summaryRunId) ?? null : null),
+    [summaryRunId, runs]
+  );
+
+  function openRunSummary(runId: number) {
+    setSummaryRunId(runId);
+  }
+
+  function openRunVerMais(runId: number) {
+    setSummaryRunId(runId);
+    setActiveRunId(runId);
+    setExecOverlayOpen(true);
+    setBackgroundRunNotice(false);
+    void fetchRunDetail(runId, resultTab, { feed: true });
+  }
 
   const runsRef = useRef(runs);
   runsRef.current = runs;
@@ -493,44 +543,76 @@ export function AdminNovosLeadsWizard() {
     return null;
   }, [listActiveRun, activeRunId, activeRun?.id, activeRun?.status, runs, starting]);
 
+  const pollTarget = useMemo(
+    () =>
+      resolveNovosLeadsPollTarget({
+        starting,
+        runIdToPoll,
+        execOverlayOpen,
+        backgroundRunNotice,
+        shownRunId: shownRun?.id,
+        getRun: (id) => {
+          if (activeRunRef.current?.id === id) return activeRunRef.current;
+          return runsRef.current.find((r) => r.id === id);
+        }
+      }),
+    [
+      starting,
+      runIdToPoll,
+      execOverlayOpen,
+      backgroundRunNotice,
+      shownRun?.id,
+      shownRun?.status,
+      shownRun?.phase
+    ]
+  );
+
   useEffect(() => {
-    if (!onNovosLeadsPage || runIdToPoll == null) return;
+    if (!onNovosLeadsPage || pollTarget == null) return;
 
     let cancelled = false;
+    const pollId = pollTarget.id;
+    const pollMode = pollTarget.mode;
     const withFeed = execOverlayOpen || backgroundRunNotice;
 
-    async function tickOnce() {
+    async function pollOnce() {
       if (cancelled || document.visibilityState === "hidden") return;
       const gen = pollGenerationRef.current;
+      if (pollMode === "refresh") {
+        await refreshRunProgress(pollId, withFeed, gen);
+        return;
+      }
       if (tickInFlightRef.current) {
-        await refreshRunProgress(runIdToPoll!, withFeed, gen);
+        await refreshRunProgress(pollId, withFeed, gen);
         return;
       }
       tickInFlightRef.current = true;
       try {
-        await pollRunProgress(runIdToPoll!, withFeed, gen);
+        await pollRunProgress(pollId, withFeed, gen);
       } finally {
         tickInFlightRef.current = false;
       }
     }
 
-    void tickOnce();
+    void pollOnce();
 
-    function pollIntervalMs() {
+    function intervalMs() {
       const snap =
-        activeRunRef.current?.id === runIdToPoll
+        activeRunRef.current?.id === pollId
           ? activeRunRef.current
-          : runsRef.current.find((r) => r.id === runIdToPoll);
-      if (snap && !runNeedsLeadGenDrain(snap)) {
-        return execOverlayOpen ? 8000 : 12_000;
-      }
-      return execOverlayOpen ? 2500 : backgroundRunNotice ? 4500 : 4000;
+          : runsRef.current.find((r) => r.id === pollId);
+      return novosLeadsPollIntervalMs({
+        mode: pollMode,
+        execOverlayOpen,
+        backgroundRunNotice,
+        runSnap: snap
+      });
     }
 
-    const t = window.setInterval(() => void tickOnce(), pollIntervalMs());
+    const t = window.setInterval(() => void pollOnce(), intervalMs());
 
     function onVisibility() {
-      if (document.visibilityState === "visible") void tickOnce();
+      if (document.visibilityState === "visible") void pollOnce();
     }
     document.addEventListener("visibilitychange", onVisibility);
 
@@ -539,25 +621,14 @@ export function AdminNovosLeadsWizard() {
       window.clearInterval(t);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [onNovosLeadsPage, runIdToPoll, execOverlayOpen, backgroundRunNotice, pollRunProgress, refreshRunProgress]);
-
-  const selectedRunStatus = useMemo(() => {
-    if (activeRunId == null) return null;
-    if (activeRun?.id === activeRunId) return activeRun.status;
-    return runs.find((r) => r.id === activeRunId)?.status ?? null;
-  }, [activeRunId, activeRun?.id, activeRun?.status, runs]);
-
-  useEffect(() => {
-    if (!onNovosLeadsPage || activeRunId == null) return;
-    if (selectedRunStatus && RUN_POLL_STATUSES.has(selectedRunStatus)) return;
-    if (
-      selectedRunStatus &&
-      !["completed", "partial", "failed", "cancelled"].includes(selectedRunStatus)
-    ) {
-      return;
-    }
-    void fetchRunDetail(activeRunId, resultTab);
-  }, [onNovosLeadsPage, activeRunId, resultTab, fetchRunDetail, selectedRunStatus]);
+  }, [
+    onNovosLeadsPage,
+    pollTarget,
+    execOverlayOpen,
+    backgroundRunNotice,
+    pollRunProgress,
+    refreshRunProgress
+  ]);
 
   function leadGenSelectionPayload() {
     return {
@@ -822,6 +893,7 @@ export function AdminNovosLeadsWizard() {
       setActiveRunId(null);
       setActiveRun(null);
     }
+    if (summaryRunId === r.id) setSummaryRunId(null);
     void loadMeta();
   }
 
@@ -833,6 +905,56 @@ export function AdminNovosLeadsWizard() {
   return (
     <div>
       {error ? <div className="alert alert-error">{error}</div> : null}
+
+      {summaryRun ? (
+        <div className="lead-gen-run-summary-banner" role="region" aria-label="Resumo da execução">
+          <div className="lead-gen-run-summary-banner-main">
+            <p className="lead-gen-run-summary-banner-title">
+              <strong>{summaryRun.uf}</strong> · meta {summaryRun.max_stations} novo
+              {summaryRun.max_stations === 1 ? "" : "s"} ·{" "}
+              <span className={`lead-gen-status lead-gen-status--${summaryRun.status}`}>
+                {RUN_STATUS_LABEL[summaryRun.status] ?? summaryRun.status}
+              </span>
+              <span className="muted">
+                {" "}
+                ·{" "}
+                {new Date(summaryRun.created_at).toLocaleString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit"
+                })}
+              </span>
+            </p>
+            <p className="lead-gen-run-summary-banner-stats muted">
+              {formatRunResults(summaryRun.counts_json ?? {})}
+              {" · "}
+              ANP {summaryRun.counts_json?.anp_found ?? 0} · processados {summaryRun.counts_json?.processed ?? 0} · novos{" "}
+              {summaryRun.counts_json?.created ?? 0}
+            </p>
+            {summaryRun.error_message ? (
+              <p className="lead-gen-run-summary-banner-error muted" title={summaryRun.error_message}>
+                {summaryRun.error_message.length > 160
+                  ? `${summaryRun.error_message.slice(0, 160)}…`
+                  : summaryRun.error_message}
+              </p>
+            ) : null}
+          </div>
+          <div className="lead-gen-run-summary-banner-actions">
+            <button type="button" className="btn btn-sm btn-primary" onClick={() => openRunVerMais(summaryRun.id)}>
+              Ver mais
+            </button>
+            <button
+              type="button"
+              className="btn btn-icon-sm lead-gen-run-summary-close"
+              aria-label="Fechar resumo"
+              onClick={() => setSummaryRunId(null)}
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {showBackgroundBanner && shownRun ? (
         <div className="lead-gen-bg-banner" role="status">
@@ -862,44 +984,46 @@ export function AdminNovosLeadsWizard() {
         </div>
       ) : null}
 
-      <LeadGenAnpPreviewModal
-        open={anpPreviewOpen}
-        loading={anpPreviewLoading}
-        data={anpPreviewData}
-        error={anpPreviewError}
-        leadsRequested={leadsRequested}
-        onClose={() => setAnpPreviewOpen(false)}
-        onConfirmStart={() => void startRun()}
-        onAdjustMetaToEstimated={(estimated) => void openAnpPreviewModal(estimated)}
-        starting={starting}
-      />
-
-      {shownRun && execOverlayOpen ? (
-        <LeadGenExecutionOverlay
-          open
-          run={shownRun}
-          phaseLine={
-            tickBusy && runNeedsLeadGenDrain(shownRun) ? TICK_BUSY_PHASE_LINE : phaseLine
-          }
-          activity={activityFeed}
-          cancelling={cancelling}
-          onClose={closeExecOverlay}
-          onCancel={() => {
-            if (shownRun.id > 0) void cancelRun(shownRun.id);
-            else {
-              setExecOverlayOpen(false);
-              setActiveRun(null);
-              setStarting(false);
-            }
-          }}
-          onResume={shownRun.status === "paused" ? () => void resumeRun(shownRun.id) : undefined}
-          onRefresh={() => void manualRefreshRun(shownRun.id)}
-          onForceTick={() => forceTickRun(shownRun.id)}
-          refreshBusy={refreshBusy}
-          tickBusy={tickBusy}
-          lastRefreshedLabel={lastRefreshedLabel}
+      <LeadGenOverlayLayer>
+        <LeadGenAnpPreviewModal
+          open={anpPreviewOpen}
+          loading={anpPreviewLoading}
+          data={anpPreviewData}
+          error={anpPreviewError}
+          leadsRequested={leadsRequested}
+          onClose={() => setAnpPreviewOpen(false)}
+          onConfirmStart={() => void startRun()}
+          onAdjustMetaToEstimated={(estimated) => void openAnpPreviewModal(estimated)}
+          starting={starting}
         />
-      ) : null}
+
+        {shownRun && execOverlayOpen ? (
+          <LeadGenExecutionOverlay
+            open
+            run={shownRun}
+            phaseLine={
+              tickBusy && runNeedsLeadGenDrain(shownRun) ? TICK_BUSY_PHASE_LINE : phaseLine
+            }
+            activity={activityFeed}
+            cancelling={cancelling}
+            onClose={closeExecOverlay}
+            onCancel={() => {
+              if (shownRun.id > 0) void cancelRun(shownRun.id);
+              else {
+                setExecOverlayOpen(false);
+                setActiveRun(null);
+                setStarting(false);
+              }
+            }}
+            onResume={shownRun.status === "paused" ? () => void resumeRun(shownRun.id) : undefined}
+            onRefresh={() => void manualRefreshRun(shownRun.id)}
+            onForceTick={() => forceTickRun(shownRun.id)}
+            refreshBusy={refreshBusy}
+            tickBusy={tickBusy}
+            lastRefreshedLabel={lastRefreshedLabel}
+          />
+        ) : null}
+      </LeadGenOverlayLayer>
 
       <div className="panel">
         <h3 className="panel-title">Parâmetros</h3>
@@ -1060,7 +1184,7 @@ export function AdminNovosLeadsWizard() {
         </div>
       </div>
 
-      {shownRun ? (
+      {shownRun && shownRunActive ? (
         <div className="panel lead-gen-active-panel" style={{ marginTop: "1rem" }}>
           <div className="lead-gen-active-panel-head">
             <h3 className="panel-title">{shownRunActive ? "Execução em andamento" : "Detalhe da execução"}</h3>
@@ -1110,41 +1234,6 @@ export function AdminNovosLeadsWizard() {
               </button>
             </div>
           ) : null}
-
-          {["completed", "partial", "failed", "cancelled"].includes(shownRun.status) ? (
-            <div style={{ marginTop: "1rem" }}>
-              <h4>Resultados</h4>
-              <div className="filters-row" style={{ marginBottom: 8 }}>
-                {(["created", "existing", "ambiguous", "errors"] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    className={`btn ${resultTab === t ? "btn-primary" : ""}`}
-                    onClick={() => {
-                      setResultTab(t);
-                      void fetchRunDetail(shownRun.id, t);
-                    }}
-                  >
-                    {t === "created" ? "Novos" : t === "existing" ? "Já existentes" : t === "ambiguous" ? "Revisão" : "Erros"}
-                  </button>
-                ))}
-              </div>
-              <ul>
-                {resultItems.map((item) => (
-                  <li key={item.id}>
-                    CNPJ {item.cnpj} — {item.status}
-                    {item.client_id ? (
-                      <>
-                        {" "}
-                        <Link href={`/clientes/${item.client_id}`}>Abrir ficha</Link>
-                      </>
-                    ) : null}
-                    {item.error_message ? <span className="muted"> ({item.error_message})</span> : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
         </div>
       ) : null}
 
@@ -1176,19 +1265,17 @@ export function AdminNovosLeadsWizard() {
                   const active = ["queued", "running", "paused"].includes(r.status);
                   const bdrName = r.bdr_user_id ? bdrNameById.get(r.bdr_user_id) : null;
                   const productName = r.product_id ? productNameById.get(r.product_id) : null;
-                  const isSelected = activeRunId === r.id;
+                  const isSelected = summaryRunId === r.id;
                   return (
                     <tr key={r.id} className={isSelected ? "is-selected" : undefined}>
                       <td className="lead-gen-history-when">
-                        <button type="button" className="link-btn" onClick={() => setActiveRunId(r.id)}>
-                          {new Date(r.created_at).toLocaleString("pt-BR", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit"
-                          })}
-                        </button>
+                        {new Date(r.created_at).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        })}
                       </td>
                       <td className="lead-gen-history-params">
                         <span className="lead-gen-history-line">
@@ -1223,13 +1310,28 @@ export function AdminNovosLeadsWizard() {
                         ) : null}
                       </td>
                       <td className="lead-gen-history-result">
-                        {showRunResultColumn(r) ? (
-                          formatRunResults(r.counts_json ?? {})
-                        ) : active ? (
-                          <LeadGenRunProgressBar run={r} compact />
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
+                        <div className="lead-gen-history-result-row">
+                          <span>
+                            {showRunResultColumn(r) ? (
+                              formatRunResults(r.counts_json ?? {})
+                            ) : active ? (
+                              <LeadGenRunProgressBar run={r} compact />
+                            ) : (
+                              <span className="muted">—</span>
+                            )}
+                          </span>
+                          {showRunResultColumn(r) || active ? (
+                            <button
+                              type="button"
+                              className={`btn btn-icon-sm lead-gen-history-info${isSelected ? " is-active" : ""}`}
+                              title="Resumo da execução"
+                              aria-label="Resumo da execução"
+                              onClick={() => openRunSummary(r.id)}
+                            >
+                              <Info size={15} aria-hidden />
+                            </button>
+                          ) : null}
+                        </div>
                         {(r.counts_json?.items_total ?? 0) > 0 ? (
                           <span className="lead-gen-history-sub muted">{r.counts_json.items_total} itens ANP</span>
                         ) : null}
@@ -1244,20 +1346,6 @@ export function AdminNovosLeadsWizard() {
                         {active ? (
                           <span className="lead-gen-history-sub muted">
                             {computeRunProgressPct(r)}% · {runProgressDetail(r)}
-                          </span>
-                        ) : null}
-                        {r.error_message ? (
-                          <span
-                            className={`lead-gen-history-sub lead-gen-history-error${
-                              r.status === "partial" || r.status === "failed" ? " lead-gen-history-error--block" : ""
-                            }`}
-                            title={r.error_message}
-                          >
-                            {r.status === "partial" || r.status === "failed"
-                              ? r.error_message
-                              : r.error_message.length > 72
-                                ? `${r.error_message.slice(0, 72)}…`
-                                : r.error_message}
                           </span>
                         ) : null}
                       </td>
