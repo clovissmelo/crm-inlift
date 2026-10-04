@@ -104,7 +104,9 @@ export function DashboardView({
 
   const periodNote = periodFootnote(period);
 
-  const bdrLabel = bdrUserId ? (bdrs.find((b) => String(b.id) === bdrUserId)?.name ?? "BDR") : "Todas";
+  const bdrLabel = bdrUserId
+    ? (bdrs.find((b) => String(b.id) === bdrUserId)?.name ?? "BDR")
+    : "Todos os BDRs";
   const productLabel = productId ? (products.find((p) => String(p.id) === productId)?.name ?? "Produto") : "Todos";
 
   function shareWhatsAppReport() {
@@ -153,7 +155,6 @@ export function DashboardView({
           ))}
         </FilterSelect>
         <FilterBarButton
-          accent
           className="dash-wa-share-btn"
           title="Enviar fechamento comercial no WhatsApp"
           aria-label="Enviar fechamento comercial no WhatsApp"
