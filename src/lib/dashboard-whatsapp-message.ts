@@ -1,4 +1,5 @@
 import type { DashboardWhatsAppReport } from "@/lib/dashboard-stats";
+import { openWhatsAppShare, prepareWhatsAppMessage, WA, waBold, waBullet, waHeading, waLabel } from "@/lib/whatsapp-format";
 
 export type DashboardWhatsAppFilterLabels = {
   bdr: string;
@@ -13,18 +14,6 @@ function fmt(n: number): string {
 function pct(num: number, den: number): string {
   if (den <= 0) return "0,0%";
   return `${((100 * num) / den).toFixed(1).replace(".", ",")}%`;
-}
-
-function bold(value: string): string {
-  const safe = value.replace(/\*/g, "").trim();
-  return safe ? `*${safe}*` : "—";
-}
-
-/** WhatsApp ignora formatação se a mensagem termina em * ou _ */
-function finalizeWhatsAppText(body: string): string {
-  const trimmed = body.trimEnd();
-  if (trimmed.endsWith("*") || trimmed.endsWith("_")) return `${trimmed} \u200B`;
-  return trimmed;
 }
 
 export function buildDashboardWhatsAppMessage(
@@ -48,49 +37,48 @@ export function buildDashboardWhatsAppMessage(
   } = report;
 
   const lines: string[] = [
-    bold("📊 Fechamento Comercial"),
-    `👤 BDR: ${bold(labels.bdr)}`,
-    `📅 Período: ${bold(labels.period)}`,
-    `📦 Produto: ${bold(labels.product)}`,
+    waHeading(WA.chart, "Fechamento Comercial"),
+    waLabel(WA.person, "BDR", labels.bdr),
+    waLabel(WA.calendar, "Período", labels.period),
+    waLabel(WA.package, "Produto", labels.product),
     "",
-    bold("📞 Prospecção"),
-    `• Leads trabalhados: ${bold(fmt(leads_worked))}`,
-    `• Ligações realizadas: ${bold(fmt(calls_made))}`,
-    `• Ligações que chamaram: ${bold(fmt(calls_rang))}`,
-    `• Ligações atendidas: ${bold(fmt(calls_answered))}`,
-    `• Contatos com decisores: ${bold(fmt(decision_maker_contacts))}`,
+    waHeading(WA.phone, "Prospecção"),
+    waBullet("Leads trabalhados", fmt(leads_worked)),
+    waBullet("Ligações realizadas", fmt(calls_made)),
+    waBullet("Ligações que chamaram", fmt(calls_rang)),
+    waBullet("Ligações atendidas", fmt(calls_answered)),
+    waBullet("Contatos com decisores", fmt(decision_maker_contacts)),
     "",
-    bold("📞 Resultado das ligações"),
-    `• Erro na ligação: ${bold(fmt(call_error))}`,
-    `• Chamou e não atendeu: ${bold(fmt(call_no_answer))}`,
-    `• Atendidas: ${bold(fmt(calls_answered))}`,
+    waHeading(WA.phone, "Resultado das ligações"),
+    waBullet("Erro na ligação", fmt(call_error)),
+    waBullet("Chamou e não atendeu", fmt(call_no_answer)),
+    waBullet("Atendidas", fmt(calls_answered)),
     "",
-    bold("🎯 Resultado dos contatos"),
-    `• Sem interesse: ${bold(fmt(no_interest))}`,
-    `• Bloqueio por intermediário: ${bold(fmt(gatekeeper_block))}`,
-    `• Retorno solicitado: ${bold(fmt(return_requested))}`,
-    `• Reuniões agendadas: ${bold(fmt(meetings_scheduled))}`,
+    waHeading(WA.target, "Resultado dos contatos"),
+    waBullet("Sem interesse", fmt(no_interest)),
+    waBullet("Bloqueio por intermediário", fmt(gatekeeper_block)),
+    waBullet("Retorno solicitado", fmt(return_requested)),
+    waBullet("Reuniões agendadas", fmt(meetings_scheduled)),
     "",
-    bold("📈 Conversão"),
-    `• Ligações que chamaram: ${bold(pct(calls_rang, calls_made))}`,
-    `• Ligações atendidas: ${bold(pct(calls_answered, calls_rang))}`,
-    `• Acesso ao decisor: ${bold(pct(decision_maker_contacts, calls_answered))}`,
-    `• Leads → Reunião: ${bold(pct(meetings_scheduled, leads_worked))}`,
+    waHeading(WA.trending, "Conversão"),
+    waBullet("Ligações que chamaram", pct(calls_rang, calls_made)),
+    waBullet("Ligações atendidas", pct(calls_answered, calls_rang)),
+    waBullet("Acesso ao decisor", pct(decision_maker_contacts, calls_answered)),
+    waBullet("Leads → Reunião", pct(meetings_scheduled, leads_worked)),
     ""
   ];
 
   if (period_key === "today") {
-    lines.push(`🏆 ${bold(`${fmt(meetings_today)} reuniões agendadas hoje`)}`);
+    lines.push(`${WA.trophy} ${waBold(`${fmt(meetings_today)} reuniões agendadas hoje`)}`);
   } else if (meetings_scheduled > 0) {
-    lines.push(`🏆 ${bold(`${fmt(meetings_scheduled)} reuniões agendadas no período`)}`);
+    lines.push(`${WA.trophy} ${waBold(`${fmt(meetings_scheduled)} reuniões agendadas no período`)}`);
   } else {
-    lines.push(`🏆 ${bold("Nenhuma reunião agendada no período")}`);
+    lines.push(`${WA.trophy} ${waBold("Nenhuma reunião agendada no período")}`);
   }
 
-  return finalizeWhatsAppText(lines.join("\n"));
+  return prepareWhatsAppMessage(lines.join("\n"));
 }
 
 export function openDashboardWhatsAppShare(text: string) {
-  const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-  window.open(url, "_blank", "noopener,noreferrer");
+  openWhatsAppShare(text);
 }

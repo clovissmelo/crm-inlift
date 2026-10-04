@@ -1,3 +1,5 @@
+import { openWhatsAppShare, prepareWhatsAppMessage, WA, waHeading } from "@/lib/whatsapp-format";
+
 export type MeetingWhatsAppDetail = {
   meeting: Record<string, unknown>;
   internal_participants: Array<{ id: number; name: string }>;
@@ -71,21 +73,21 @@ export function buildMeetingWhatsAppInvite(detail: MeetingWhatsAppDetail, client
     .filter(Boolean);
 
   const lines: string[] = [
-    "🚨 *Nova Reunião Agendada*",
-    `🏢 Empresa: ${company}`,
-    `📦 Produto: ${product}`,
+    waHeading(WA.alert, "Nova Reunião Agendada"),
+    `${WA.building} Empresa: ${company}`,
+    `${WA.package} Produto: ${product}`,
     "",
-    `👤 Contato: ${contactName}`,
-    `📱 Telefone: ${contactPhone}`,
-    `📧 E-mail: ${contactEmail}`,
+    `${WA.person} Contato: ${contactName}`,
+    `${WA.mobile} Telefone: ${contactPhone}`,
+    `${WA.email} E-mail: ${contactEmail}`,
     "",
-    `📅 Data: ${dateLabel}`,
-    `🕒 Horário: ${timeLabel}`,
-    `💻 Formato: ${formatLabel}`,
-    `🤝 BDR: ${bdrLabel}`,
-    `🔗 Link: ${linkLine}`,
+    `${WA.calendar} Data: ${dateLabel}`,
+    `${WA.clock} Horário: ${timeLabel}`,
+    `${WA.laptop} Formato: ${formatLabel}`,
+    `${WA.handshake} BDR: ${bdrLabel}`,
+    `${WA.link} Link: ${linkLine}`,
     "",
-    "👥 *Participantes*"
+    waHeading(WA.people, "Participantes")
   ];
 
   if (participantNames.length === 0) {
@@ -96,10 +98,9 @@ export function buildMeetingWhatsAppInvite(detail: MeetingWhatsAppDetail, client
     }
   }
 
-  return lines.join("\n");
+  return prepareWhatsAppMessage(lines.join("\n"));
 }
 
 export function openMeetingWhatsAppShare(text: string) {
-  const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-  window.open(url, "_blank", "noopener,noreferrer");
+  openWhatsAppShare(text);
 }
