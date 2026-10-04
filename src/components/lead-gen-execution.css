@@ -54,12 +54,25 @@
   font-size: 0.8125rem;
 }
 
-/* Portal só dentro de .main-column-body — não intercepta cliques na sidebar. */
+/*
+ * Fixo na coluna principal (viewport), não no scroll da página —
+ * evita modal “lá embaixo” em telas longas (ANP / execução).
+ * Sidebar fica fora (left) e acima (z-index 500 no menu).
+ */
 .app-main-overlay-root {
-  position: absolute;
-  inset: 0;
+  position: fixed;
   z-index: 200;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: var(--app-sidebar-width, 260px);
   pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .app-main-overlay-root {
+    left: 0;
+  }
 }
 
 .app-main-overlay-root:empty {

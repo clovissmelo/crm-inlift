@@ -308,7 +308,7 @@ export async function listRunActivityFeed(runId: number, limit = 40) {
       SELECT id, cnpj, status, error_message, station_json, anp_raw, created_at, updated_at
       FROM lead_generation_items
       WHERE run_id = @runId AND status NOT IN ('pending', 'processing')
-      ORDER BY updated_at DESC, id DESC
+      ORDER BY id DESC
       LIMIT @limit
     `,
     { runId, limit: cap }

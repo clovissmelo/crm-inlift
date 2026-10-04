@@ -14,6 +14,13 @@ const FETCH_INIT: RequestInit = {
   }
 };
 
+let abortActivePageSync: (() => void) | null = null;
+
+/** Cancela fetch de sync em andamento (ex.: ao clicar no menu lateral). */
+export function abortNovosLeadsPageSync() {
+  abortActivePageSync?.();
+}
+
 export type NovosLeadsPageSyncPayload = {
   server_time: string;
   runs: unknown[];
@@ -59,6 +66,9 @@ export function useNovosLeadsPageSync({
 
     let cancelled = false;
     let timer: number | undefined;
+    let syncController: AbortController | null = null;
+
+    abortActivePageSync = () => syncController?.abort();
 
     async function runSync() {
       if (cancelled) return;
@@ -66,22 +76,30 @@ export function useNovosLeadsPageSync({
         schedule();
         return;
       }
+      syncController?.abort();
+      const controller = new AbortController();
+      syncController = controller;
       try {
         const params = new URLSearchParams();
         if (watchRunId != null && watchRunId > 0) params.set("watch", String(watchRunId));
         if (withFeed) params.set("feed", "1");
         if (advanceMotor) params.set("motor", "1");
         params.set("t", String(Date.now()));
-        const res = await fetch(`/api/admin/lead-generation/page-sync?${params}`, FETCH_INIT);
+        const res = await fetch(`/api/admin/lead-generation/page-sync?${params}`, {
+          ...FETCH_INIT,
+          signal: controller.signal
+        });
         if (!res.ok) {
           onErrorRef.current?.();
           return;
         }
         const data = (await res.json()) as NovosLeadsPageSyncPayload;
         if (!cancelled) onPayloadRef.current(data);
-      } catch {
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
         onErrorRef.current?.();
       } finally {
+        if (syncController === controller) syncController = null;
         schedule();
       }
     }
@@ -100,6 +118,8 @@ export function useNovosLeadsPageSync({
 
     return () => {
       cancelled = true;
+      abortActivePageSync = null;
+      syncController?.abort();
       if (timer != null) window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };

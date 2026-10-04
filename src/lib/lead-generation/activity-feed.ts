@@ -42,6 +42,16 @@ export type LeadGenActivityEntry = {
   at: string;
 };
 
+/** Mais recente primeiro (inserções novas no topo do feed). */
+export function sortActivityFeedDesc<T extends { id: number; at: string }>(lines: T[]): T[] {
+  return [...lines].sort((a, b) => {
+    const tb = Date.parse(b.at);
+    const ta = Date.parse(a.at);
+    if (Number.isFinite(tb) && Number.isFinite(ta) && tb !== ta) return tb - ta;
+    return b.id - a.id;
+  });
+}
+
 export function formatLeadGenActivityEntry(row: Record<string, unknown>): LeadGenActivityEntry {
   const station = parseStationField(row.station_json) ?? parseStationField(row.anp_raw);
   const cnpj = String(row.cnpj ?? "").replace(/^gplace:/, "");

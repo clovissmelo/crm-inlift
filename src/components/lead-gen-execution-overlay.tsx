@@ -2,7 +2,9 @@
 
 import "./lead-gen-execution.css";
 import { X } from "lucide-react";
+import { useEffect, useMemo, useRef } from "react";
 import { LeadGenExecutionTechPanel } from "@/components/lead-gen-execution-tech-panel";
+import { sortActivityFeedDesc } from "@/lib/lead-generation/activity-feed";
 import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
 
 export type LeadGenActivityLine = {
@@ -101,6 +103,17 @@ export function LeadGenExecutionOverlay({
   tickBusy,
   lastRefreshedLabel
 }: Props) {
+  const activitySorted = useMemo(() => sortActivityFeedDesc(activity), [activity]);
+  const feedScrollRef = useRef<HTMLDivElement>(null);
+  const lastTopActivityIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const topId = activitySorted[0]?.id ?? null;
+    if (topId == null || topId === lastTopActivityIdRef.current) return;
+    lastTopActivityIdRef.current = topId;
+    feedScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [activitySorted]);
+
   if (!open) return null;
 
   const active = ["queued", "running", "paused"].includes(run.status);
@@ -152,14 +165,14 @@ export function LeadGenExecutionOverlay({
           />
         ) : null}
 
-        <div className="lead-gen-overlay-feed">
+        <div className="lead-gen-overlay-feed" ref={feedScrollRef}>
           <h3 className="lead-gen-overlay-feed-title">Atividade recente</h3>
           {phaseLine ? <p className="lead-gen-overlay-phase-line">{phaseLine}</p> : null}
-          {activity.length === 0 ? (
+          {activitySorted.length === 0 ? (
             phaseLine ? null : <p className="muted">Aguardando primeiros resultados…</p>
           ) : (
             <ul className="lead-gen-overlay-feed-list">
-              {activity.map((line) => (
+              {activitySorted.map((line) => (
                 <li key={line.id} className={`lead-gen-feed-item lead-gen-feed-item--${line.status}`}>
                   <span className="lead-gen-feed-time">{activityTime(line.at)}</span>
                   <span className="lead-gen-feed-label">{line.label}</span>

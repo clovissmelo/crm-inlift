@@ -1,3 +1,5 @@
+import { abortNovosLeadsPageSync } from "@/hooks/use-novos-leads-page-sync";
+
 type LeadGenOverlayCloser = () => void;
 
 let closer: LeadGenOverlayCloser | null = null;
@@ -9,4 +11,5 @@ export function setLeadGenOverlayCloser(fn: LeadGenOverlayCloser | null) {
 /** Fecha modais de geração de leads antes de trocar de rota (menu lateral). */
 export function closeLeadGenOverlays() {
   closer?.();
+  abortNovosLeadsPageSync();
 }

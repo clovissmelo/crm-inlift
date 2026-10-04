@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
@@ -110,6 +109,7 @@ function isAdminHubPath(pathname: string) {
   );
 }
 
+/** Links nativos: evita transição Next pendente enquanto page-sync (motor) está em flight. */
 function handleSidebarNavClick(e: MouseEvent<HTMLAnchorElement>, active: boolean) {
   closeLeadGenOverlays();
   if (active) e.preventDefault();
@@ -119,15 +119,15 @@ function NavLinkItem({ item, pathname }: { item: NavItem; pathname: string }) {
   const Icon = item.icon;
   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
   return (
-    <Link
+    <a
       href={item.href}
-      prefetch={false}
       className={clsx("nav-link", active && "active")}
+      aria-current={active ? "page" : undefined}
       onClick={(e) => handleSidebarNavClick(e, active)}
     >
       <Icon size={18} aria-hidden />
       <span className="nav-link-label">{item.label}</span>
-    </Link>
+    </a>
   );
 }
 
@@ -173,7 +173,7 @@ export function AppShell({
       <aside className={clsx("sidebar", mobileNavOpen && "is-nav-open")}>
         <div className="sidebar-header">
           <div className="brand">
-            <Link
+            <a
               href="/dashboard"
               className="sidebar-brand-link"
               aria-label="CRM Inlift — início"
@@ -187,7 +187,7 @@ export function AppShell({
                 className="sidebar-logo"
                 priority
               />
-            </Link>
+            </a>
           </div>
           <button
             type="button"
@@ -207,15 +207,16 @@ export function AppShell({
               {section.items.map((item) => {
                 if (item.menuKey === "admin_hub") {
                   return (
-                    <Link
+                    <a
                       key={item.href}
                       href={item.href}
                       className={clsx("nav-link", isAdminHubPath(pathname) && "active")}
+                      aria-current={isAdminHubPath(pathname) ? "page" : undefined}
                       onClick={(e) => handleSidebarNavClick(e, isAdminHubPath(pathname))}
                     >
                       <Shield size={18} aria-hidden />
                       <span className="nav-link-label">{item.label}</span>
-                    </Link>
+                    </a>
                   );
                 }
                 return <NavLinkItem key={item.href} item={item} pathname={pathname} />;
