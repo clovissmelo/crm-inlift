@@ -39,6 +39,8 @@ export type CallScriptLogEntry = {
   contact_layer?: "decisor" | "outra" | "ninguem";
   /** Reunião agendada na etapa do roteiro (ISO UTC). */
   scheduled_meeting_at?: string | null;
+  /** Contato criado/atualizado no cliente ao salvar esta anotação. */
+  created_contact_id?: number;
 };
 
 /** Última escolha do roteiro que define contato na ligação (Decisor / Outra / Ninguém). */

@@ -114,10 +114,12 @@ export async function appendCallScriptLog(callId: number, userId: number, entry:
     throw new Error("O roteiro só pode ser atualizado enquanto a ligação estiver ativa.");
   }
   const prev = normalizeCallScriptLog(row.script_flow_log);
+  const { enrichScriptLogEntryWithContactCreate } = await import("@/lib/script-flow-capture-contact");
+  const enriched = await enrichScriptLogEntryWithContactCreate(callId, entry, prev);
   const next: CallScriptLogEntry[] = [
     ...prev,
     {
-      ...entry,
+      ...enriched,
       at: nowIso()
     }
   ];

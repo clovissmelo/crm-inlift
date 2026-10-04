@@ -3,7 +3,8 @@ export const CONTACT_ORIGIN = {
   manual: "Manual",
   googlePlaces: "Google Places",
   receitaFederal: "Receita Federal",
-  importSpreadsheet: "Importação planilha"
+  importSpreadsheet: "Importação planilha",
+  callScript: "Roteiro de ligação"
 } as const;
 
 export type ContactOriginLabel = (typeof CONTACT_ORIGIN)[keyof typeof CONTACT_ORIGIN];

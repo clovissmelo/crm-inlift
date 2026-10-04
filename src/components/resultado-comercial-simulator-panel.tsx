@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Api4comCallResultForm,
   type CallRegistrationSimulation,
@@ -47,12 +47,15 @@ export type SimulatorDraftScript = {
 export function ResultadoComercialSimulatorPanel({
   open,
   onClose,
-  draftScript = null
+  draftScript = null,
+  embedded = false
 }: {
   open: boolean;
   onClose: () => void;
   /** Roteiro ainda não salvo (ex.: editor em Abordagens). */
   draftScript?: SimulatorDraftScript | null;
+  /** Coluna fixa ao lado do editor (sem overlay sobre o modal). */
+  embedded?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [phase, setPhase] = useState<Phase>("setup");
@@ -213,14 +216,18 @@ export function ResultadoComercialSimulatorPanel({
 
   if (!open) return null;
 
+  const wrapEmbedded = (node: ReactNode) =>
+    embedded ? <div className="resultado-simulator-embedded-root">{node}</div> : node;
+
   if (phase === "script" && mockScriptCall) {
-    return (
+    return wrapEmbedded(
       <CallScriptGuidePanel
         key={`sim-script-${runId}`}
         call={mockScriptCall}
         scriptBody={scriptBody}
         scriptReady={scriptReady}
         collapsed={collapsed}
+        embedded={embedded}
         onCollapse={() => setCollapsed(true)}
         onExpand={() => setCollapsed(false)}
         onLogUpdated={setScriptLog}
@@ -231,12 +238,13 @@ export function ResultadoComercialSimulatorPanel({
   }
 
   if (phase === "history" && historyPreview) {
-    return (
+    return wrapEmbedded(
       <CallSidePanelShell
         title="HISTÓRICO DO CLIENTE"
         meta="Simulação — como ficaria após salvar o atendimento"
         ariaLabel="Prévia do histórico do cliente"
         collapsed={collapsed}
+        embedded={embedded}
         collapsedLabel="Simulador"
         onCollapse={() => setCollapsed(true)}
         onExpand={() => setCollapsed(false)}
@@ -279,12 +287,13 @@ export function ResultadoComercialSimulatorPanel({
   }
 
   if (phase === "register" && simulationConfig) {
-    return (
+    return wrapEmbedded(
       <CallSidePanelShell
         title="COMPLEMENTO DE REGISTRO"
         meta="Simulador — registro comercial (última etapa)"
         ariaLabel="Simulador de complemento de registro"
         collapsed={collapsed}
+        embedded={embedded}
         collapsedLabel="Simulador"
         onCollapse={() => setCollapsed(true)}
         onExpand={() => setCollapsed(false)}
@@ -308,12 +317,13 @@ export function ResultadoComercialSimulatorPanel({
     );
   }
 
-  return (
+  return wrapEmbedded(
     <CallSidePanelShell
       title="Simulador de ligação"
       meta="Teste abordagem, resultados comerciais e regras — nada é gravado"
       ariaLabel="Simulador de ligação e registro"
       collapsed={collapsed}
+      embedded={embedded}
       collapsedLabel="Simulador"
       onCollapse={() => setCollapsed(true)}
       onExpand={() => setCollapsed(false)}

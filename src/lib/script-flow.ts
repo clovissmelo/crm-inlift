@@ -35,12 +35,18 @@ export type ScriptFlowCaptureField = {
   input?: "text" | "tel" | "textarea";
 };
 
+export type ScriptFlowCreateContactMode = "skip" | "create";
+
 export type ScriptFlowCaptureStep = {
   type: "capture";
   title: string;
   content: string;
   fields: ScriptFlowCaptureField[];
   next: string | null;
+  /** Ao salvar anotação na ligação, cadastra contato no cliente. */
+  create_contact?: ScriptFlowCreateContactMode;
+  /** Tag de perfil (ex.: PERFIL DECISOR) quando create_contact = create. */
+  contact_profile_tag?: string;
 };
 
 export type ScriptFlowStep = ScriptFlowLinearStep | ScriptFlowBranchStep | ScriptFlowCaptureStep;
@@ -60,6 +66,8 @@ export type ScriptFlowStepDraft = {
   question?: string;
   choices?: ScriptFlowBranchChoice[];
   fields?: ScriptFlowCaptureField[];
+  create_contact?: ScriptFlowCreateContactMode;
+  contact_profile_tag?: string;
 };
 
 export const DEFAULT_CAPTURE_FIELDS: ScriptFlowCaptureField[] = [
@@ -160,7 +168,9 @@ export function flowToDrafts(flow: ScriptFlow): ScriptFlowStepDraft[] {
         title: step.title,
         content: step.content,
         next: step.next,
-        fields: step.fields.map((f) => ({ ...f }))
+        fields: step.fields.map((f) => ({ ...f })),
+        ...(step.create_contact ? { create_contact: step.create_contact } : {}),
+        ...(step.contact_profile_tag?.trim() ? { contact_profile_tag: step.contact_profile_tag.trim() } : {})
       };
     }
     return {
@@ -229,12 +239,19 @@ export function draftsToFlow(drafts: ScriptFlowStepDraft[]): ScriptFlow {
           placeholder: f.placeholder?.trim() || undefined,
           input: f.input
         }));
+      const createContact = d.create_contact === "create";
       steps[id] = {
         type: "capture",
         title: d.title.trim() || "Etapa",
         content: d.content,
         fields: fields.length > 0 ? fields : [...DEFAULT_CAPTURE_FIELDS],
-        next
+        next,
+        ...(createContact
+          ? {
+              create_contact: "create" as const,
+              contact_profile_tag: (d.contact_profile_tag?.trim() || "PERFIL DECISOR").slice(0, 80)
+            }
+          : {})
       };
     } else {
       let next = d.next ?? null;

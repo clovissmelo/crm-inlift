@@ -17,6 +17,7 @@ import {
   type ScriptFlow,
   type ScriptFlowStep
 } from "@/lib/script-flow";
+import { captureStepContactTag, captureStepCreatesContact } from "@/lib/script-flow-capture-contact";
 import { spLocalDateTimeToIso } from "@/lib/datetime";
 import { CallDialContextBanner } from "@/components/call-dial-context-banner";
 import "./call-script-guide.css";
@@ -47,6 +48,7 @@ type Props = {
   onScriptFlowComplete?: () => void;
   /** Simulador: encerra o painel (ex.: ao lado de Reiniciar etapas). */
   onCloseSimulator?: () => void;
+  embedded?: boolean;
 };
 
 export function callScriptStatusLabel(status: string) {
@@ -73,7 +75,8 @@ export function CallScriptGuidePanel({
   onExpand,
   onLogUpdated,
   onScriptFlowComplete,
-  onCloseSimulator
+  onCloseSimulator,
+  embedded = false
 }: Props) {
   const handoffSentRef = useRef(false);
   const [handoffPending, setHandoffPending] = useState(false);
@@ -86,6 +89,7 @@ export function CallScriptGuidePanel({
   const [meetingDate, setMeetingDate] = useState("");
   const [meetingTime, setMeetingTime] = useState("");
   const [meetingInvalid, setMeetingInvalid] = useState(false);
+  const [captureContactNotice, setCaptureContactNotice] = useState<string | null>(null);
 
   useEffect(() => {
     handoffSentRef.current = false;
@@ -183,10 +187,16 @@ export function CallScriptGuidePanel({
       body: JSON.stringify(payload)
     });
     if (!res.ok) return;
-    const data = (await res.json()) as { log?: CallScriptLogEntry[] };
+    const data = (await res.json()) as {
+      log?: CallScriptLogEntry[];
+      contact_created?: { id: number; step_id: string };
+    };
     if (data.log) {
       setLogCount(data.log.length);
       onLogUpdated?.(data.log);
+    }
+    if (data.contact_created?.id) {
+      setCaptureContactNotice(`Contato #${data.contact_created.id} salvo na ficha do cliente.`);
     }
   }
 
@@ -196,7 +206,7 @@ export function CallScriptGuidePanel({
 
   if (collapsed) {
     return (
-      <div className="call-script-collapsed">
+      <div className={embedded ? "call-script-collapsed call-script-collapsed--embedded" : "call-script-collapsed"}>
         <button type="button" className="btn btn-primary" onClick={onExpand} title="Abrir script da ligação">
           <PanelRightOpen size={18} aria-hidden />
           Script da ligação
@@ -318,8 +328,11 @@ export function CallScriptGuidePanel({
 
   return (
     <>
-      <div className="call-script-backdrop" aria-hidden />
-      <aside className="call-script-panel" aria-label="Script da ligação">
+      {embedded ? null : <div className="call-script-backdrop" aria-hidden />}
+      <aside
+        className={embedded ? "call-script-panel call-script-panel--embedded" : "call-script-panel"}
+        aria-label="Script da ligação"
+      >
         <header className="call-script-panel-head">
           <div>
             <h2>{callScriptStatusLabel(call.status)}</h2>
@@ -423,7 +436,20 @@ export function CallScriptGuidePanel({
                   </div>
                   <p className="muted call-script-capture-hint">
                     Ao avançar, o que você preencher fica salvo nesta ligação e nas observações da abordagem.
+                    {captureStepCreatesContact(step) ? (
+                      <>
+                        {" "}
+                        Será criado um contato no cliente
+                        {captureStepContactTag(step) ? ` com a tag “${captureStepContactTag(step)}”` : ""}.
+                      </>
+                    ) : null}
+                    {isSimulation && captureStepCreatesContact(step) ? " (simulação — não grava contato.)" : null}
                   </p>
+                  {captureContactNotice ? (
+                    <p className="call-script-capture-hint" style={{ color: "var(--success, #86efac)" }}>
+                      {captureContactNotice}
+                    </p>
+                  ) : null}
                   <div className="call-script-nav-row">
                     <button type="button" className="btn call-script-btn-back" disabled={!canGoBack} onClick={goBack}>
                       <ChevronLeft size={18} aria-hidden />

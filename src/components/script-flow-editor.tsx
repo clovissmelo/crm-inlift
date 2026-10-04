@@ -342,6 +342,51 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                 >
                   + Campo
                 </button>
+                <div className="filters-row" style={{ marginTop: 12 }}>
+                  <div className="field" style={{ flex: 1, minWidth: "12rem" }}>
+                    <label className="label" htmlFor="script-capture-create-contact">
+                      Contato no cliente
+                    </label>
+                    <select
+                      id="script-capture-create-contact"
+                      className="select"
+                      value={selected.create_contact === "create" ? "create" : "skip"}
+                      onChange={(e) => {
+                        const create = e.target.value === "create";
+                        updateSelected({
+                          create_contact: create ? "create" : "skip",
+                          contact_profile_tag: create
+                            ? selected.contact_profile_tag?.trim() || "PERFIL DECISOR"
+                            : undefined
+                        });
+                      }}
+                    >
+                      <option value="skip">Não criar (pular)</option>
+                      <option value="create">Criar contato ao salvar anotação</option>
+                    </select>
+                  </div>
+                  {selected.create_contact === "create" ? (
+                    <div className="field" style={{ flex: 1, minWidth: "12rem" }}>
+                      <label className="label" htmlFor="script-capture-contact-tag">
+                        Tag de perfil
+                      </label>
+                      <input
+                        id="script-capture-contact-tag"
+                        className="input"
+                        value={selected.contact_profile_tag ?? "PERFIL DECISOR"}
+                        placeholder="PERFIL DECISOR"
+                        maxLength={80}
+                        onChange={(e) => updateSelected({ contact_profile_tag: e.target.value })}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+                {selected.create_contact === "create" ? (
+                  <p className="muted script-flow-field-hint">
+                    Usa os campos com vínculo <strong>Nome</strong> e telefone (tipo Telefone ou chave telefone). Origem
+                    &quot;Roteiro de ligação&quot; na ficha do cliente.
+                  </p>
+                ) : null}
               </>
             ) : null}
             {selected.type === "linear" || selected.type === "capture" ? (

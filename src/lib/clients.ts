@@ -2,6 +2,7 @@ import { all, get, nowIso, run } from "@/lib/db";
 import { normalizeCnpj } from "@/lib/format";
 import { parseLeadQualification } from "@/lib/lead-qualification";
 import type { ContactVerification } from "@/lib/types";
+import { parseContactProfileTags } from "@/lib/script-flow-capture-contact";
 
 const CONTACT_VERIFICATION: ContactVerification[] = [
   "unverified",
@@ -54,7 +55,8 @@ export function serializeContactForDetailPage(row: Record<string, unknown>) {
     notes: (row.notes as string | null) ?? null,
     verification_status,
     is_primary_phone: Boolean(row.is_primary_phone),
-    origin: (row.origin as string | null) ?? null
+    origin: (row.origin as string | null) ?? null,
+    profile_tags: parseContactProfileTags(row.profile_tags)
   };
 }
 

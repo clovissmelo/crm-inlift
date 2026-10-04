@@ -30,13 +30,18 @@ export async function POST(request: Request, { params }: Params) {
   }
   const data = parsed.data;
   const origin = data.origin?.trim() || CONTACT_ORIGIN.manual;
+  const profileTags = JSON.stringify(
+    (data.profile_tags ?? []).map((t) => t.trim()).filter(Boolean)
+  );
   const result = await run(
     `
       INSERT INTO contacts (
-        client_id, name, job_title, phone, whatsapp, email, notes, verification_status, origin, created_at, updated_at
+        client_id, name, job_title, phone, whatsapp, email, notes, verification_status, origin, profile_tags,
+        created_at, updated_at
       )
       VALUES (
-        @clientId, @name, @jobTitle, @phone, @whatsapp, @email, @notes, @status, @origin, @createdAt, @updatedAt
+        @clientId, @name, @jobTitle, @phone, @whatsapp, @email, @notes, @status, @origin, @profileTags::jsonb,
+        @createdAt, @updatedAt
       )
     `,
     {
@@ -49,6 +54,7 @@ export async function POST(request: Request, { params }: Params) {
       notes: data.notes ?? null,
       status: data.verification_status,
       origin,
+      profileTags,
       createdAt: nowIso(),
       updatedAt: nowIso()
     }

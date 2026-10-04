@@ -650,6 +650,15 @@ table.data-table th {
   color: var(--success);
 }
 
+.badge-contact-profile-tag {
+  background: rgba(99, 102, 241, 0.18);
+  color: #c7d2fe;
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
 .badge-contact-primary {
   display: inline-flex;
   align-items: center;

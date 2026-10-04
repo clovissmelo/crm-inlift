@@ -14,7 +14,8 @@ const bodySchema = z.object({
     .array(z.object({ label: z.string(), value: z.string(), field_key: z.string().optional() }))
     .optional(),
   contact_layer: z.enum(["decisor", "outra", "ninguem"]).optional(),
-  scheduled_meeting_at: z.string().optional().nullable()
+  scheduled_meeting_at: z.string().optional().nullable(),
+  created_contact_id: z.number().int().positive().optional()
 });
 
 const logEntrySchema = z.object({
@@ -28,7 +29,8 @@ const logEntrySchema = z.object({
     .array(z.object({ label: z.string(), value: z.string(), field_key: z.string().optional() }))
     .optional(),
   contact_layer: z.enum(["decisor", "outra", "ninguem"]).optional(),
-  scheduled_meeting_at: z.string().optional().nullable()
+  scheduled_meeting_at: z.string().optional().nullable(),
+  created_contact_id: z.number().int().positive().optional()
 });
 
 const replaceBodySchema = z.object({
@@ -69,7 +71,12 @@ export async function POST(request: Request, { params }: Params) {
   }
   try {
     const log = await appendCallScriptLog(callId, user.id, parsed.data);
-    return Response.json({ log });
+    const last = log[log.length - 1];
+    const contactCreated =
+      last?.created_contact_id != null
+        ? { id: last.created_contact_id, step_id: last.step_id }
+        : undefined;
+    return Response.json({ log, contact_created: contactCreated });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Erro ao registrar roteiro" }, { status: 400 });
   }

@@ -23,6 +23,19 @@
   box-shadow: -8px 0 32px rgba(0, 0, 0, 0.35);
 }
 
+.call-script-panel--embedded {
+  position: relative;
+  top: auto;
+  right: auto;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: 100%;
+  z-index: auto;
+  box-shadow: none;
+  border-left: none;
+}
+
 .call-script-panel-head {
   flex-shrink: 0;
   padding: 1rem 1.25rem;
@@ -151,6 +164,13 @@
   right: 16px;
   bottom: 16px;
   z-index: 46;
+}
+
+.call-script-collapsed--embedded {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
 }
 
 .call-script-capture-fields {

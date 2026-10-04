@@ -16,6 +16,8 @@ type Props = {
   headerActions?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /** Dentro de coluna (ex.: teste ao lado do editor), sem overlay fixo. */
+  embedded?: boolean;
 };
 
 export function CallSidePanelShell({
@@ -28,11 +30,12 @@ export function CallSidePanelShell({
   onExpand,
   headerActions,
   children,
-  footer
+  footer,
+  embedded = false
 }: Props) {
   if (collapsed) {
     return (
-      <div className="call-script-collapsed">
+      <div className={embedded ? "call-script-collapsed call-script-collapsed--embedded" : "call-script-collapsed"}>
         <button type="button" className="btn btn-primary" onClick={onExpand} title={collapsedLabel}>
           <PanelRightOpen size={18} aria-hidden />
           {collapsedLabel}
@@ -43,8 +46,11 @@ export function CallSidePanelShell({
 
   return (
     <>
-      <div className="call-script-backdrop" aria-hidden />
-      <aside className="call-script-panel" aria-label={ariaLabel}>
+      {embedded ? null : <div className="call-script-backdrop" aria-hidden />}
+      <aside
+        className={embedded ? "call-script-panel call-script-panel--embedded" : "call-script-panel"}
+        aria-label={ariaLabel}
+      >
         <header className="call-script-panel-head">
           <div>
             <h2>{title}</h2>

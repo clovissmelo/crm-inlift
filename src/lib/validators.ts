@@ -228,7 +228,8 @@ export const contactSchema = z.object({
   email: z.string().trim().email().optional().nullable().or(z.literal("")),
   notes: z.string().trim().optional().nullable(),
   verification_status: z.enum(["unverified", "confirmed", "invalid_number", "wrong_contact"]),
-  origin: z.string().trim().min(1).optional().nullable()
+  origin: z.string().trim().min(1).optional().nullable(),
+  profile_tags: z.array(z.string().trim().min(1).max(80)).optional()
 });
 
 export const opportunityCreateSchema = z.object({

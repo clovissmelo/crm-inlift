@@ -36,6 +36,7 @@ export type ClientContact = {
   verification_status: ContactVerification;
   is_primary_phone?: boolean;
   origin?: string | null;
+  profile_tags?: string[];
 };
 
 function sortContactsForDisplay(list: ClientContact[]) {
@@ -1285,6 +1286,11 @@ function ContactReadOnly({
               Verificado
             </span>
           ) : null}
+          {(contact.profile_tags ?? []).map((tag) => (
+            <span key={tag} className="badge badge-contact-profile-tag client-contact-badge-gap" title="Tag de perfil">
+              {tag}
+            </span>
+          ))}
         </div>
         <div className="client-contact-readonly-meta">
           {hasText(contact.phone) ? (

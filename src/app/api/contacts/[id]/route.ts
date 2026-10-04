@@ -1,5 +1,6 @@
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { get, nowIso, run } from "@/lib/db";
+import { parseContactProfileTags } from "@/lib/script-flow-capture-contact";
 import { contactSchema } from "@/lib/validators";
 import { syncClientPhonesFromContacts } from "@/lib/call-strategy/client-phones";
 import { tryReenterProspeccaoAfterNewPhone } from "@/lib/call-strategy/queue-eval";
@@ -17,11 +18,16 @@ export async function PATCH(request: Request, { params }: Params) {
   }
   const data = parsed.data;
   const contactId = Number(id);
-  const existing = await get<{ client_id: number; verification_status: string }>(
-    "SELECT client_id, verification_status FROM contacts WHERE id = @id",
+  const existing = await get<{ client_id: number; verification_status: string; profile_tags: unknown }>(
+    "SELECT client_id, verification_status, profile_tags FROM contacts WHERE id = @id",
     { id: contactId }
   );
   if (!existing) return Response.json({ error: "Não encontrado" }, { status: 404 });
+
+  const profileTags =
+    data.profile_tags != null
+      ? JSON.stringify(data.profile_tags.map((t) => t.trim()).filter(Boolean))
+      : JSON.stringify(parseContactProfileTags(existing.profile_tags));
 
   await run(
     `
@@ -33,6 +39,7 @@ export async function PATCH(request: Request, { params }: Params) {
         email = @email,
         notes = @notes,
         verification_status = @status,
+        profile_tags = @profileTags::jsonb,
         updated_at = @updatedAt
       WHERE id = @id
     `,
@@ -45,6 +52,7 @@ export async function PATCH(request: Request, { params }: Params) {
       email: data.email || null,
       notes: data.notes ?? null,
       status: data.verification_status,
+      profileTags,
       updatedAt: nowIso()
     }
   );

@@ -17,6 +17,7 @@ import {
   serializeCallScriptFlow
 } from "@/lib/script-flow";
 import type { Product } from "@/lib/types";
+import "./resultado-comercial-admin.css";
 
 type ScriptRow = {
   id: number;
@@ -73,7 +74,21 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
   const [scriptSaveNotice, setScriptSaveNotice] = useState<string | null>(null);
   const [flowEditorKey, setFlowEditorKey] = useState(0);
   const [simulatorOpen, setSimulatorOpen] = useState(false);
-  const [simulatorDraft, setSimulatorDraft] = useState<SimulatorDraftScript | null>(null);
+
+  const liveSimulatorDraft = useMemo((): SimulatorDraftScript | null => {
+    if (scriptForm.script_type !== "call") return null;
+    return {
+      body: normalizeCallScriptBodyForSave(scriptForm.body),
+      productId: scriptForm.product_id ? Number(scriptForm.product_id) : null
+    };
+  }, [scriptForm.body, scriptForm.product_id, scriptForm.script_type]);
+
+  const splitTestMode = scriptModal && simulatorOpen && scriptForm.script_type === "call";
+
+  function closeScriptModal() {
+    setScriptModal(false);
+    setSimulatorOpen(false);
+  }
 
   const load = useCallback(async () => {
     const s = await fetch("/api/message-scripts?all=1").then((res) => res.json());
@@ -127,11 +142,6 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
       setError("Configure ao menos uma etapa no fluxo de ligação.");
       return;
     }
-    setError(null);
-    setSimulatorDraft({
-      body: normalizeCallScriptBodyForSave(scriptForm.body),
-      productId: scriptForm.product_id ? Number(scriptForm.product_id) : null
-    });
     setSimulatorOpen(true);
   }
 
@@ -182,9 +192,118 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
       setError(data.error ?? "Erro ao excluir");
       return;
     }
-    if (scriptEditingId === row.id) setScriptModal(false);
+    if (scriptEditingId === row.id) closeScriptModal();
     void load();
   }
+
+  const scriptEditorForm = (
+    <form onSubmit={saveScript}>
+      {error ? <div className="alert alert-error">{error}</div> : null}
+      {scriptSaveNotice ? (
+        <div className="alert" style={{ marginBottom: 12 }}>
+          {scriptSaveNotice}
+        </div>
+      ) : null}
+      <div className="filters-row script-modal-meta-row">
+        <div className="field script-modal-meta-title">
+          <label className="label">Título</label>
+          <input
+            className="input"
+            value={scriptForm.title}
+            onChange={(e) => setScriptForm((f) => ({ ...f, title: e.target.value }))}
+            required
+          />
+        </div>
+        <div className="field">
+          <label className="label">Tipo</label>
+          <select
+            className="select"
+            value={scriptForm.script_type}
+            onChange={(e) =>
+              setScriptForm((f) => ({ ...f, script_type: e.target.value as "call" | "whatsapp" | "email" }))
+            }
+          >
+            <option value="call">Script de ligação</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="email">E-mail</option>
+          </select>
+        </div>
+        <div className="field">
+          <label className="label">Produto (opcional)</label>
+          <select
+            className="select"
+            value={scriptForm.product_id}
+            onChange={(e) => setScriptForm((f) => ({ ...f, product_id: e.target.value }))}
+          >
+            <option value="">Geral</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label className="label">Situação</label>
+          <select
+            className="select"
+            value={scriptForm.status}
+            onChange={(e) => setScriptForm((f) => ({ ...f, status: e.target.value as "active" | "inactive" }))}
+          >
+            <option value="active">Ativo</option>
+            <option value="inactive">Inativo</option>
+          </select>
+        </div>
+      </div>
+      {scriptForm.script_type === "call" ? (
+        <div className="field script-flow-modal-field">
+          <ScriptFlowEditor
+            key={`flow-${scriptEditingId ?? "new"}-${flowEditorKey}`}
+            body={scriptForm.body}
+            onBodyChange={(body) => setScriptForm((f) => ({ ...f, body }))}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="field">
+            <label className="label">Texto</label>
+            <textarea
+              className="textarea"
+              value={scriptForm.body}
+              onChange={(e) => setScriptForm((f) => ({ ...f, body: e.target.value }))}
+              required
+            />
+          </div>
+          <p className="muted" style={{ fontSize: "0.75rem" }}>
+            Placeholders: {PLACEHOLDER_HELP.map((p) => p.key).join(", ")}
+          </p>
+        </>
+      )}
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+        <button type="button" className="btn" onClick={closeScriptModal}>
+          Cancelar
+        </button>
+        {scriptForm.script_type === "call" ? (
+          <button
+            type="button"
+            className="btn btn-result-test"
+            onClick={() => {
+              if (splitTestMode) setSimulatorOpen(false);
+              else testScriptFromModal();
+            }}
+          >
+            <span className="btn-result-test-icon" aria-hidden>
+              {splitTestMode ? "◀" : "▶"}
+            </span>
+            {splitTestMode ? "Ocultar teste" : "Testar"}
+          </button>
+        ) : null}
+        <button className="btn btn-primary" type="submit" disabled={scriptSaving}>
+          {scriptSaving ? "Salvando…" : "Salvar"}
+        </button>
+      </div>
+    </form>
+  );
 
   return (
     <div>
@@ -246,111 +365,53 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
         ) : null}
       </div>
 
-      <CadastroModal
-        open={scriptModal}
-        title={scriptEditingId ? "Editar script" : "Novo script / modelo"}
-        onClose={() => setScriptModal(false)}
-        extraWide
-      >
-        <form onSubmit={saveScript}>
-          {error ? <div className="alert alert-error">{error}</div> : null}
-          {scriptSaveNotice ? (
-            <div className="alert" style={{ marginBottom: 12 }}>
-              {scriptSaveNotice}
-            </div>
-          ) : null}
-          <div className="filters-row script-modal-meta-row">
-            <div className="field script-modal-meta-title">
-              <label className="label">Título</label>
-              <input
-                className="input"
-                value={scriptForm.title}
-                onChange={(e) => setScriptForm((f) => ({ ...f, title: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="field">
-              <label className="label">Tipo</label>
-              <select
-                className="select"
-                value={scriptForm.script_type}
-                onChange={(e) => setScriptForm((f) => ({ ...f, script_type: e.target.value as "call" | "whatsapp" | "email" }))}
-              >
-                <option value="call">Script de ligação</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="email">E-mail</option>
-              </select>
-            </div>
-            <div className="field">
-              <label className="label">Produto (opcional)</label>
-              <select className="select" value={scriptForm.product_id} onChange={(e) => setScriptForm((f) => ({ ...f, product_id: e.target.value }))}>
-                <option value="">Geral</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label className="label">Situação</label>
-              <select className="select" value={scriptForm.status} onChange={(e) => setScriptForm((f) => ({ ...f, status: e.target.value as "active" | "inactive" }))}>
-                <option value="active">Ativo</option>
-                <option value="inactive">Inativo</option>
-              </select>
-            </div>
-          </div>
-          {scriptForm.script_type === "call" ? (
-            <div className="field script-flow-modal-field">
-              <ScriptFlowEditor
-                key={`flow-${scriptEditingId ?? "new"}-${flowEditorKey}`}
-                body={scriptForm.body}
-                onBodyChange={(body) => setScriptForm((f) => ({ ...f, body }))}
-              />
-            </div>
-          ) : (
-            <>
-              <div className="field">
-                <label className="label">Texto</label>
-                <textarea
-                  className="textarea"
-                  value={scriptForm.body}
-                  onChange={(e) => setScriptForm((f) => ({ ...f, body: e.target.value }))}
-                  required
-                />
+      {scriptModal ? (
+        splitTestMode ? (
+          <div
+            className="abordagem-script-test-split"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="abordagem-script-test-title"
+          >
+            <div className="abordagem-script-test-split-editor">
+              <header className="abordagem-script-test-split-editor-head">
+                <div>
+                  <h2 id="abordagem-script-test-title">
+                    {scriptEditingId ? "Editar script" : "Novo script / modelo"}
+                  </h2>
+                  <p className="muted abordagem-script-test-split-hint">
+                    Edite o roteiro à esquerda e conduza o teste à direita. Alterações aqui refletem no simulador; use
+                    &quot;Reiniciar etapas&quot; no painel se mudar a ordem das etapas.
+                  </p>
+                </div>
+                <button type="button" className="btn cadastro-modal-close" onClick={closeScriptModal} aria-label="Fechar">
+                  ×
+                </button>
+              </header>
+              <div className="abordagem-script-test-split-editor-body ui-scroll ui-scroll-elevated">
+                {scriptEditorForm}
               </div>
-              <p className="muted" style={{ fontSize: "0.75rem" }}>
-                Placeholders: {PLACEHOLDER_HELP.map((p) => p.key).join(", ")}
-              </p>
-            </>
-          )}
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-            <button type="button" className="btn" onClick={() => setScriptModal(false)}>
-              Cancelar
-            </button>
-            {scriptForm.script_type === "call" ? (
-              <button type="button" className="btn btn-result-test" onClick={testScriptFromModal}>
-                <span className="btn-result-test-icon" aria-hidden>
-                  ▶
-                </span>
-                Testar
-              </button>
-            ) : null}
-            <button className="btn btn-primary" type="submit" disabled={scriptSaving}>
-              {scriptSaving ? "Salvando…" : "Salvar"}
-            </button>
+            </div>
+            <div className="abordagem-script-test-split-sim">
+              <ResultadoComercialSimulatorPanel
+                embedded
+                open
+                draftScript={liveSimulatorDraft}
+                onClose={() => setSimulatorOpen(false)}
+              />
+            </div>
           </div>
-        </form>
-      </CadastroModal>
-
-      <ResultadoComercialSimulatorPanel
-        open={simulatorOpen}
-        draftScript={simulatorDraft}
-        onClose={() => {
-          setSimulatorOpen(false);
-          setSimulatorDraft(null);
-        }}
-      />
+        ) : (
+          <CadastroModal
+            open
+            title={scriptEditingId ? "Editar script" : "Novo script / modelo"}
+            onClose={closeScriptModal}
+            extraWide
+          >
+            {scriptEditorForm}
+          </CadastroModal>
+        )
+      ) : null}
     </div>
   );
 }
