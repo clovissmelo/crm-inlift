@@ -8,17 +8,23 @@ export function personFromScriptLog(log: CallScriptLogEntry[]): { name: string; 
   let name = "";
   let jobTitle = "";
   for (const e of log) {
-    if (e.action !== "capture" || !e.capture_notes?.length) continue;
+    if (!e.capture_notes?.length) continue;
     for (const n of e.capture_notes) {
       const val = n.value.trim();
       if (!val) continue;
       const key = (n.field_key ?? "").trim().toLowerCase();
-      if (SCRIPT_PERSON_NAME_KEYS.has(key) || (!key && /nome/i.test(n.label))) {
+      const label = n.label.trim();
+      if (
+        SCRIPT_PERSON_NAME_KEYS.has(key) ||
+        (!key && /nome/i.test(label)) ||
+        /nome do decisor|nome de quem atendeu/i.test(label)
+      ) {
         name = val;
       }
       if (
         SCRIPT_PERSON_JOB_KEYS.has(key) ||
-        (!key && /cargo|função|funcao/i.test(n.label))
+        (!key && /cargo|função|funcao/i.test(label)) ||
+        /função\s*\/\s*cargo/i.test(label)
       ) {
         jobTitle = val;
       }

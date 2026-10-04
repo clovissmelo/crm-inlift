@@ -3120,6 +3120,18 @@ table.data-table tbody tr.is-selected {
   overflow: auto;
   max-height: min(52vh, 520px);
   background: var(--bg-elevated);
+  flex: 1;
+  min-height: 0;
+}
+
+.script-flow-steps-foot {
+  margin-top: 0.65rem;
+  flex-shrink: 0;
+}
+
+.script-flow-steps-test-btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .script-flow-step-btn {

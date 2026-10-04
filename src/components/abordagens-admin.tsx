@@ -261,6 +261,11 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
             key={`flow-${scriptEditingId ?? "new"}-${flowEditorKey}`}
             body={scriptForm.body}
             onBodyChange={(body) => setScriptForm((f) => ({ ...f, body }))}
+            testSplitActive={splitTestMode}
+            onTestToggle={() => {
+              if (splitTestMode) setSimulatorOpen(false);
+              else testScriptFromModal();
+            }}
           />
         </div>
       ) : (
@@ -283,21 +288,6 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
         <button type="button" className="btn" onClick={closeScriptModal}>
           Cancelar
         </button>
-        {scriptForm.script_type === "call" ? (
-          <button
-            type="button"
-            className="btn btn-result-test"
-            onClick={() => {
-              if (splitTestMode) setSimulatorOpen(false);
-              else testScriptFromModal();
-            }}
-          >
-            <span className="btn-result-test-icon" aria-hidden>
-              {splitTestMode ? "◀" : "▶"}
-            </span>
-            {splitTestMode ? "Ocultar teste" : "Testar"}
-          </button>
-        ) : null}
         <button className="btn btn-primary" type="submit" disabled={scriptSaving}>
           {scriptSaving ? "Salvando…" : "Salvar"}
         </button>

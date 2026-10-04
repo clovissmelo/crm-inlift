@@ -22,6 +22,9 @@ import {
 type Props = {
   body: string;
   onBodyChange: (body: string) => void;
+  /** Abordagens: abre/fecha simulador ao lado do editor. */
+  testSplitActive?: boolean;
+  onTestToggle?: () => void;
 };
 
 function newInternalScreenId(existing: ScriptScreenDraft[]) {
@@ -32,7 +35,7 @@ function newInternalScreenId(existing: ScriptScreenDraft[]) {
   return `scr_${Date.now()}`;
 }
 
-export function ScriptFlowEditor({ body, onBodyChange }: Props) {
+export function ScriptFlowEditor({ body, onBodyChange, testSplitActive, onTestToggle }: Props) {
   const parsed = useMemo(() => parseCallScriptBody(body), [body]);
   const [drafts, setDrafts] = useState<ScriptScreenDraft[]>(() => {
     const base = parsed ? screenFlowToDrafts(parsed) : screenFlowToDrafts(defaultEmptyCallFlow());
@@ -220,6 +223,16 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
               </li>
             ))}
           </ul>
+          {onTestToggle ? (
+            <div className="script-flow-steps-foot">
+              <button type="button" className="btn btn-result-test script-flow-steps-test-btn" onClick={onTestToggle}>
+                <span className="btn-result-test-icon" aria-hidden>
+                  {testSplitActive ? "◀" : "▶"}
+                </span>
+                {testSplitActive ? "Ocultar teste" : "Testar"}
+              </button>
+            </div>
+          ) : null}
         </aside>
 
         {selected ? (

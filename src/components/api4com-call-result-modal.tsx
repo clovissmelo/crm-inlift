@@ -223,6 +223,7 @@ export function Api4comCallResultForm({
   const [contactOutcomeId, setContactOutcomeId] = useState("");
   const autoSettleRef = useRef<number | null>(null);
   const scriptContactPrefillKeyRef = useRef("");
+  const scriptPersonPrefillRef = useRef("");
   const scriptMeetingPrefillRef = useRef("");
   const [technicalSlug, setTechnicalSlug] = useState<string | null>(null);
   const [technicalLabel, setTechnicalLabel] = useState("");
@@ -552,6 +553,7 @@ export function Api4comCallResultForm({
   useEffect(() => {
     autoSettleRef.current = null;
     scriptContactPrefillKeyRef.current = "";
+    scriptPersonPrefillRef.current = "";
     scriptMeetingPrefillRef.current = "";
   }, [callId, simulation?.scriptFlowLog]);
 
@@ -697,19 +699,25 @@ export function Api4comCallResultForm({
     resultTypeId,
     resultTypes,
     nenhumContatoType,
-    compatMap
+    compatMap,
+    call?.script_flow_log
   ]);
 
   useEffect(() => {
-    if (!call || contextLoading) return;
-    if (contactLayerChoice !== "decisor" && contactLayerChoice !== "outra") return;
-    const { name, jobTitle } = personFromScriptLog(normalizeCallScriptLog(call.script_flow_log));
-    if (!name.trim()) return;
-    setContactedPersonName(name);
-    setContactedPersonJobTitle(jobTitle);
-    setPersonFieldsFromScript(true);
-    setPersonFieldsEditing(false);
-  }, [call, call?.script_flow_log, contactLayerChoice, contextLoading]);
+    if (!call || contextLoading || personFieldsEditing) return;
+    const log = normalizeCallScriptLog(call.script_flow_log);
+    const { name, jobTitle } = personFromScriptLog(log);
+    if (!name.trim() && !jobTitle.trim()) return;
+    const key = `${call.id}:${log.length}:${name}:${jobTitle}`;
+    if (scriptPersonPrefillRef.current === key) return;
+    scriptPersonPrefillRef.current = key;
+    if (name.trim()) setContactedPersonName(name);
+    if (jobTitle.trim()) setContactedPersonJobTitle(jobTitle);
+    if (name.trim()) {
+      setPersonFieldsFromScript(true);
+      setPersonFieldsEditing(false);
+    }
+  }, [call, call?.script_flow_log, contextLoading, personFieldsEditing]);
 
   useEffect(() => {
     if (!call || contextLoading || !callWasAnswered) return;
