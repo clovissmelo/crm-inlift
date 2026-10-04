@@ -12,13 +12,15 @@ import {
   branchChoiceContactLayer,
   branchChoiceScheduleMeeting,
   captureFieldRegistrationLabel,
-  notesFieldsOnScreen,
+  contactRegisterFields,
+  inputFieldsOnScreen,
   parseCallScriptBody,
+  screenHasFillableFields,
   renderStepContent,
-  screenContactTag,
   screenCreatesContact,
-  screenHasNotesBlock,
   screenHasScheduleBlock,
+  screenHasScheduleReturnBlock,
+  screenRequiresScheduleInput,
   sequentialNext,
   type ScriptCallFlow,
   type ScriptScreen
@@ -127,11 +129,11 @@ export function CallScriptGuidePanel({
       return;
     }
     const current = flow.screens[stepId];
-    if (!current || !screenHasNotesBlock(current)) {
+    if (!current || !screenHasFillableFields(current)) {
       setCaptureDraft({});
       return;
     }
-    const fields = notesFieldsOnScreen(current);
+    const fields = inputFieldsOnScreen(current);
     const lastForStep = [...savedLog]
       .reverse()
       .find((e) => e.step_id === stepId && e.action === "capture");
@@ -267,7 +269,8 @@ export function CallScriptGuidePanel({
     action: "next" | "choice" | "capture",
     choiceLabel?: string,
     captureNotes?: CallScriptLogEntry["capture_notes"],
-    scheduledMeetingAt?: string | null
+    scheduledMeetingAt?: string | null,
+    scheduledReturnAt?: string | null
   ) {
     if (!screen || !stepId) return;
     const payload: Omit<CallScriptLogEntry, "at"> = {
@@ -277,7 +280,8 @@ export function CallScriptGuidePanel({
       choice_label: choiceLabel ?? null,
       next_step_id: next,
       capture_notes: captureNotes,
-      scheduled_meeting_at: scheduledMeetingAt ?? null
+      scheduled_meeting_at: scheduledMeetingAt ?? null,
+      scheduled_return_at: scheduledReturnAt ?? null
     };
     if (action === "choice" && choiceLabel?.trim() && screen.navigation.mode === "branch") {
       const layer = branchChoiceContactLayer(screen, choiceLabel.trim());
@@ -339,37 +343,60 @@ export function CallScriptGuidePanel({
   }
 
   function buildCaptureNotes(scr: ScriptScreen) {
-    const fields = notesFieldsOnScreen(scr);
-    return fields
-      .map((f) => ({
-        label: captureFieldRegistrationLabel(f, scriptContactLayer),
-        value: (captureDraft[f.key] ?? "").trim(),
-        field_key: f.key
-      }))
-      .filter((n) => n.value);
+    const notes: CallScriptLogEntry["capture_notes"] = [];
+    for (const block of scr.blocks) {
+      if (block.kind === "notes") {
+        for (const f of block.fields) {
+          const value = (captureDraft[f.key] ?? "").trim();
+          if (!value) continue;
+          notes.push({
+            label: captureFieldRegistrationLabel(f, scriptContactLayer),
+            value,
+            field_key: f.key
+          });
+        }
+      }
+      if (block.kind === "contact_register") {
+        for (const f of contactRegisterFields(block)) {
+          const value = (captureDraft[f.key] ?? "").trim();
+          if (!value) continue;
+          notes.push({
+            label: captureFieldRegistrationLabel(f, scriptContactLayer),
+            value,
+            field_key: f.key
+          });
+        }
+      }
+    }
+    return notes;
   }
 
   function advanceSequential() {
-    if (!screen || !flow) return;
-    const next = sequentialNext(screen);
-    let scheduledIso: string | null = null;
-    if (screenHasScheduleBlock(screen)) {
+    if (!screen || !flow || !stepId) return;
+    const next = sequentialNext(flow, stepId);
+    let meetingIso: string | null = null;
+    let returnIso: string | null = null;
+    if (screenRequiresScheduleInput(screen)) {
       if (!meetingDate.trim() || !meetingTime.trim()) {
         setMeetingInvalid(true);
         return;
       }
       setMeetingInvalid(false);
-      scheduledIso = spLocalDateTimeToIso(meetingDate, meetingTime);
+      const iso = spLocalDateTimeToIso(meetingDate, meetingTime);
+      if (screenHasScheduleBlock(screen)) meetingIso = iso;
+      if (screenHasScheduleReturnBlock(screen)) returnIso = iso;
     }
     const notes = buildCaptureNotes(screen);
-    if (screenHasNotesBlock(screen) && notes.length > 0) {
-      goNext(next, "capture", undefined, notes, scheduledIso);
+    const shouldCapture =
+      screenHasFillableFields(screen) && (notes.length > 0 || screenCreatesContact(screen));
+    if (shouldCapture) {
+      goNext(next, "capture", undefined, notes.length ? notes : undefined, meetingIso, returnIso);
       return;
     }
-    goNext(next, "next", undefined, undefined, scheduledIso);
+    goNext(next, "next", undefined, undefined, meetingIso, returnIso);
   }
 
-  const seqNext = screen ? sequentialNext(screen) : null;
+  const seqNext = screen && flow && stepId ? sequentialNext(flow, stepId) : null;
   const hasNextScreen = Boolean(seqNext && flow?.screens[seqNext]);
 
   return (
@@ -475,21 +502,37 @@ export function CallScriptGuidePanel({
                 }
                 if (block.kind === "contact_register") {
                   return (
-                    <p key={block.id} className="muted call-script-capture-hint">
-                      Registro de contato no cliente
-                      {block.contact_profile_tag ? ` · tag “${block.contact_profile_tag}”` : ""}.
-                      {isSimulation ? " (simulação — não grava.)" : ""}
-                    </p>
+                    <div key={block.id} className="call-script-capture-fields call-script-contact-register-fields">
+                      {contactRegisterFields(block).map((field) => (
+                        <label key={field.key} className="call-script-capture-field">
+                          <span className="label">
+                            {captureFieldRegistrationLabel(field, scriptContactLayer)}
+                          </span>
+                          <input
+                            className="input"
+                            type={field.input === "tel" ? "tel" : "text"}
+                            placeholder={field.placeholder}
+                            value={captureDraft[field.key] ?? ""}
+                            onChange={(e) =>
+                              setCaptureDraft((d) => ({ ...d, [field.key]: e.target.value }))
+                            }
+                          />
+                        </label>
+                      ))}
+                    </div>
                   );
                 }
-                if (block.kind === "schedule_meeting") {
+                if (block.kind === "schedule_meeting" || block.kind === "schedule_return") {
                   return (
                     <div key={block.id} className="call-script-meeting-pick">
                       <p className="muted" style={{ fontSize: "0.875rem", margin: "0 0 8px" }}>
-                        {block.prompt?.trim() || "Agendar reunião — informe data e hora."}
+                        {block.prompt?.trim() ||
+                          (block.kind === "schedule_meeting"
+                            ? "Agendar reunião — informe data e hora."
+                            : "Agendar retorno — informe data e hora.")}
                       </p>
                       <ApproachMinimalScheduleField
-                        mode="meeting"
+                        mode={block.kind === "schedule_meeting" ? "meeting" : "return"}
                         nextDate={meetingDate}
                         nextTime={meetingTime}
                         onNextDateChange={setMeetingDate}
@@ -501,14 +544,14 @@ export function CallScriptGuidePanel({
                 }
                 return null;
               })}
-              {screenHasNotesBlock(screen) ? (
+              {screenHasFillableFields(screen) ? (
                 <p className="muted call-script-capture-hint">
-                  Anotações ficam salvas nesta ligação e no complemento de registro.
+                  Dados ficam na ligação e no complemento de registro.
                   {screenCreatesContact(screen) ? (
                     <>
                       {" "}
-                      Será criado contato no cliente
-                      {screenContactTag(screen) ? ` (tag “${screenContactTag(screen)}”)` : ""}.
+                      Com nome preenchido, cria/atualiza contato no cliente
+                      {isSimulation ? " (simulação — não grava.)" : "."}
                     </>
                   ) : null}
                 </p>
@@ -530,7 +573,6 @@ export function CallScriptGuidePanel({
                         onClick={() => onBranchChoice(choice.next, choice.label)}
                       >
                         {choice.label}
-                        {choice.schedule_meeting ? " · agendar" : null}
                       </button>
                     ))}
                   </div>
@@ -541,14 +583,14 @@ export function CallScriptGuidePanel({
                     </button>
                   </div>
                 </>
-              ) : hasNextScreen || screenHasNotesBlock(screen) ? (
+              ) : hasNextScreen || screenHasFillableFields(screen) ? (
                 <div className="call-script-nav-row">
                   <button type="button" className="btn call-script-btn-back" disabled={!canGoBack} onClick={goBack}>
                     <ChevronLeft size={18} aria-hidden />
                     Voltar
                   </button>
                   <button type="button" className="btn btn-primary call-script-btn-next" onClick={() => advanceSequential()}>
-                    {screenHasNotesBlock(screen)
+                    {screenHasFillableFields(screen)
                       ? hasNextScreen
                         ? "Salvar e continuar"
                         : "Salvar e concluir"

@@ -39,6 +39,8 @@ export type CallScriptLogEntry = {
   contact_layer?: "decisor" | "outra" | "ninguem";
   /** Reunião agendada na etapa do roteiro (ISO UTC). */
   scheduled_meeting_at?: string | null;
+  /** Retorno agendado na etapa do roteiro (ISO UTC). */
+  scheduled_return_at?: string | null;
   /** Contato criado/atualizado no cliente ao salvar esta anotação. */
   created_contact_id?: number;
 };
@@ -47,6 +49,14 @@ export type CallScriptLogEntry = {
 export function meetingScheduleFromScriptLog(log: CallScriptLogEntry[]): string | null {
   for (let i = log.length - 1; i >= 0; i--) {
     const at = log[i]!.scheduled_meeting_at?.trim();
+    if (at) return at;
+  }
+  return null;
+}
+
+export function returnScheduleFromScriptLog(log: CallScriptLogEntry[]): string | null {
+  for (let i = log.length - 1; i >= 0; i--) {
+    const at = log[i]!.scheduled_return_at?.trim();
     if (at) return at;
   }
   return null;
@@ -139,7 +149,14 @@ export function formatCallScriptLogInline(log: CallScriptLogEntry[]): string | n
       const block = formatCaptureNotes(e.capture_notes);
       return block ? `${title}: ${block}` : `${title} (anotações)`;
     }
-    if (e.action === "next") return `${title} → Próximo`;
+    if (e.action === "next") {
+      const meet = e.scheduled_meeting_at?.trim();
+      const ret = e.scheduled_return_at?.trim();
+      if (meet && ret) return `${title} → Próximo (reunião e retorno)`;
+      if (meet) return `${title} → Próximo (reunião agendada)`;
+      if (ret) return `${title} → Próximo (retorno agendado)`;
+      return `${title} → Próximo`;
+    }
     if (e.action === "restart") return "Reinício do roteiro";
     return title;
   });

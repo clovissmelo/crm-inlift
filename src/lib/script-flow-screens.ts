@@ -23,7 +23,9 @@ export type ScriptNotesBlock = { id: string; kind: "notes"; fields: ScriptFlowCa
 export type ScriptContactRegisterBlock = {
   id: string;
   kind: "contact_register";
+  /** Metadado ao gravar contato no cliente (ex.: PERFIL DECISOR). */
   contact_profile_tag?: string;
+  fields?: ScriptFlowCaptureField[];
 };
 export type ScriptScheduleMeetingBlock = {
   id: string;
@@ -31,14 +33,21 @@ export type ScriptScheduleMeetingBlock = {
   prompt?: string;
 };
 
+export type ScriptScheduleReturnBlock = {
+  id: string;
+  kind: "schedule_return";
+  prompt?: string;
+};
+
 export type ScriptScreenBlock =
   | ScriptTextBlock
   | ScriptNotesBlock
   | ScriptContactRegisterBlock
-  | ScriptScheduleMeetingBlock;
+  | ScriptScheduleMeetingBlock
+  | ScriptScheduleReturnBlock;
 
 export type ScriptScreenNavigation =
-  | { mode: "sequential"; next: string | null }
+  | { mode: "sequential"; next: string | null; /** true = “Fim do fluxo” (não segue ordem das telas) */ nextIsEnd?: boolean }
   | { mode: "branch"; question: string; choices: ScriptFlowBranchChoice[] };
 
 export type ScriptScreen = {
@@ -50,6 +59,8 @@ export type ScriptScreen = {
 export type ScriptCallFlow = {
   v: 2;
   start: string;
+  /** Ordem das telas no editor (ids). */
+  screenOrder?: string[];
   screens: Record<string, ScriptScreen>;
 };
 
@@ -67,11 +78,51 @@ export const DEFAULT_CAPTURE_FIELDS: ScriptFlowCaptureField[] = [
   { key: "observacao", label: "Observação", placeholder: "Retorno, horário, etc.", input: "textarea" }
 ];
 
+export const DEFAULT_CONTACT_REGISTER_FIELDS: ScriptFlowCaptureField[] = [
+  { key: "nome", label: "Nome", placeholder: "Nome completo do contato" },
+  { key: "cargo", label: "Cargo / função", placeholder: "Ex.: Sócio, Gerente de compras" },
+  { key: "telefone", label: "Telefone", placeholder: "(DDD) 9xxxx-xxxx", input: "tel" }
+];
+
+const CONTACT_REGISTER_KEYS = ["nome", "cargo", "telefone"] as const;
+
+export function contactRegisterFields(block: ScriptContactRegisterBlock): ScriptFlowCaptureField[] {
+  const raw = block.fields?.length ? block.fields : DEFAULT_CONTACT_REGISTER_FIELDS;
+  return CONTACT_REGISTER_KEYS.map((key, i) => {
+    const fromBlock = raw.find((f) => f.key === key);
+    const fallback = DEFAULT_CONTACT_REGISTER_FIELDS[i]!;
+    return {
+      key,
+      label: (fromBlock?.label ?? fallback.label).trim() || fallback.label,
+      placeholder: fromBlock?.placeholder?.trim() || fallback.placeholder,
+      input: key === "telefone" ? "tel" : "text"
+    };
+  });
+}
+
+export function screenHasContactRegisterBlock(screen: ScriptScreen): boolean {
+  return screen.blocks.some((b) => b.kind === "contact_register");
+}
+
+export function inputFieldsOnScreen(screen: ScriptScreen): ScriptFlowCaptureField[] {
+  const out: ScriptFlowCaptureField[] = [];
+  for (const b of screen.blocks) {
+    if (b.kind === "notes") out.push(...b.fields);
+    if (b.kind === "contact_register") out.push(...contactRegisterFields(b));
+  }
+  return out;
+}
+
+export function screenHasFillableFields(screen: ScriptScreen): boolean {
+  return screenHasNotesBlock(screen) || screenHasContactRegisterBlock(screen);
+}
+
 export const SCRIPT_BLOCK_LABELS: Record<ScriptScreenBlock["kind"], string> = {
   text: "Texto (descrições e instruções)",
   notes: "Anotações (observações para registro)",
   contact_register: "Registro de contato (cadastro no cliente)",
-  schedule_meeting: "Agendar reunião"
+  schedule_meeting: "Agendar reunião",
+  schedule_return: "Agendar retorno"
 };
 
 export function captureFieldRegistrationLabel(
@@ -104,6 +155,14 @@ export function screenHasScheduleBlock(screen: ScriptScreen): boolean {
   return screen.blocks.some((b) => b.kind === "schedule_meeting");
 }
 
+export function screenHasScheduleReturnBlock(screen: ScriptScreen): boolean {
+  return screen.blocks.some((b) => b.kind === "schedule_return");
+}
+
+export function screenRequiresScheduleInput(screen: ScriptScreen): boolean {
+  return screenHasScheduleBlock(screen) || screenHasScheduleReturnBlock(screen);
+}
+
 export function screenCreatesContact(screen: ScriptScreen): boolean {
   return screen.blocks.some((b) => b.kind === "contact_register");
 }
@@ -114,9 +173,49 @@ export function screenContactTag(screen: ScriptScreen): string | null {
   return b.contact_profile_tag?.trim() || "PERFIL DECISOR";
 }
 
-export function sequentialNext(screen: ScriptScreen): string | null {
-  if (screen.navigation.mode !== "sequential") return null;
-  return screen.navigation.next;
+export function flowScreenOrder(flow: ScriptCallFlow): string[] {
+  if (flow.screenOrder?.length) {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const id of flow.screenOrder) {
+      if (flow.screens[id] && !seen.has(id)) {
+        seen.add(id);
+        out.push(id);
+      }
+    }
+    for (const id of Object.keys(flow.screens)) {
+      if (!seen.has(id)) out.push(id);
+    }
+    return out;
+  }
+  const order: string[] = [];
+  const seen = new Set<string>();
+  function walk(id: string | null) {
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    order.push(id);
+    const screen = flow.screens[id];
+    if (!screen) return;
+    walk(walkScreenNext(screen));
+    for (const n of walkScreenBranches(screen)) walk(n);
+  }
+  walk(flow.start);
+  for (const id of Object.keys(flow.screens)) {
+    if (!seen.has(id)) order.push(id);
+  }
+  return order;
+}
+
+export function sequentialNext(flow: ScriptCallFlow, screenId: string): string | null {
+  const screen = flow.screens[screenId];
+  if (!screen || screen.navigation.mode !== "sequential") return null;
+  const nav = screen.navigation;
+  if (nav.nextIsEnd === true) return null;
+  if (nav.next) return nav.next;
+  const order = flowScreenOrder(flow);
+  const i = order.indexOf(screenId);
+  if (i >= 0 && i < order.length - 1) return order[i + 1]!;
+  return null;
 }
 
 export function branchChoiceContactLayer(screen: ScriptScreen, choiceLabel: string): ScriptFlowContactLayer | undefined {
@@ -213,7 +312,12 @@ Posso seguir?`
               { key: "retorno", label: "Melhor dia/horário para retorno", input: "textarea" }
             ]
           },
-          { id: newBlockId("contact"), kind: "contact_register", contact_profile_tag: "PERFIL DECISOR" }
+          {
+            id: newBlockId("contact"),
+            kind: "contact_register",
+            contact_profile_tag: "PERFIL DECISOR",
+            fields: [...DEFAULT_CONTACT_REGISTER_FIELDS]
+          }
         ],
         navigation: { mode: "sequential", next: encerramento }
       },
@@ -316,7 +420,8 @@ function migrateLegacyStep(id: string, step: LegacyStep): ScriptScreen {
       blocks.push({
         id: newBlockId("contact"),
         kind: "contact_register",
-        contact_profile_tag: step.contact_profile_tag?.trim() || "PERFIL DECISOR"
+        contact_profile_tag: step.contact_profile_tag?.trim() || "PERFIL DECISOR",
+        fields: [...DEFAULT_CONTACT_REGISTER_FIELDS]
       });
     }
   }
@@ -364,8 +469,9 @@ export function parseCallScriptBody(body: string): ScriptCallFlow | null {
   if (!trimmed) return null;
   try {
     const parsed = JSON.parse(trimmed) as unknown;
-    if (isScriptCallFlow(parsed) && parsed.screens[parsed.start]) {
-      return enrichScreenLinks(parsed);
+    if (isScriptCallFlow(parsed) && Object.keys(parsed.screens).length > 0) {
+      const start = parsed.start in parsed.screens ? parsed.start : Object.keys(parsed.screens)[0]!;
+      return { ...parsed, start };
     }
     const legacy = parsed as LegacyFlow;
     if (legacy?.v === 1 && legacy.steps?.[legacy.start]) {
@@ -403,21 +509,7 @@ function walkScreenBranches(screen: ScriptScreen): Array<string | null> {
 }
 
 export function screenFlowToDrafts(flow: ScriptCallFlow): ScriptScreenDraft[] {
-  const order: string[] = [];
-  const seen = new Set<string>();
-  function walk(id: string | null) {
-    if (!id || seen.has(id)) return;
-    seen.add(id);
-    order.push(id);
-    const screen = flow.screens[id];
-    if (!screen) return;
-    walk(walkScreenNext(screen));
-    for (const n of walkScreenBranches(screen)) walk(n);
-  }
-  walk(flow.start);
-  for (const id of Object.keys(flow.screens)) {
-    if (!seen.has(id)) order.push(id);
-  }
+  const order = flowScreenOrder(flow);
   return order.map((id) => {
     const s = flow.screens[id]!;
     return {
@@ -471,7 +563,8 @@ export function draftsToScreenFlow(drafts: ScriptScreenDraft[]): ScriptCallFlow 
         if (b.kind === "contact_register") {
           return {
             ...b,
-            contact_profile_tag: (b.contact_profile_tag?.trim() || "PERFIL DECISOR").slice(0, 80)
+            contact_profile_tag: (b.contact_profile_tag?.trim() || "PERFIL DECISOR").slice(0, 80),
+            fields: contactRegisterFields(b)
           };
         }
         return { ...b };
@@ -485,11 +578,11 @@ export function draftsToScreenFlow(drafts: ScriptScreenDraft[]): ScriptCallFlow 
 
     let navigation = d.navigation;
     if (navigation.mode === "sequential") {
-      let next = navigation.next;
-      if (!next && i < ordered.length - 1) {
-        next = ordered[i + 1]!.id.trim() || `scr-${i + 2}`;
-      }
-      navigation = { mode: "sequential", next };
+      navigation = {
+        mode: "sequential",
+        next: navigation.next,
+        ...(navigation.nextIsEnd ? { nextIsEnd: true } : {})
+      };
     } else {
       navigation = {
         mode: "branch",
@@ -500,7 +593,6 @@ export function draftsToScreenFlow(drafts: ScriptScreenDraft[]): ScriptCallFlow 
             label: c.label.trim(),
             next: c.next,
             ...(c.contact_layer ? { contact_layer: c.contact_layer } : {}),
-            ...(c.schedule_meeting ? { schedule_meeting: true } : {})
           }))
       };
     }
@@ -512,7 +604,13 @@ export function draftsToScreenFlow(drafts: ScriptScreenDraft[]): ScriptCallFlow 
     };
   }
   const start = ordered[0]?.id.trim() || "scr-1";
-  return { v: 2, start: screens[start] ? start : Object.keys(screens)[0] ?? "scr-1", screens };
+  const screenOrder = ordered.map((d, i) => d.id.trim() || `scr-${i + 1}`);
+  return {
+    v: 2,
+    start: screens[start] ? start : Object.keys(screens)[0] ?? "scr-1",
+    screenOrder,
+    screens
+  };
 }
 
 export function enrichScreenLinks(flow: ScriptCallFlow): ScriptCallFlow {
@@ -529,7 +627,15 @@ export function newScreenBlock(kind: ScriptScreenBlock["kind"]): ScriptScreenBlo
   if (kind === "text") return { id: newBlockId("text"), kind: "text", content: "" };
   if (kind === "notes") return { id: newBlockId("notes"), kind: "notes", fields: [...DEFAULT_CAPTURE_FIELDS] };
   if (kind === "contact_register") {
-    return { id: newBlockId("contact"), kind: "contact_register", contact_profile_tag: "PERFIL DECISOR" };
+    return {
+      id: newBlockId("contact"),
+      kind: "contact_register",
+      contact_profile_tag: "PERFIL DECISOR",
+      fields: [...DEFAULT_CONTACT_REGISTER_FIELDS]
+    };
+  }
+  if (kind === "schedule_return") {
+    return { id: newBlockId("ret"), kind: "schedule_return", prompt: "Data e hora do retorno" };
   }
   return { id: newBlockId("meet"), kind: "schedule_meeting", prompt: "Data e hora da reunião" };
 }

@@ -3236,6 +3236,32 @@ table.data-table tbody tr.is-selected {
   font-size: 0.8125rem;
 }
 
+.script-flow-block-card-head-title {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.script-flow-block-drag-handle {
+  cursor: grab;
+  color: var(--muted, #9ca3af);
+  flex-shrink: 0;
+}
+
+.script-flow-block-drag-handle:active {
+  cursor: grabbing;
+}
+
+.script-flow-block-card--drop-target {
+  outline: 2px solid rgba(129, 140, 248, 0.55);
+  outline-offset: 2px;
+}
+
+.script-flow-block-card--dragging {
+  opacity: 0.55;
+}
+
 .script-flow-nav-mode-row {
   display: flex;
   flex-direction: column;

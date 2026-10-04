@@ -15,6 +15,7 @@ const bodySchema = z.object({
     .optional(),
   contact_layer: z.enum(["decisor", "outra", "ninguem"]).optional(),
   scheduled_meeting_at: z.string().optional().nullable(),
+  scheduled_return_at: z.string().optional().nullable(),
   created_contact_id: z.number().int().positive().optional()
 });
 
@@ -30,6 +31,7 @@ const logEntrySchema = z.object({
     .optional(),
   contact_layer: z.enum(["decisor", "outra", "ninguem"]).optional(),
   scheduled_meeting_at: z.string().optional().nullable(),
+  scheduled_return_at: z.string().optional().nullable(),
   created_contact_id: z.number().int().positive().optional()
 });
 

@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Trash2 } from "lucide-react";
 import { TemplatePlaceholderHelp } from "@/components/template-placeholder-help";
 import {
   DEFAULT_CAPTURE_FIELDS,
+  contactRegisterFields,
   defaultEmptyCallFlow,
   draftsToScreenFlow,
   ensureInternalScreenIds,
@@ -38,6 +39,8 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
     return ensureInternalScreenIds(base);
   });
   const [selectedId, setSelectedId] = useState<string | null>(drafts[0]?.id ?? null);
+  const [dragBlockId, setDragBlockId] = useState<string | null>(null);
+  const [dropBlockId, setDropBlockId] = useState<string | null>(null);
 
   useEffect(() => {
     if (drafts.length === 0) return;
@@ -71,6 +74,22 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
   function removeBlock(blockId: string) {
     if (!selected) return;
     updateSelected({ blocks: selected.blocks.filter((b) => b.id !== blockId) });
+  }
+
+  function reorderBlocks(fromId: string, toId: string) {
+    if (!selected || fromId === toId) return;
+    setDrafts((list) =>
+      list.map((d) => {
+        if (d.id !== selected.id) return d;
+        const fromIdx = d.blocks.findIndex((b) => b.id === fromId);
+        const toIdx = d.blocks.findIndex((b) => b.id === toId);
+        if (fromIdx < 0 || toIdx < 0) return d;
+        const blocks = [...d.blocks];
+        const [item] = blocks.splice(fromIdx, 1);
+        blocks.splice(toIdx, 0, item!);
+        return { ...d, blocks };
+      })
+    );
   }
 
   function addBlock(kind: ScriptScreenBlock["kind"]) {
@@ -139,6 +158,14 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
     return idx >= 0 ? `${title} (ordem ${idx + 1})` : title;
   }
 
+  function sequentialNextSelectValue(d: ScriptScreenDraft, index: number): string {
+    if (d.navigation.mode !== "sequential") return "";
+    if (d.navigation.nextIsEnd) return "";
+    if (d.navigation.next) return d.navigation.next;
+    const implicit = index < drafts.length - 1 ? drafts[index + 1]!.id : "";
+    return implicit;
+  }
+
   function setNavigationMode(mode: "sequential" | "branch") {
     if (!selected) return;
     if (mode === "branch") {
@@ -156,9 +183,14 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
         }
       });
     } else {
-      const next =
-        selected.navigation.mode === "sequential" ? selected.navigation.next : null;
-      updateSelected({ navigation: { mode: "sequential", next } });
+      const prev = selected.navigation.mode === "sequential" ? selected.navigation : null;
+      updateSelected({
+        navigation: {
+          mode: "sequential",
+          next: prev?.next ?? null,
+          ...(prev?.nextIsEnd ? { nextIsEnd: true } : {})
+        }
+      });
     }
   }
 
@@ -240,11 +272,56 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
               </div>
               {selected.blocks.length === 0 ? (
                 <p className="muted script-flow-field-hint">Adicione ao menos um bloco (ex.: Texto).</p>
+              ) : selected.blocks.length >= 2 ? (
+                <p className="muted script-flow-field-hint">Arraste pelo ícone ⋮⋮ para reordenar os blocos nesta tela.</p>
               ) : null}
-              {selected.blocks.map((block) => (
-                <div key={block.id} className="script-flow-block-card panel">
+              {selected.blocks.map((block) => {
+                const canReorder = selected.blocks.length >= 2;
+                const isDropTarget = dropBlockId === block.id && dragBlockId !== block.id;
+                return (
+                <div
+                  key={block.id}
+                  className={`script-flow-block-card panel${isDropTarget ? " script-flow-block-card--drop-target" : ""}${dragBlockId === block.id ? " script-flow-block-card--dragging" : ""}`}
+                  onDragOver={(e) => {
+                    if (!canReorder || !dragBlockId || dragBlockId === block.id) return;
+                    e.preventDefault();
+                    setDropBlockId(block.id);
+                  }}
+                  onDragLeave={() => {
+                    if (dropBlockId === block.id) setDropBlockId(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const from = e.dataTransfer.getData("text/plain") || dragBlockId;
+                    if (from && from !== block.id) reorderBlocks(from, block.id);
+                    setDragBlockId(null);
+                    setDropBlockId(null);
+                  }}
+                >
                   <div className="script-flow-block-card-head">
-                    <strong>{SCRIPT_BLOCK_LABELS[block.kind]}</strong>
+                    <div className="script-flow-block-card-head-title">
+                      {canReorder ? (
+                        <button
+                          type="button"
+                          className="script-flow-block-drag-handle btn btn-icon-sm"
+                          draggable
+                          title="Arrastar para reordenar"
+                          aria-label="Arrastar bloco para reordenar"
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("text/plain", block.id);
+                            e.dataTransfer.effectAllowed = "move";
+                            setDragBlockId(block.id);
+                          }}
+                          onDragEnd={() => {
+                            setDragBlockId(null);
+                            setDropBlockId(null);
+                          }}
+                        >
+                          <GripVertical size={16} aria-hidden />
+                        </button>
+                      ) : null}
+                      <strong>{SCRIPT_BLOCK_LABELS[block.kind]}</strong>
+                    </div>
                     <button type="button" className="btn btn-icon-sm" title="Remover bloco" onClick={() => removeBlock(block.id)}>
                       <Trash2 size={14} />
                     </button>
@@ -369,33 +446,71 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                     </>
                   ) : null}
                   {block.kind === "contact_register" ? (
-                    <div className="field">
-                      <label className="label">Tag de perfil no cadastro</label>
-                      <input
-                        className="input"
-                        value={block.contact_profile_tag ?? "PERFIL DECISOR"}
-                        maxLength={80}
-                        onChange={(e) => updateBlock(block.id, { contact_profile_tag: e.target.value })}
-                      />
+                    <>
                       <p className="muted script-flow-field-hint">
-                        Ao salvar anotações nesta tela, cria/atualiza contato no cliente (nome e telefone dos campos de
-                        anotação).
+                        Na ligação: nome, cargo/função e telefone. A tag abaixo só orienta o cadastro no cliente.
                       </p>
-                    </div>
+                      {contactRegisterFields(block).map((field) => (
+                        <div key={field.key} className="filters-row script-flow-capture-row">
+                          <div className="field" style={{ flex: 1 }}>
+                            <label className="label">
+                              Rótulo — {field.key === "nome" ? "Nome" : field.key === "cargo" ? "Cargo" : "Telefone"}
+                            </label>
+                            <input
+                              className="input"
+                              value={field.label}
+                              onChange={(e) => {
+                                const fields = contactRegisterFields(block).map((f) =>
+                                  f.key === field.key ? { ...f, label: e.target.value } : f
+                                );
+                                updateBlock(block.id, { fields });
+                              }}
+                            />
+                          </div>
+                          <div className="field" style={{ flex: 1 }}>
+                            <label className="label">Placeholder</label>
+                            <input
+                              className="input"
+                              value={field.placeholder ?? ""}
+                              onChange={(e) => {
+                                const fields = contactRegisterFields(block).map((f) =>
+                                  f.key === field.key ? { ...f, placeholder: e.target.value } : f
+                                );
+                                updateBlock(block.id, { fields });
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                      <div className="field">
+                        <label className="label">Tag no cadastro (técnico)</label>
+                        <input
+                          className="input"
+                          value={block.contact_profile_tag ?? "PERFIL DECISOR"}
+                          maxLength={80}
+                          onChange={(e) => updateBlock(block.id, { contact_profile_tag: e.target.value })}
+                        />
+                      </div>
+                    </>
                   ) : null}
-                  {block.kind === "schedule_meeting" ? (
+                  {block.kind === "schedule_meeting" || block.kind === "schedule_return" ? (
                     <div className="field">
                       <label className="label">Instrução (opcional)</label>
                       <input
                         className="input"
                         value={block.prompt ?? ""}
-                        placeholder="Data e hora da reunião"
+                        placeholder={
+                          block.kind === "schedule_meeting"
+                            ? "Data e hora da reunião"
+                            : "Data e hora do retorno"
+                        }
                         onChange={(e) => updateBlock(block.id, { prompt: e.target.value })}
                       />
                     </div>
                   ) : null}
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="script-flow-screen-section">
@@ -421,17 +536,31 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                 </label>
               </div>
 
+              <p className="muted script-flow-field-hint" style={{ marginTop: 0 }}>
+                Reunião e retorno são blocos em <strong>Conteúdo da tela</strong>, não nas opções de ramificação.
+              </p>
               {navMode === "sequential" ? (
                 <div className="field">
                   <label className="label">Próxima tela</label>
                   <select
                     className="select"
-                    value={selected.navigation.mode === "sequential" ? selected.navigation.next ?? "" : ""}
-                    onChange={(e) =>
-                      updateSelected({
-                        navigation: { mode: "sequential", next: e.target.value || null }
-                      })
+                    value={
+                      selected.navigation.mode === "sequential"
+                        ? sequentialNextSelectValue(selected, selectedOrder - 1)
+                        : ""
                     }
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (!v) {
+                        updateSelected({
+                          navigation: { mode: "sequential", next: null, nextIsEnd: true }
+                        });
+                        return;
+                      }
+                      updateSelected({
+                        navigation: { mode: "sequential", next: v, nextIsEnd: false }
+                      });
+                    }}
                   >
                     <option value="">Fim do fluxo</option>
                     {screenIds
@@ -502,24 +631,7 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                           <option value="ninguem">Ninguém</option>
                         </select>
                       </div>
-                      <label className="script-flow-branch-check">
-                        <input
-                          type="checkbox"
-                          checked={choice.schedule_meeting === true}
-                          onChange={(e) => {
-                            const choices = [...branchNav.choices];
-                            choices[idx] = {
-                              ...choices[idx]!,
-                              schedule_meeting: e.target.checked ? true : undefined
-                            };
-                            updateSelected({
-                              navigation: { mode: "branch", question: branchNav.question, choices }
-                            });
-                          }}
-                        />
-                        <span>Agendar reunião na opção</span>
-                      </label>
-                      <div className="field" style={{ flex: 1 }}>
+                    <div className="field" style={{ flex: 1 }}>
                         <label className="label">Ir para</label>
                         <select
                           className="select"

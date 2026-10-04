@@ -23,6 +23,7 @@ import {
   contactLayerFromScriptLog,
   formatCallScriptLogForNotes,
   meetingScheduleFromScriptLog,
+  returnScheduleFromScriptLog,
   normalizeCallScriptLog,
   personFromScriptLog,
   type CallScriptLogEntry
@@ -709,9 +710,10 @@ export function Api4comCallResultForm({
 
   useEffect(() => {
     if (!call || contextLoading || !callWasAnswered) return;
-    const iso = meetingScheduleFromScriptLog(normalizeCallScriptLog(call.script_flow_log));
-    const key = `${call.id}:${iso ?? ""}`;
-    if (!iso) {
+    const log = normalizeCallScriptLog(call.script_flow_log);
+    const meetIso = meetingScheduleFromScriptLog(log);
+    const key = `${call.id}:m:${meetIso ?? ""}`;
+    if (!meetIso) {
       scriptMeetingPrefillRef.current = "";
       return;
     }
@@ -723,6 +725,30 @@ export function Api4comCallResultForm({
       setResultLockedByIntegration(false);
     }
     setNextType("schedule_meeting");
+    const { date, time } = isoToSpDateAndTime(meetIso);
+    setNextDate(date);
+    setNextTime(time);
+  }, [call, call?.script_flow_log, callWasAnswered, contextLoading, resultTypes]);
+
+  const scriptReturnPrefillRef = useRef("");
+  useEffect(() => {
+    if (!call || contextLoading || !callWasAnswered) return;
+    const log = normalizeCallScriptLog(call.script_flow_log);
+    if (meetingScheduleFromScriptLog(log)) return;
+    const iso = returnScheduleFromScriptLog(log);
+    const key = `${call.id}:r:${iso ?? ""}`;
+    if (!iso) {
+      scriptReturnPrefillRef.current = "";
+      return;
+    }
+    if (scriptReturnPrefillRef.current === key) return;
+    scriptReturnPrefillRef.current = key;
+    const retorno = resultTypes.find((r) => r.slug === "pediu_retorno");
+    if (retorno) {
+      setResultTypeId(String(retorno.id));
+      setResultLockedByIntegration(false);
+    }
+    setNextType("schedule_return");
     const { date, time } = isoToSpDateAndTime(iso);
     setNextDate(date);
     setNextTime(time);
