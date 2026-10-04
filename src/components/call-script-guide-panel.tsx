@@ -44,8 +44,6 @@ type Props = {
   onScriptFlowComplete?: () => void;
   /** Simulador: encerra o painel (ex.: ao lado de Reiniciar etapas). */
   onCloseSimulator?: () => void;
-  /** Simulador: abre complemento de registro comercial sem fechar o painel. */
-  onGoToCommercialRegistration?: () => void;
 };
 
 export function callScriptStatusLabel(status: string) {
@@ -72,8 +70,7 @@ export function CallScriptGuidePanel({
   onExpand,
   onLogUpdated,
   onScriptFlowComplete,
-  onCloseSimulator,
-  onGoToCommercialRegistration
+  onCloseSimulator
 }: Props) {
   const handoffSentRef = useRef(false);
   const [handoffPending, setHandoffPending] = useState(false);
@@ -418,11 +415,6 @@ export function CallScriptGuidePanel({
             <button type="button" className="btn" disabled={!flow} onClick={restartFlow}>
               Reiniciar etapas
             </button>
-            {onGoToCommercialRegistration ? (
-              <button type="button" className="btn" onClick={onGoToCommercialRegistration}>
-                Registro comercial
-              </button>
-            ) : null}
             {onCloseSimulator ? (
               <button type="button" className="btn" onClick={onCloseSimulator}>
                 Fechar

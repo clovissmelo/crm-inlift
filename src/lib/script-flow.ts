@@ -172,10 +172,41 @@ export function flowToDrafts(flow: ScriptFlow): ScriptFlowStepDraft[] {
   });
 }
 
+/** IDs sequenciais (1…n) na ordem da lista — alinha sidebar, JSON e campo ID. */
+export function normalizeDraftStepIds(drafts: ScriptFlowStepDraft[]): ScriptFlowStepDraft[] {
+  if (drafts.length === 0) return drafts;
+  const idMap = new Map<string, string>();
+  drafts.forEach((d, i) => idMap.set(d.id, String(i + 1)));
+
+  const mapNext = (next: string | null | undefined): string | null => {
+    if (!next?.trim()) return null;
+    return idMap.get(next) ?? null;
+  };
+
+  return drafts.map((d, i) => {
+    const newId = String(i + 1);
+    if (d.type === "branch") {
+      return {
+        ...d,
+        id: newId,
+        choices: (d.choices ?? []).map((c) => ({ ...c, next: mapNext(c.next) }))
+      };
+    }
+    return { ...d, id: newId, next: mapNext(d.next) };
+  });
+}
+
+export function normalizeCallScriptBodyForSave(body: string): string {
+  const flow = parseCallScriptBody(body);
+  if (!flow) return body;
+  return serializeCallScriptFlow(draftsToFlow(normalizeDraftStepIds(flowToDrafts(flow))));
+}
+
 export function draftsToFlow(drafts: ScriptFlowStepDraft[]): ScriptFlow {
+  const ordered = normalizeDraftStepIds(drafts);
   const steps: Record<string, ScriptFlowStep> = {};
-  for (let i = 0; i < drafts.length; i++) {
-    const d = drafts[i]!;
+  for (let i = 0; i < ordered.length; i++) {
+    const d = ordered[i]!;
     const id = d.id.trim() || `step-${i + 1}`;
     if (d.type === "branch") {
       steps[id] = {
@@ -224,7 +255,7 @@ export function draftsToFlow(drafts: ScriptFlowStepDraft[]): ScriptFlow {
       };
     }
   }
-  const start = drafts[0]?.id.trim() || "step-1";
+  const start = ordered[0]?.id.trim() || "step-1";
   return { v: 1, start: steps[start] ? start : Object.keys(steps)[0] ?? "step-1", steps };
 }
 

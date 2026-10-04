@@ -13,6 +13,7 @@ import {
   callTelephonyResultLabel
 } from "@/lib/api4com/call-registration";
 import type { TechnicalResultTypeRow } from "@/lib/classifications/technical-result-match";
+import { normalizeCallScriptBodyForSave } from "@/lib/script-flow";
 import { pickCallScriptBody } from "@/lib/pick-call-script";
 import { technicalResultIconForSlug } from "@/lib/technical-result-icons";
 import type { CallScriptLogEntry } from "@/lib/call-script-log";
@@ -100,7 +101,8 @@ export function ResultadoComercialSimulatorPanel({
     void fetch(`/api/message-scripts?${params}`)
       .then((r) => r.json())
       .then((d: { items?: Parameters<typeof pickCallScriptBody>[0] }) => {
-        setScriptBody(pickCallScriptBody(d.items ?? [], pid));
+        const raw = pickCallScriptBody(d.items ?? [], pid);
+        setScriptBody(raw ? normalizeCallScriptBodyForSave(raw) : null);
       })
       .catch(() => setScriptBody(null))
       .finally(() => setScriptReady(true));
@@ -176,7 +178,6 @@ export function ResultadoComercialSimulatorPanel({
         onExpand={() => setCollapsed(false)}
         onLogUpdated={setScriptLog}
         onScriptFlowComplete={goToCommercialRegistration}
-        onGoToCommercialRegistration={goToCommercialRegistration}
         onCloseSimulator={onClose}
       />
     );

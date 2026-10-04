@@ -7,6 +7,7 @@ import {
   DEFAULT_CAPTURE_FIELDS,
   draftsToFlow,
   flowToDrafts,
+  normalizeDraftStepIds,
   parseCallScriptBody,
   serializeCallScriptFlow,
   type ScriptFlowCaptureField,
@@ -29,14 +30,25 @@ function nextSuggestedId(existing: ScriptFlowStepDraft[]) {
 
 export function ScriptFlowEditor({ body, onBodyChange }: Props) {
   const parsed = useMemo(() => parseCallScriptBody(body), [body]);
-  const [drafts, setDrafts] = useState<ScriptFlowStepDraft[]>(() =>
-    parsed ? flowToDrafts(parsed) : flowToDrafts({ v: 1, start: "1", steps: {} })
-  );
+  const [drafts, setDrafts] = useState<ScriptFlowStepDraft[]>(() => {
+    const base = parsed ? flowToDrafts(parsed) : flowToDrafts({ v: 1, start: "1", steps: {} });
+    return normalizeDraftStepIds(base);
+  });
   const [selectedId, setSelectedId] = useState<string | null>(drafts[0]?.id ?? null);
 
   useEffect(() => {
     if (drafts.length === 0) return;
-    const flow = draftsToFlow(drafts);
+    const normalized = normalizeDraftStepIds(drafts);
+    const idsDiffer = normalized.some((d, i) => d.id !== drafts[i]?.id);
+    if (idsDiffer) {
+      setSelectedId((prev) => {
+        const idx = drafts.findIndex((d) => d.id === prev);
+        return idx >= 0 ? normalized[idx]!.id : (normalized[0]?.id ?? null);
+      });
+      setDrafts(normalized);
+      return;
+    }
+    const flow = draftsToFlow(normalized);
     onBodyChange(serializeCallScriptFlow(flow));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- serializa rascunho → body JSON
   }, [drafts]);
@@ -157,7 +169,6 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                   setSelectedId(newId);
                 }}
               />
-              <span className="muted script-flow-field-hint">Sugestão para novas etapas: {suggestedId}</span>
             </div>
             <div className="field">
               <label className="label" htmlFor="script-step-title">
@@ -215,7 +226,7 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
               <textarea
                 id="script-step-content"
                 className="textarea script-flow-textarea"
-                rows={10}
+                rows={4}
                 value={selected.content}
                 onChange={(e) => updateSelected({ content: e.target.value })}
               />

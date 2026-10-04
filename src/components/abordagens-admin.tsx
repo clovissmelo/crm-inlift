@@ -6,7 +6,12 @@ import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroD
 import { FilterBar, FilterSelect } from "@/components/filter-bar";
 import { ScriptFlowEditor } from "@/components/script-flow-editor";
 import { PLACEHOLDER_HELP } from "@/lib/message-templates";
-import { defaultEmptyCallFlow, parseCallScriptBody, serializeCallScriptFlow } from "@/lib/script-flow";
+import {
+  defaultEmptyCallFlow,
+  normalizeCallScriptBodyForSave,
+  parseCallScriptBody,
+  serializeCallScriptFlow
+} from "@/lib/script-flow";
 import type { Product } from "@/lib/types";
 
 type ScriptRow = {
@@ -61,6 +66,8 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
   const [scriptEditingId, setScriptEditingId] = useState<number | null>(null);
   const [scriptForm, setScriptForm] = useState<ScriptForm>(emptyScriptForm());
   const [scriptSaving, setScriptSaving] = useState(false);
+  const [scriptSaveNotice, setScriptSaveNotice] = useState<string | null>(null);
+  const [flowEditorKey, setFlowEditorKey] = useState(0);
 
   const load = useCallback(async () => {
     const s = await fetch("/api/message-scripts?all=1").then((res) => res.json());
@@ -89,6 +96,7 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
   function openScriptCreate() {
     setScriptEditingId(null);
     setScriptForm(emptyScriptForm());
+    setScriptSaveNotice(null);
     setError(null);
     setScriptModal(true);
   }
@@ -102,6 +110,7 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
       body: row.body,
       status: row.status as "active" | "inactive"
     });
+    setScriptSaveNotice(null);
     setError(null);
     setScriptModal(true);
   }
@@ -115,8 +124,13 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
       setError("Configure ao menos uma etapa no fluxo de ligação.");
       return;
     }
+    const bodyForSave =
+      scriptForm.script_type === "call"
+        ? normalizeCallScriptBodyForSave(scriptForm.body)
+        : scriptForm.body;
     const payload = {
       ...scriptForm,
+      body: bodyForSave,
       product_id: scriptForm.product_id ? Number(scriptForm.product_id) : null
     };
     const url = scriptEditingId ? `/api/message-scripts/${scriptEditingId}` : "/api/message-scripts";
@@ -131,7 +145,11 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
       setError("Erro ao salvar script");
       return;
     }
-    setScriptModal(false);
+    const created = !scriptEditingId ? ((await res.json()) as { id?: number }) : null;
+    if (created?.id) setScriptEditingId(created.id);
+    setScriptForm((f) => ({ ...f, body: bodyForSave }));
+    setFlowEditorKey((k) => k + 1);
+    setScriptSaveNotice("Salvo — você pode continuar editando.");
     void load();
   }
 
@@ -216,11 +234,21 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
       >
         <form onSubmit={saveScript}>
           {error ? <div className="alert alert-error">{error}</div> : null}
-          <div className="field">
-            <label className="label">Título</label>
-            <input className="input" value={scriptForm.title} onChange={(e) => setScriptForm((f) => ({ ...f, title: e.target.value }))} required />
-          </div>
-          <div className="filters-row">
+          {scriptSaveNotice ? (
+            <div className="alert" style={{ marginBottom: 12 }}>
+              {scriptSaveNotice}
+            </div>
+          ) : null}
+          <div className="filters-row script-modal-meta-row">
+            <div className="field script-modal-meta-title">
+              <label className="label">Título</label>
+              <input
+                className="input"
+                value={scriptForm.title}
+                onChange={(e) => setScriptForm((f) => ({ ...f, title: e.target.value }))}
+                required
+              />
+            </div>
             <div className="field">
               <label className="label">Tipo</label>
               <select
@@ -255,7 +283,7 @@ export function AbordagensAdmin({ products, canDelete = false }: { products: Pro
           {scriptForm.script_type === "call" ? (
             <div className="field script-flow-modal-field">
               <ScriptFlowEditor
-                key={`flow-${scriptEditingId ?? "new"}-${scriptModal}`}
+                key={`flow-${scriptEditingId ?? "new"}-${flowEditorKey}`}
                 body={scriptForm.body}
                 onBodyChange={(body) => setScriptForm((f) => ({ ...f, body }))}
               />
