@@ -67,21 +67,35 @@ type MoveModalState = {
   targetStageName?: string;
 };
 
-export function FunilKanbanView({ products, bdrs, users }: { products: Product[]; bdrs: User[]; users: User[] }) {
+function defaultBdrCloserFilter(user: Pick<User, "id" | "roles">) {
+  return user.roles.includes("bdr") ? String(user.id) : "";
+}
+
+export function FunilKanbanView({
+  products,
+  bdrs,
+  users,
+  currentUser
+}: {
+  products: Product[];
+  bdrs: User[];
+  users: User[];
+  currentUser: Pick<User, "id" | "roles" | "name">;
+}) {
   const [stages, setStages] = useState<Stage[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState(() => ({
     product_id: "",
     origin_bdr_user_id: "",
     owner_user_id: "",
-    closer_user_id: "",
+    closer_user_id: defaultBdrCloserFilter(currentUser),
     temperature: "",
     city: "",
     uf: "",
     period: "all"
-  });
+  }));
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
 
   const advancedFiltersActive = Boolean(
@@ -173,6 +187,7 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
 
     if (terminalKind === "won" || terminalKind === "lost") {
       resetEnterForm();
+      setCloserId(defaultBdrCloserFilter(currentUser));
       setMoveModal({ card, toStageId, mode: terminalKind });
       return;
     }
@@ -335,12 +350,12 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
             ))}
           </FilterSelect>
           <FilterSelect
-            label="Closer"
+            label="BDR"
             value={filters.closer_user_id}
             onChange={(e) => setFilters((f) => ({ ...f, closer_user_id: e.target.value }))}
           >
             <option value="">Todos</option>
-            {users.map((u) => (
+            {bdrs.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
               </option>
@@ -460,7 +475,7 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
                       <div style={{ fontSize: "0.85rem" }}>{card.title}</div>
                       <div className="kanban-card-meta">
                         {card.owner_name ? <span>Resp.: {card.owner_name}</span> : null}
-                        {card.closer_name ? <span>Closer: {card.closer_name}</span> : null}
+                        {card.closer_name ? <span>BDR: {card.closer_name}</span> : null}
                         {(() => {
                           const qual = cardTemperatureQual(card.temperature);
                           if (qual) return <LeadQualificationBadge value={qual} />;
@@ -520,7 +535,7 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
             <MoveExtraForm
               mode={moveModal.mode}
               lossReasons={lossReasons}
-              users={users}
+              bdrs={bdrs}
               lostReasonId={lostReasonId}
               setLostReasonId={setLostReasonId}
               lostNotes={lostNotes}
@@ -726,7 +741,7 @@ function StageEnterMoveForm(props: {
 function MoveExtraForm(props: {
   mode: "won" | "lost";
   lossReasons: Array<{ id: number; name: string }>;
-  users: User[];
+  bdrs: User[];
   lostReasonId: string;
   setLostReasonId: (v: string) => void;
   lostNotes: string;
@@ -765,10 +780,10 @@ function MoveExtraForm(props: {
     return (
       <>
         <div className="field">
-          <label className="label">Closer</label>
+          <label className="label">BDR</label>
           <select className="select" value={props.closerId} onChange={(e) => props.setCloserId(e.target.value)} required>
             <option value="">Selecione</option>
-            {props.users.map((u) => (
+            {props.bdrs.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
               </option>

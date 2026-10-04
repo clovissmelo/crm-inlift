@@ -309,8 +309,8 @@ export async function resolveAdministrativeRolesFromProfileIds(profileIds: numbe
 
 export async function resolveUserMenuAccess(userId: number, roles: UserRole[]): Promise<ResolvedMenuAccess> {
   const effectiveRoles = await resolveEffectiveUserRoles(userId, roles);
-  const profileIds = await listUserAccessProfileIds(userId);
-  if (profileIds.length === 0 && isAdmin({ roles: effectiveRoles })) return "all";
+  /** Papel Administrador (perfil ou user_roles) = menu completo, independente dos itens marcados na aba Acessos. */
+  if (isAdmin({ roles: effectiveRoles })) return "all";
   const assigned = await loadUserAssignedProfiles(userId);
   return resolveMenuKeysFromProfiles(assigned);
 }
