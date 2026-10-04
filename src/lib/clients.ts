@@ -2,7 +2,7 @@ import { all, get, nowIso, run } from "@/lib/db";
 import { normalizeCnpj } from "@/lib/format";
 import { parseLeadQualification } from "@/lib/lead-qualification";
 import type { ContactVerification } from "@/lib/types";
-import { parseContactProfileTags } from "@/lib/script-flow-capture-contact";
+import { parseContactProfileTags } from "@/lib/script-flow-capture-contact-utils";
 
 const CONTACT_VERIFICATION: ContactVerification[] = [
   "unverified",

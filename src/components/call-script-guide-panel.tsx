@@ -17,7 +17,7 @@ import {
   type ScriptFlow,
   type ScriptFlowStep
 } from "@/lib/script-flow";
-import { captureStepContactTag, captureStepCreatesContact } from "@/lib/script-flow-capture-contact";
+import { captureStepContactTag, captureStepCreatesContact } from "@/lib/script-flow-capture-contact-utils";
 import { spLocalDateTimeToIso } from "@/lib/datetime";
 import { CallDialContextBanner } from "@/components/call-dial-context-banner";
 import "./call-script-guide.css";

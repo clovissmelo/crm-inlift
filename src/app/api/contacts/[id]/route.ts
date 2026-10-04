@@ -1,6 +1,6 @@
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { get, nowIso, run } from "@/lib/db";
-import { parseContactProfileTags } from "@/lib/script-flow-capture-contact";
+import { parseContactProfileTags } from "@/lib/script-flow-capture-contact-utils";
 import { contactSchema } from "@/lib/validators";
 import { syncClientPhonesFromContacts } from "@/lib/call-strategy/client-phones";
 import { tryReenterProspeccaoAfterNewPhone } from "@/lib/call-strategy/queue-eval";
