@@ -28,27 +28,46 @@ const api4comExtensionField = z
   })
   .refine((v) => v === null || /^[0-9A-Za-z_-]{2,12}$/.test(v), "Ramal inválido (2–12 caracteres alfanuméricos)");
 
-export const userCreateSchema = z
-  .object({
-    name: z.string().trim().min(2, "Nome obrigatório"),
-    email: z.string().trim().email("E-mail inválido"),
-    phone: z.string().trim().optional().nullable(),
-    status: z.enum(["active", "inactive"]),
-    roles: z.array(z.enum(["bdr", "product_owner", "manager", "admin"])).optional(),
-    access_profile_ids: z.array(z.number().int().positive()).optional(),
-    password: z.string().min(8, "Senha com no mínimo 8 caracteres"),
-    api4com_extension: api4comExtensionField,
-    api4com_api_token: api4comApiTokenField
-  })
-  .refine((data) => (data.access_profile_ids?.length ?? 0) > 0 || (data.roles?.length ?? 0) > 0, {
-    message: "Selecione ao menos um perfil de acesso.",
-    path: ["access_profile_ids"]
-  });
-
-export const userUpdateSchema = userCreateSchema.partial().extend({
-  password: z.string().min(8).optional(),
-  clear_api4com_api_token: z.boolean().optional()
+const userBodySchema = z.object({
+  name: z.string().trim().min(2, "Nome obrigatório"),
+  email: z.string().trim().email("E-mail inválido"),
+  phone: z.string().trim().optional().nullable(),
+  status: z.enum(["active", "inactive"]),
+  roles: z.array(z.enum(["bdr", "product_owner", "manager", "admin"])).optional(),
+  access_profile_ids: z.array(z.number().int().positive()).optional(),
+  password: z.string().min(8, "Senha com no mínimo 8 caracteres"),
+  api4com_extension: api4comExtensionField,
+  api4com_api_token: api4comApiTokenField
 });
+
+function userHasAccessProfileOrRole(data: {
+  access_profile_ids?: number[];
+  roles?: Array<"bdr" | "product_owner" | "manager" | "admin">;
+}) {
+  return (data.access_profile_ids?.length ?? 0) > 0 || (data.roles?.length ?? 0) > 0;
+}
+
+export const userCreateSchema = userBodySchema.refine(userHasAccessProfileOrRole, {
+  message: "Selecione ao menos um perfil de acesso.",
+  path: ["access_profile_ids"]
+});
+
+export const userUpdateSchema = userBodySchema
+  .partial()
+  .extend({
+    password: z.string().min(8).optional(),
+    clear_api4com_api_token: z.boolean().optional()
+  })
+  .refine(
+    (data) => {
+      if (data.access_profile_ids === undefined && data.roles === undefined) return true;
+      return userHasAccessProfileOrRole(data);
+    },
+    {
+      message: "Selecione ao menos um perfil de acesso.",
+      path: ["access_profile_ids"]
+    }
+  );
 
 export const profileUpdateSchema = z.object({
   name: z.string().trim().min(2),
