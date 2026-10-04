@@ -208,6 +208,18 @@ export async function updateMeeting(
   }
 
   if (patch.status === "cancelled") {
+    const wasCancelled = current.status === "cancelled";
+    const meetingCtx = wasCancelled
+      ? null
+      : await get<{
+          client_id: number | null;
+          product_id: number | null;
+          opportunity_id: number | null;
+          bdr_user_id: number;
+        }>(
+          "SELECT client_id, product_id, opportunity_id, bdr_user_id FROM meetings WHERE id = @id",
+          { id: meetingId }
+        );
     await run(
       `
         UPDATE meetings SET status = 'cancelled', cancelled_at = @now, cancelled_by_user_id = @userId,
@@ -218,6 +230,16 @@ export async function updateMeeting(
     );
     await logStatus(meetingId, current.status, "cancelled", userId, patch.cancel_reason);
     await cancelMeetingOnGoogle(meetingId);
+    if (!wasCancelled && meetingCtx?.client_id) {
+      const { restoreProspeccaoAfterMeetingCancelled } = await import("@/lib/prospeccao-return");
+      await restoreProspeccaoAfterMeetingCancelled({
+        clientId: meetingCtx.client_id,
+        productId: meetingCtx.product_id,
+        opportunityId: meetingCtx.opportunity_id,
+        bdrUserId: meetingCtx.bdr_user_id,
+        actorUserId: userId
+      });
+    }
     return;
   }
 

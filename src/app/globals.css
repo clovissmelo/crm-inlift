@@ -1130,6 +1130,11 @@ table.data-table td.prospeccao-col-phone-count__value {
   justify-content: flex-end;
 }
 
+.cadastro-list-actions--inline {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
 .btn-result-test {
   display: inline-flex;
   align-items: center;

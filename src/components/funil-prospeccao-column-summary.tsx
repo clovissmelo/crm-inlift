@@ -39,7 +39,6 @@ export function FunilProspeccaoColumnSummary({
           </li>
         ))}
       </ul>
-      <p className="muted funil-prospeccao-summary__hint">Fila de prospecção — ligue em Leads para contato.</p>
     </div>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
 import clsx from "clsx";
-import { useCallback, useEffect, useState } from "react";
-import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { CadastroModal, CadastroPageHeader, CadastroRowActions } from "@/components/cadastro-ui";
 import { LeadQualificationBadge, LeadQualificationLabel } from "@/components/lead-qualification-picker";
 import {
   deriveSuggestFollowUpFromRules,
@@ -85,6 +85,8 @@ export function ResultadoComercialAdmin({
   });
   const [resultSaving, setResultSaving] = useState(false);
   const [simulatorOpen, setSimulatorOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ResultRow | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/approach-result-types").then((res) => res.json());
@@ -206,22 +208,26 @@ export function ResultadoComercialAdmin({
     void load();
   }
 
-  async function removeResult(row: ResultRow) {
-    if (!(await requestCadastroDelete(row.name))) return;
+  async function confirmDeleteResult(e: FormEvent) {
+    e.preventDefault();
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
     setError(null);
-    const res = await fetch(`/api/approach-result-types/${row.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/approach-result-types/${deleteTarget.id}`, { method: "DELETE" });
     const data = (await res.json()) as { error?: string };
+    setDeleteLoading(false);
     if (!res.ok) {
       setError(data.error ?? "Erro ao excluir");
       return;
     }
-    if (resultEditingId === row.id) setResultModal(false);
+    if (resultEditingId === deleteTarget.id) setResultModal(false);
+    setDeleteTarget(null);
     void load();
   }
 
   return (
     <div>
-      {error && !resultModal ? <div className="alert alert-error">{error}</div> : null}
+      {error && !resultModal && !deleteTarget ? <div className="alert alert-error">{error}</div> : null}
 
       <CadastroPageHeader
         title={commercialOnly ? "Resultados Comerciais" : "Resultado comercial"}
@@ -247,7 +253,7 @@ export function ResultadoComercialAdmin({
               <th>Retorno obrig.</th>
               <th>Perg. decisor</th>
               <th>Próximos passos</th>
-              <th style={{ width: canDelete ? 120 : 80 }} />
+              <th style={{ width: canDelete ? 108 : 80 }} />
             </tr>
           </thead>
           <tbody>
@@ -264,7 +270,7 @@ export function ResultadoComercialAdmin({
                   <CadastroRowActions
                     canDelete={canDelete}
                     onEdit={() => openResultEdit(r)}
-                    onDelete={() => removeResult(r)}
+                    onDelete={() => setDeleteTarget(r)}
                   />
                 </td>
               </tr>
@@ -421,6 +427,32 @@ export function ResultadoComercialAdmin({
             </button>
           </div>
         </form>
+      </CadastroModal>
+
+      <CadastroModal
+        open={deleteTarget !== null}
+        title={deleteTarget ? `Excluir “${deleteTarget.name}”` : "Excluir resultado"}
+        onClose={() => {
+          if (!deleteLoading) setDeleteTarget(null);
+        }}
+      >
+        {deleteTarget ? (
+          <form onSubmit={(e) => void confirmDeleteResult(e)}>
+            {error ? <div className="alert alert-error">{error}</div> : null}
+            <p className="muted" style={{ marginTop: 0 }}>
+              Este resultado comercial será removido. Abordagens já registradas mantêm o histórico, mas o tipo deixará de
+              estar disponível para novos registros. Esta ação não pode ser desfeita.
+            </p>
+            <div className="resultado-modal-actions">
+              <button type="button" className="btn" disabled={deleteLoading} onClick={() => setDeleteTarget(null)}>
+                Cancelar
+              </button>
+              <button type="submit" className="btn btn-danger" disabled={deleteLoading}>
+                {deleteLoading ? "Excluindo…" : "Excluir resultado"}
+              </button>
+            </div>
+          </form>
+        ) : null}
       </CadastroModal>
 
       <ResultadoComercialSimulatorPanel open={simulatorOpen} onClose={() => setSimulatorOpen(false)} />

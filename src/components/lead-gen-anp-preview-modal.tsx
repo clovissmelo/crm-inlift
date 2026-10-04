@@ -30,6 +30,8 @@ type Props = {
   leadsRequested: number;
   onClose: () => void;
   onConfirmStart: () => void;
+  /** Ajusta a meta ao volume estimado e reabre a prévia. */
+  onAdjustMetaToEstimated: (estimated: number) => void;
   starting: boolean;
 };
 
@@ -41,12 +43,15 @@ export function LeadGenAnpPreviewModal({
   leadsRequested,
   onClose,
   onConfirmStart,
+  onAdjustMetaToEstimated,
   starting
 }: Props) {
   if (!open) return null;
 
   const unsupported = data?.supported === false;
   const cities = data?.cities ?? [];
+  const estimatedNew = data?.new_estimated ?? 0;
+  const belowRequested = Boolean(data && !unsupported && !loading && !error && estimatedNew < leadsRequested);
 
   return (
     <div className="lead-gen-overlay" role="dialog" aria-modal="true" aria-labelledby="lead-gen-anp-preview-title">
@@ -79,7 +84,17 @@ export function LeadGenAnpPreviewModal({
               <li>Já no CRM: {data.existing_in_crm ?? 0}</li>
               <li>Novos estimados: {data.new_estimated ?? 0}</li>
             </ul>
-            {data.volume_hint ? (
+            {belowRequested ? (
+              <div className="lead-gen-preview-hint lead-gen-preview-hint--warn lead-gen-preview-adjust-prompt" role="status">
+                <p style={{ margin: "0 0 0.35rem" }}>
+                  A consulta encontrou <strong>{estimatedNew}</strong> CNPJ novo(s) estimado(s), abaixo dos{" "}
+                  <strong>{leadsRequested}</strong> solicitados. Não dá para iniciar uma geração parcial com essa meta.
+                </p>
+                <p style={{ margin: 0 }}>
+                  Deseja <strong>ajustar</strong> (ampliar cidades/zonas ou reduzir a meta) antes de continuar?
+                </p>
+              </div>
+            ) : data.volume_hint ? (
               <p className={data.volume_ok ? "lead-gen-preview-hint lead-gen-preview-hint--ok" : "lead-gen-preview-hint lead-gen-preview-hint--warn"}>
                 {data.volume_hint}
               </p>
@@ -119,17 +134,37 @@ export function LeadGenAnpPreviewModal({
         ) : null}
 
         <footer className="lead-gen-overlay-actions">
-          <button type="button" className="btn" onClick={onClose} disabled={starting}>
-            Voltar
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={loading || starting || Boolean(error && !unsupported)}
-            onClick={onConfirmStart}
-          >
-            {starting ? "Iniciando…" : unsupported ? "Iniciar geração" : "Confirmar e iniciar geração"}
-          </button>
+          {belowRequested ? (
+            <>
+              <button type="button" className="btn btn-primary" onClick={onClose} disabled={starting}>
+                Ajustar seleção
+              </button>
+              {estimatedNew > 0 ? (
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={starting}
+                  onClick={() => onAdjustMetaToEstimated(estimatedNew)}
+                >
+                  Usar meta de {estimatedNew} e conferir de novo
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <button type="button" className="btn" onClick={onClose} disabled={starting}>
+                Voltar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={loading || starting || Boolean(error && !unsupported)}
+                onClick={onConfirmStart}
+              >
+                {starting ? "Iniciando…" : unsupported ? "Iniciar geração" : "Confirmar e iniciar geração"}
+              </button>
+            </>
+          )}
         </footer>
       </div>
     </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 
 export function CadastroPageHeader({
@@ -44,7 +45,7 @@ export function CadastroRowActions({
   onTest?: () => void;
 }) {
   return (
-    <div className="cadastro-list-actions">
+    <div className="cadastro-list-actions cadastro-list-actions--inline">
       {onTest ? (
         <button type="button" className="btn btn-result-test" onClick={onTest}>
           <span className="btn-result-test-icon" aria-hidden>
@@ -57,8 +58,14 @@ export function CadastroRowActions({
         Editar
       </button>
       {canDelete && onDelete ? (
-        <button type="button" className="btn btn-danger" onClick={() => void onDelete()}>
-          Excluir
+        <button
+          type="button"
+          className="btn btn-icon-sm btn-danger-outline"
+          aria-label="Excluir"
+          title="Excluir"
+          onClick={() => void onDelete()}
+        >
+          <Trash2 size={16} aria-hidden />
         </button>
       ) : null}
     </div>

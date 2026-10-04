@@ -584,8 +584,10 @@ export function AdminNovosLeadsWizard() {
     return true;
   }
 
-  async function openAnpPreviewModal() {
+  async function openAnpPreviewModal(maxStationsOverride?: number) {
     if (!validateBeforeLeadGen()) return;
+    const meta = clampLeadsRequested(maxStationsOverride ?? leadsRequested);
+    if (maxStationsOverride != null) setLeadsRequested(meta);
     setError(null);
     setAnpPreviewOpen(true);
     setAnpPreviewLoading(true);
@@ -595,7 +597,7 @@ export function AdminNovosLeadsWizard() {
       const res = await fetch("/api/admin/lead-generation/anp-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(leadGenSelectionPayload())
+        body: JSON.stringify({ ...leadGenSelectionPayload(), max_stations: meta })
       });
       const data = (await res.json()) as AnpPreviewPayload & { error?: string };
       if (!res.ok) {
@@ -612,6 +614,16 @@ export function AdminNovosLeadsWizard() {
 
   async function startRun() {
     if (!validateBeforeLeadGen()) return;
+    const meta = clampLeadsRequested(leadsRequested);
+    if (
+      anpPreviewData &&
+      anpPreviewData.supported !== false &&
+      (anpPreviewData.new_estimated ?? 0) < meta
+    ) {
+      setError("Volume estimado abaixo da meta. Ajuste cidades ou a meta antes de iniciar.");
+      setAnpPreviewOpen(true);
+      return;
+    }
     if (productId !== "" && citySelection.municipalities.length > 0) {
       const indRes = await fetch("/api/admin/lead-generation/geo/indicators", {
         method: "POST",
@@ -858,6 +870,7 @@ export function AdminNovosLeadsWizard() {
         leadsRequested={leadsRequested}
         onClose={() => setAnpPreviewOpen(false)}
         onConfirmStart={() => void startRun()}
+        onAdjustMetaToEstimated={(estimated) => void openAnpPreviewModal(estimated)}
         starting={starting}
       />
 
