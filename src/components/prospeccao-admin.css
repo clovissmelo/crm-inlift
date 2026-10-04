@@ -191,7 +191,16 @@
 
 .prospeccao-queue-row__actions {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem 0.5rem;
+}
+
+.prospeccao-queue-row__actions-pair {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 0.35rem;
 }

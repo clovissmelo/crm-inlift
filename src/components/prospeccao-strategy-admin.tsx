@@ -738,7 +738,7 @@ export function ProspeccaoStrategyAdmin({ initialTab = "rules" }: { initialTab?:
                     </div>
                     <div className="prospeccao-queue-row__actions">
                       {canDeletePriority(p) ? (
-                        <>
+                        <div className="prospeccao-queue-row__actions-pair">
                           <button type="button" className="btn btn-sm" onClick={() => openEditPriority(p)}>
                             Editar regra
                           </button>
@@ -749,7 +749,7 @@ export function ProspeccaoStrategyAdmin({ initialTab = "rules" }: { initialTab?:
                           >
                             Excluir
                           </button>
-                        </>
+                        </div>
                       ) : null}
                       <button type="button" className="btn btn-sm btn-primary" onClick={() => void savePriority(p)}>
                         Salvar

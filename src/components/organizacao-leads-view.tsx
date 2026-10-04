@@ -266,62 +266,66 @@ export function OrganizacaoLeadsView({
       </div>
 
       <div className="panel organizacao-bulk-bar">
-        <div className="field organizacao-bulk-bar-field">
-          <label className="label" htmlFor="organizacao-new-bdr">
-            Nova BDR responsável
-          </label>
-          <select
-            id="organizacao-new-bdr"
-            className="select"
-            value={toBdr}
-            onChange={(e) => setToBdr(e.target.value)}
-          >
-            <option value="">Selecione</option>
-            {bdrs.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field organizacao-bulk-bar-field">
-          <label className="label" htmlFor="organizacao-new-product">
-            Vincular produto (oportunidade)
-          </label>
-          <select
-            id="organizacao-new-product"
-            className="select"
-            value={toProduct}
-            onChange={(e) => setToProduct(e.target.value)}
-          >
-            <option value="">Selecione</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="organizacao-bulk-bar-actions">
+        <div className="organizacao-bulk-bar-group">
+          <div className="field organizacao-bulk-bar-field">
+            <label className="label" htmlFor="organizacao-new-bdr">
+              Nova BDR responsável
+            </label>
+            <select
+              id="organizacao-new-bdr"
+              className="select"
+              value={toBdr}
+              onChange={(e) => setToBdr(e.target.value)}
+            >
+              <option value="">Selecione</option>
+              {bdrs.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
-            className="btn btn-primary"
+            className="btn btn-primary organizacao-bulk-bar-btn"
             type="button"
             disabled={!toBdr || selectedCount === 0}
             onClick={() => setConfirmOpen(true)}
           >
             Transferir BDR
           </button>
+        </div>
+        <div className="organizacao-bulk-bar-group">
+          <div className="field organizacao-bulk-bar-field">
+            <label className="label" htmlFor="organizacao-new-product">
+              Vincular produto (criar oportunidade)
+            </label>
+            <select
+              id="organizacao-new-product"
+              className="select"
+              value={toProduct}
+              onChange={(e) => setToProduct(e.target.value)}
+            >
+              <option value="">Selecione</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
-            className="btn btn-primary"
+            className="btn btn-primary organizacao-bulk-bar-btn"
             type="button"
             disabled={!toProduct || selectedCount === 0}
             onClick={() => setConfirmProductOpen(true)}
           >
             Vincular produto
           </button>
+        </div>
+        <div className="organizacao-bulk-bar-trailing">
           {isAdmin ? (
             <button
-              className="btn btn-danger"
+              className="btn btn-danger organizacao-bulk-bar-btn"
               type="button"
               disabled={selectedCount === 0}
               onClick={() => {
@@ -341,7 +345,7 @@ export function OrganizacaoLeadsView({
                 if (e.target.checked) setSelected(new Set());
               }}
             />
-            <span>Selecionar todos os {total} resultados do filtro</span>
+            <span>Selecionar os {total} resultados do filtro</span>
           </label>
         </div>
       </div>

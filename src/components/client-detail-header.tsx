@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ChevronDown, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { CalendarPlus, MoreHorizontal, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   ClientContactShortcuts,
@@ -12,6 +12,64 @@ import {
   LeadQualificationPicker
 } from "@/components/lead-qualification-picker";
 import type { LeadQualification } from "@/lib/lead-qualification";
+
+function QualificationEdit({
+  leadQualification,
+  savingQualification,
+  onChangeLeadQualification
+}: {
+  leadQualification: LeadQualification;
+  savingQualification: boolean;
+  onChangeLeadQualification: (next: LeadQualification) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const panelId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="client-detail-header__qual-edit" ref={rootRef}>
+      <LeadQualificationBadge value={leadQualification} />
+      <button
+        type="button"
+        className="btn btn-icon-sm client-detail-header__edit-btn"
+        aria-expanded={open}
+        aria-controls={panelId}
+        title="Alterar qualificação do lead"
+        aria-label="Alterar qualificação do lead"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Pencil size={14} aria-hidden />
+      </button>
+      {open ? (
+        <div id={panelId} className="client-detail-header__edit-popover panel" role="dialog" aria-label="Alterar qualificação">
+          <LeadQualificationPicker
+            value={leadQualification}
+            onChange={onChangeLeadQualification}
+            disabled={savingQualification}
+            compact
+            showCurrentLabel={false}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function HeaderMetaEdit({
   label,
@@ -45,35 +103,32 @@ function HeaderMetaEdit({
   }, [open]);
 
   return (
-    <div className="client-detail-header__meta-row" ref={rootRef}>
-      <span className="client-detail-header__meta-text">
-        <span className="muted">{label}: </span>
-        {value}
-      </span>
-      <div className="client-detail-header__meta-edit">
-        <button
-          type="button"
-          className="btn btn-icon-sm client-detail-header__edit-btn"
-          aria-expanded={open}
-          aria-controls={panelId}
-          title={panelLabel}
-          aria-label={panelLabel}
-          onClick={() => setOpen((v) => !v)}
-        >
-          <Pencil size={14} aria-hidden />
-        </button>
-        {open ? (
-          <div id={panelId} className="client-detail-header__edit-popover panel" role="dialog" aria-label={panelLabel}>
-            {panel}
-          </div>
-        ) : null}
-      </div>
+    <div className="client-detail-header__chip" ref={rootRef}>
+      <span className="client-detail-header__chip-label muted">{label}</span>
+      <span className="client-detail-header__chip-value">{value}</span>
+      <button
+        type="button"
+        className="btn btn-icon-sm client-detail-header__edit-btn"
+        aria-expanded={open}
+        aria-controls={panelId}
+        title={panelLabel}
+        aria-label={panelLabel}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Pencil size={14} aria-hidden />
+      </button>
+      {open ? (
+        <div id={panelId} className="client-detail-header__edit-popover panel" role="dialog" aria-label={panelLabel}>
+          {panel}
+        </div>
+      ) : null}
     </div>
   );
 }
 
 export function ClientDetailHeader({
   clientDisplayName,
+  legalName,
   isExistingCustomer,
   savingExistingCustomer,
   onChangeExistingCustomer,
@@ -82,11 +137,11 @@ export function ClientDetailHeader({
   savingQualification,
   onChangeLeadQualification,
   bdrName,
+  linkedProducts,
+  onAssociateProduct,
   contactShortcuts,
-  engagementContextLabel,
   onRegisterApproach,
-  onScheduleContact,
-  onScheduleMeeting,
+  onSchedule,
   onNewOpportunity,
   onEnrollProspeccao,
   canReconsult,
@@ -95,6 +150,7 @@ export function ClientDetailHeader({
   deletingClient
 }: {
   clientDisplayName: string;
+  legalName: string | null;
   isExistingCustomer: boolean;
   savingExistingCustomer: boolean;
   onChangeExistingCustomer: (next: boolean) => void;
@@ -103,6 +159,8 @@ export function ClientDetailHeader({
   savingQualification: boolean;
   onChangeLeadQualification: (next: LeadQualification) => void;
   bdrName: string | null;
+  linkedProducts: Array<{ product_id: number; name: string }>;
+  onAssociateProduct: () => void;
   contactShortcuts: {
     clientName: string;
     contactName?: string | null;
@@ -116,10 +174,8 @@ export function ClientDetailHeader({
     dialOptions?: ContactDialOption[];
     resolveEngagement?: () => Promise<{ productId?: number | null; productName?: string | null } | void>;
   };
-  engagementContextLabel?: string | null;
   onRegisterApproach: () => void;
-  onScheduleContact: () => void;
-  onScheduleMeeting: () => void;
+  onSchedule: () => void;
   onNewOpportunity: () => void;
   onEnrollProspeccao?: () => void;
   canReconsult?: boolean;
@@ -127,153 +183,82 @@ export function ClientDetailHeader({
   onDeleteClient?: () => void;
   deletingClient?: boolean;
 }) {
-  const [actionsOpen, setActionsOpen] = useState(false);
-  const actionsRef = useRef<HTMLDivElement>(null);
-  const actionsMenuId = useId();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const moreMenuId = useId();
 
   useEffect(() => {
-    if (!actionsOpen) return;
+    if (!moreOpen) return;
     function onDoc(e: MouseEvent) {
-      if (!actionsRef.current?.contains(e.target as Node)) setActionsOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setActionsOpen(false);
+      if (!moreRef.current?.contains(e.target as Node)) setMoreOpen(false);
     }
     document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [actionsOpen]);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [moreOpen]);
 
-  function runAction(fn: () => void) {
-    setActionsOpen(false);
-    fn();
-  }
+  const subtitle = legalName?.trim() && legalName.trim() !== clientDisplayName ? legalName.trim() : null;
 
   return (
-    <header className="client-detail-header">
-      <div className="client-detail-header__main">
-        <h1 className="client-detail-header__name">{clientDisplayName}</h1>
-        {engagementContextLabel ? (
-          <p className="client-detail-header__engagement-context muted">{engagementContextLabel}</p>
-        ) : null}
-        <div className="client-detail-header__meta">
-          <HeaderMetaEdit
-            label="Já é cliente"
-            panelLabel="Alterar se já é cliente"
-            value={<strong>{isExistingCustomer ? "Sim" : "Não"}</strong>}
-            panel={
-              <div className="client-detail-header__qual-panel">
-                <p className="muted client-detail-header__qual-hint">Marque manualmente quando o posto já for cliente.</p>
-                <div className="client-detail-header__yes-no">
-                  <button
-                    type="button"
-                    className={clsx("btn btn-sm", !isExistingCustomer && "btn-primary")}
-                    disabled={savingExistingCustomer || !isExistingCustomer}
-                    onClick={() => onChangeExistingCustomer(false)}
-                  >
-                    Não
-                  </button>
-                  <button
-                    type="button"
-                    className={clsx("btn btn-sm", isExistingCustomer && "btn-primary")}
-                    disabled={savingExistingCustomer || isExistingCustomer}
-                    onClick={() => onChangeExistingCustomer(true)}
-                  >
-                    Sim
-                  </button>
-                </div>
-              </div>
-            }
-          />
-          <p className="client-detail-header__meta-row client-detail-header__meta-row--plain">
-            <span className="muted">Em prospecção: </span>
-            <strong>{inProspeccao ? "Sim" : "Não"}</strong>
-          </p>
-          <HeaderMetaEdit
-            label="Qualificação do lead"
-            panelLabel="Alterar qualificação do lead"
-            value={<LeadQualificationBadge value={leadQualification} />}
-            panel={
-              <LeadQualificationPicker
-                value={leadQualification}
-                onChange={onChangeLeadQualification}
-                disabled={savingQualification}
-                compact
-                showCurrentLabel={false}
-              />
-            }
-          />
+    <header className="client-detail-header client-detail-header--v2">
+      <div className="client-detail-header__top">
+        <div className="client-detail-header__title-block">
+          <div className="client-detail-header__title-row">
+            <h1 className="client-detail-header__name">{clientDisplayName}</h1>
+            <QualificationEdit
+              leadQualification={leadQualification}
+              savingQualification={savingQualification}
+              onChangeLeadQualification={onChangeLeadQualification}
+            />
+          </div>
+          {subtitle ? <p className="client-detail-header__legal muted">{subtitle}</p> : null}
         </div>
-      </div>
-
-      <div className="client-detail-header__aside">
-        <div className="client-detail-header__aside-row">
-          <span className="client-detail-header__aside-label">Contato</span>
-          <ClientContactShortcuts {...contactShortcuts} size="md" />
-        </div>
-        <div className="client-detail-header__aside-row client-detail-header__actions-row" ref={actionsRef}>
-          <span className="client-detail-header__aside-label">Ações</span>
-          <div className="client-detail-header__actions-wrap">
+        <div className="client-detail-header__primary-actions">
+          <button type="button" className="btn btn-primary" onClick={onRegisterApproach}>
+            <Plus size={16} aria-hidden /> Registrar
+          </button>
+          <button type="button" className="btn btn-primary" onClick={onSchedule}>
+            <CalendarPlus size={16} aria-hidden /> Agendar
+          </button>
+          {canReconsult && onReconsult ? (
+            <button type="button" className="btn btn-icon-md" title="Reconsultar dados" aria-label="Reconsultar dados" onClick={onReconsult}>
+              <RefreshCw size={18} aria-hidden />
+            </button>
+          ) : null}
+          {canReconsult && onDeleteClient ? (
             <button
               type="button"
-              className={clsx("btn client-detail-header__actions-trigger", actionsOpen && "is-open")}
-              aria-haspopup="menu"
-              aria-expanded={actionsOpen}
-              aria-controls={actionsMenuId}
-              onClick={() => setActionsOpen((o) => !o)}
+              className="btn btn-icon-md btn-danger-outline"
+              title="Excluir cliente"
+              aria-label="Excluir cliente"
+              disabled={deletingClient}
+              onClick={onDeleteClient}
             >
-              Escolher ação
-              <ChevronDown size={16} aria-hidden className="client-detail-header__actions-chevron" />
+              <Trash2 size={18} aria-hidden />
             </button>
-            {actionsOpen ? (
-              <ul id={actionsMenuId} className="client-detail-header__actions-menu panel" role="menu">
+          ) : null}
+          <div className="client-detail-header__more-wrap" ref={moreRef}>
+            <button
+              type="button"
+              className={clsx("btn btn-icon-md", moreOpen && "is-open")}
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+              aria-controls={moreMenuId}
+              title="Mais ações"
+              onClick={() => setMoreOpen((o) => !o)}
+            >
+              <MoreHorizontal size={18} aria-hidden />
+            </button>
+            {moreOpen ? (
+              <ul id={moreMenuId} className="client-detail-header__more-menu panel" role="menu">
                 <li role="none">
-                  <button type="button" role="menuitem" className="client-detail-header__actions-item" onClick={() => runAction(onRegisterApproach)}>
-                    Registrar abordagem
-                  </button>
-                </li>
-                <li role="none">
-                  <button type="button" role="menuitem" className="client-detail-header__actions-item" onClick={() => runAction(onScheduleContact)}>
-                    Agendar contato
-                  </button>
-                </li>
-                <li role="none">
-                  <button type="button" role="menuitem" className="client-detail-header__actions-item" onClick={() => runAction(onScheduleMeeting)}>
-                    Agendar reunião
-                  </button>
-                </li>
-                <li role="none">
-                  <button type="button" role="menuitem" className="client-detail-header__actions-item" onClick={() => runAction(onNewOpportunity)}>
+                  <button type="button" role="menuitem" className="client-detail-header__more-item" onClick={() => { setMoreOpen(false); onNewOpportunity(); }}>
                     Nova oportunidade
                   </button>
                 </li>
-                {!inProspeccao && onEnrollProspeccao ? (
+                {onEnrollProspeccao ? (
                   <li role="none">
-                    <button type="button" role="menuitem" className="client-detail-header__actions-item" onClick={() => runAction(onEnrollProspeccao)}>
+                    <button type="button" role="menuitem" className="client-detail-header__more-item" onClick={() => { setMoreOpen(false); onEnrollProspeccao(); }}>
                       Colocar em prospecção
-                    </button>
-                  </li>
-                ) : null}
-                {canReconsult && onReconsult ? (
-                  <li role="none">
-                    <button type="button" role="menuitem" className="client-detail-header__actions-item" onClick={() => runAction(onReconsult)}>
-                      <RefreshCw size={14} aria-hidden /> Reconsultar dados
-                    </button>
-                  </li>
-                ) : null}
-                {canReconsult && onDeleteClient ? (
-                  <li role="none">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="client-detail-header__actions-item client-detail-header__actions-item--danger"
-                      disabled={deletingClient}
-                      onClick={() => runAction(onDeleteClient)}
-                    >
-                      <Trash2 size={14} aria-hidden /> Excluir cliente
                     </button>
                   </li>
                 ) : null}
@@ -281,10 +266,70 @@ export function ClientDetailHeader({
             ) : null}
           </div>
         </div>
-        <p className="client-detail-header__aside-row client-detail-header__bdr-row">
-          <span className="client-detail-header__aside-label">BDR</span>
-          <span className="client-detail-header__bdr-value">{bdrName?.trim() || "—"}</span>
-        </p>
+      </div>
+
+      <div className="client-detail-header__status-row">
+        <HeaderMetaEdit
+          label="Já é cliente"
+          panelLabel="Alterar se já é cliente"
+          value={<strong>{isExistingCustomer ? "Sim" : "Não"}</strong>}
+          panel={
+            <div className="client-detail-header__qual-panel">
+              <p className="muted client-detail-header__qual-hint">Marque manualmente quando o posto já for cliente.</p>
+              <div className="client-detail-header__yes-no">
+                <button
+                  type="button"
+                  className={clsx("btn btn-sm", !isExistingCustomer && "btn-primary")}
+                  disabled={savingExistingCustomer || !isExistingCustomer}
+                  onClick={() => onChangeExistingCustomer(false)}
+                >
+                  Não
+                </button>
+                <button
+                  type="button"
+                  className={clsx("btn btn-sm", isExistingCustomer && "btn-primary")}
+                  disabled={savingExistingCustomer || isExistingCustomer}
+                  onClick={() => onChangeExistingCustomer(true)}
+                >
+                  Sim
+                </button>
+              </div>
+            </div>
+          }
+        />
+        <div className="client-detail-header__chip client-detail-header__chip--plain">
+          <span className="client-detail-header__chip-label muted">Em prospecção</span>
+          <span className={clsx("client-detail-header__badge", inProspeccao && "client-detail-header__badge--on")}>
+            {inProspeccao ? "Sim" : "Não"}
+          </span>
+        </div>
+        {bdrName?.trim() ? (
+          <div className="client-detail-header__chip client-detail-header__chip--plain">
+            <span className="client-detail-header__chip-label muted">BDR</span>
+            <span className="client-detail-header__chip-value">{bdrName}</span>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="client-detail-header__contact-row">
+        <ClientContactShortcuts {...contactShortcuts} size="md" />
+        <div className="client-detail-header__products">
+          <span className="muted client-detail-header__products-label">Produtos associados</span>
+          <div className="client-detail-header__product-tags">
+            {linkedProducts.length === 0 ? (
+              <span className="muted">Nenhum</span>
+            ) : (
+              linkedProducts.map((p) => (
+                <span key={p.product_id} className="client-detail-header__product-tag">
+                  {p.name}
+                </span>
+              ))
+            )}
+            <button type="button" className="btn btn-sm" onClick={onAssociateProduct}>
+              + Associar
+            </button>
+          </div>
+        </div>
       </div>
     </header>
   );

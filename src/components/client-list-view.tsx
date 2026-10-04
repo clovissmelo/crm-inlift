@@ -33,7 +33,8 @@ export function ClientListView({ initialItems, initialTotal, products, bdrs, def
     search: "",
     without_approach: defaultFilters?.without_approach ? "1" : "",
     lead_qualification: "",
-    official_client: ""
+    official_client: "",
+    existing_customer: ""
   });
   const [offset, setOffset] = useState(0);
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
@@ -123,6 +124,15 @@ export function ClientListView({ initialItems, initialTotal, products, bdrs, def
                 {LEAD_QUALIFICATION_LABELS[q]}
               </option>
             ))}
+          </FilterSelect>
+          <FilterSelect
+            label="Já é cliente"
+            value={filters.existing_customer}
+            onChange={(e) => setFilters((f) => ({ ...f, existing_customer: e.target.value }))}
+          >
+            <option value="">Todos</option>
+            <option value="yes">Sim</option>
+            <option value="no">Não</option>
           </FilterSelect>
         </FilterBar>
 

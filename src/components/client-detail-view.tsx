@@ -1,15 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { Mail, Phone, Plus, Search, Star, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import {
-  ClientEngagementContextModal,
-  type ClientOpportunityOption
-} from "@/components/client-engagement-context-modal";
+import type { ClientOpportunityOption } from "@/components/client-engagement-context-modal";
+import { ClientEngagementLinkModal } from "@/components/client-engagement-link-modal";
+import { ClientScheduleIntentModal } from "@/components/client-schedule-intent-modal";
 import type { ClientEngagementContext } from "@/lib/engagement-context";
-import { engagementLabelFromContext } from "@/lib/engagement-context";
 import { ApproachWorkflowModal } from "@/components/approach-workflow-modal";
 import { ScheduleContactModal } from "@/components/schedule-contact-modal";
 import { CadastroModal, requestCadastroDelete } from "@/components/cadastro-ui";
@@ -138,12 +135,12 @@ function hasText(value: string | null | undefined) {
   return Boolean(value?.trim());
 }
 
-function InfoLine({ label, children }: { label: string; children: ReactNode }) {
+function DetailField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <p style={{ margin: "0.35rem 0" }}>
-      <span className="muted">{label}: </span>
-      {children}
-    </p>
+    <div className="client-detail-field">
+      <dt className="client-detail-field__label muted">{label}</dt>
+      <dd className="client-detail-field__value">{children}</dd>
+    </div>
   );
 }
 
@@ -196,12 +193,11 @@ export function ClientDetailView({
   const [newOppTitle, setNewOppTitle] = useState("");
   const [newOppBdrId, setNewOppBdrId] = useState("");
   const [oppModalOpen, setOppModalOpen] = useState(false);
-  const [contextModalOpen, setContextModalOpen] = useState(false);
-  const [contextActionLabel, setContextActionLabel] = useState("ação");
+  const [engagementLinkOpen, setEngagementLinkOpen] = useState(false);
+  const [engagementLinkMode, setEngagementLinkMode] = useState<"approach" | "pick" | null>(null);
+  const [scheduleWizardOpen, setScheduleWizardOpen] = useState(false);
   const [engagementContext, setEngagementContext] = useState<ClientEngagementContext | null>(null);
-  const [pendingEngagedAction, setPendingEngagedAction] = useState<"approach" | "schedule" | "meeting" | null>(
-    null
-  );
+  const [detailTab, setDetailTab] = useState<"contacts" | "dial" | "history">("contacts");
   const contextPickRef = useRef<((ctx: ClientEngagementContext) => void) | null>(null);
   const [productLinkModalOpen, setProductLinkModalOpen] = useState(false);
   const [linkProductId, setLinkProductId] = useState("");
@@ -563,11 +559,11 @@ export function ClientDetailView({
     return undefined;
   }, [engagementContext]);
 
-  const pickEngagementContext = useCallback((actionLabel: string) => {
+  const pickEngagementContext = useCallback((_actionLabel: string) => {
     return new Promise<ClientEngagementContext>((resolve) => {
-      setContextActionLabel(actionLabel);
       contextPickRef.current = resolve;
-      setContextModalOpen(true);
+      setEngagementLinkMode("pick");
+      setEngagementLinkOpen(true);
     });
   }, []);
 
@@ -580,37 +576,40 @@ export function ClientDetailView({
     return { productId: null, productName: null };
   }, [pickEngagementContext]);
 
-  function requestEngagedAction(action: "approach" | "schedule" | "meeting", label: string) {
-    setPendingEngagedAction(action);
-    setContextActionLabel(label);
-    setContextModalOpen(true);
-  }
-
-  function onEngagementContextChosen(ctx: ClientEngagementContext) {
+  function onEngagementLinkContinue(ctx: ClientEngagementContext) {
     setEngagementContext(ctx);
-    contextPickRef.current?.(ctx);
-    contextPickRef.current = null;
-    setContextModalOpen(false);
-    const action = pendingEngagedAction;
-    setPendingEngagedAction(null);
-    const productId = ctx.kind === "opportunity" ? ctx.productId : linkedProducts[0]?.product_id;
-    if (action === "approach") setApproachOpen(true);
-    if (action === "schedule") setScheduleContactOpen(true);
-    if (action === "meeting") {
-      setMeetingProductId(productId);
-      setMeetingOpen(true);
+    const mode = engagementLinkMode;
+    setEngagementLinkOpen(false);
+    setEngagementLinkMode(null);
+    if (mode === "pick") {
+      contextPickRef.current?.(ctx);
+      contextPickRef.current = null;
+      return;
     }
+    if (mode === "approach") setApproachOpen(true);
   }
 
-  function closeEngagementContextModal() {
-    setContextModalOpen(false);
-    setPendingEngagedAction(null);
+  function closeEngagementLinkModal() {
+    setEngagementLinkOpen(false);
+    setEngagementLinkMode(null);
     contextPickRef.current = null;
   }
 
   function openOppModalFromContext() {
-    closeEngagementContextModal();
+    closeEngagementLinkModal();
+    setScheduleWizardOpen(false);
     openOppModal();
+  }
+
+  function onScheduleWizardContinue(intent: "schedule" | "meeting", ctx: ClientEngagementContext) {
+    setEngagementContext(ctx);
+    setScheduleWizardOpen(false);
+    const productId = ctx.kind === "opportunity" ? ctx.productId : linkedProducts[0]?.product_id;
+    if (intent === "schedule") setScheduleContactOpen(true);
+    else {
+      setMeetingProductId(productId ?? undefined);
+      setMeetingOpen(true);
+    }
   }
 
   function openEnrollProspeccaoModal() {
@@ -777,6 +776,7 @@ export function ClientDetailView({
     <div>
       <ClientDetailHeader
         clientDisplayName={clientDisplayName}
+        legalName={initialClient.legal_name}
         isExistingCustomer={isExistingCustomer}
         savingExistingCustomer={savingExistingCustomer}
         onChangeExistingCustomer={(next) => void changeExistingCustomer(next)}
@@ -798,13 +798,14 @@ export function ClientDetailView({
           dialOptions: contactDialOptions,
           resolveEngagement: resolveEngagementForContact
         }}
-        onRegisterApproach={() => requestEngagedAction("approach", "registrar abordagem")}
-        onScheduleContact={() => requestEngagedAction("schedule", "agendar contato")}
-        onScheduleMeeting={() => requestEngagedAction("meeting", "agendar reunião")}
+        linkedProducts={linkedProducts}
+        onAssociateProduct={openProductLinkModal}
+        onRegisterApproach={() => {
+          setEngagementLinkMode("approach");
+          setEngagementLinkOpen(true);
+        }}
+        onSchedule={() => setScheduleWizardOpen(true)}
         onNewOpportunity={openOppModal}
-        engagementContextLabel={
-          engagementContext ? engagementLabelFromContext(engagementContext) : null
-        }
         onEnrollProspeccao={!inProspeccao ? openEnrollProspeccaoModal : undefined}
         canReconsult={canReconsult}
         onReconsult={() => setReconsultOpen(true)}
@@ -819,12 +820,26 @@ export function ClientDetailView({
         onApplied={() => router.refresh()}
       />
 
-      <ClientEngagementContextModal
-        open={contextModalOpen}
-        actionLabel={contextActionLabel}
+      <ClientEngagementLinkModal
+        open={engagementLinkOpen}
+        title={engagementLinkMode === "pick" ? "Contexto do contato" : "Registrar abordagem"}
+        clientDisplayName={clientDisplayName}
+        actionHint={
+          engagementLinkMode === "pick"
+            ? "Escolha o vínculo para este contato."
+            : "Onde deseja registrar este contato?"
+        }
         opportunities={oppList as ClientOpportunityOption[]}
-        onClose={closeEngagementContextModal}
-        onChoose={onEngagementContextChosen}
+        onClose={closeEngagementLinkModal}
+        onContinue={onEngagementLinkContinue}
+        onCreateOpportunity={openOppModalFromContext}
+      />
+      <ClientScheduleIntentModal
+        open={scheduleWizardOpen}
+        clientDisplayName={clientDisplayName}
+        opportunities={oppList as ClientOpportunityOption[]}
+        onClose={() => setScheduleWizardOpen(false)}
+        onContinue={onScheduleWizardContinue}
         onCreateOpportunity={openOppModalFromContext}
       />
 
@@ -1040,14 +1055,14 @@ export function ClientDetailView({
 
       <div className="panel client-detail-section">
         <ClientPanelHead
-          title="Empresa"
+          title="Dados da empresa"
           actions={
             !editEmpresa ? (
-              <button type="button" className="btn" onClick={() => setEditEmpresa(true)}>
+              <button type="button" className="btn btn-sm" onClick={() => setEditEmpresa(true)}>
                 Editar
               </button>
             ) : (
-              <button type="button" className="btn" onClick={cancelEmpresaEdit}>
+              <button type="button" className="btn btn-sm" onClick={cancelEmpresaEdit}>
                 Cancelar
               </button>
             )
@@ -1055,57 +1070,43 @@ export function ClientDetailView({
         />
 
         {!editEmpresa ? (
-          <div style={{ marginTop: "0.75rem" }}>
-            {hasText(initialClient.cnpj) ? (
-              <InfoLine label="CNPJ">{formatCnpj(initialClient.cnpj)}</InfoLine>
-            ) : null}
-            {hasText(initialClient.legal_name) ? <InfoLine label="Razão social">{initialClient.legal_name}</InfoLine> : null}
-            {hasText(initialClient.trade_name) ? <InfoLine label="Nome fantasia">{initialClient.trade_name}</InfoLine> : null}
-            {hasText(initialClient.segment) ? <InfoLine label="Segmento">{initialClient.segment}</InfoLine> : null}
-            {hasText(localLabel) ? <InfoLine label="Local">{localLabel}</InfoLine> : null}
-            {hasText(initialClient.address) ? <InfoLine label="Endereço">{initialClient.address}</InfoLine> : null}
+          <dl className="client-detail-dl">
+            {hasText(initialClient.cnpj) ? <DetailField label="CNPJ">{formatCnpj(initialClient.cnpj)}</DetailField> : null}
+            {hasText(initialClient.legal_name) ? <DetailField label="Razão social">{initialClient.legal_name}</DetailField> : null}
+            {hasText(initialClient.segment) ? <DetailField label="Segmento">{initialClient.segment}</DetailField> : null}
+            {hasText(localLabel) ? <DetailField label="Cidade / UF">{localLabel}</DetailField> : null}
+            {hasText(initialClient.address) ? <DetailField label="Endereço">{initialClient.address}</DetailField> : null}
             {hasText(initialClient.website) && websiteHref ? (
-              <InfoLine label="Site">
+              <DetailField label="Site">
                 <a className="app-text-link" href={websiteHref} target="_blank" rel="noreferrer noopener">
                   {initialClient.website}
                 </a>
-              </InfoLine>
+              </DetailField>
             ) : null}
             {hasText(initialClient.instagram) && instagramLink ? (
-              <InfoLine label="Instagram">
+              <DetailField label="Instagram">
                 <a className="app-text-link" href={instagramLink} target="_blank" rel="noreferrer noopener">
                   {initialClient.instagram}
                 </a>
-              </InfoLine>
+              </DetailField>
             ) : null}
-            <InfoLine label="Produtos">
-              {linkedProducts.length > 0 ? linkedProducts.map((p) => p.name).join(", ") : "Nenhum"}
-              <button
-                type="button"
-                className="btn"
-                style={{ marginLeft: 12, verticalAlign: "middle" }}
-                onClick={openProductLinkModal}
-              >
-                Associar produto
-              </button>
-            </InfoLine>
-            {hasText(fuelDisplay.fuelBrand) ? <InfoLine label="Bandeira">{fuelDisplay.fuelBrand}</InfoLine> : null}
+            {hasText(fuelDisplay.fuelBrand) ? <DetailField label="Bandeira">{fuelDisplay.fuelBrand}</DetailField> : null}
             {formatParticipatesInBrandNetwork(fuelDisplay.participatesInBrandNetwork) ? (
-              <InfoLine label="Participa de grupo">
+              <DetailField label="Participa de grupo">
                 {formatParticipatesInBrandNetwork(fuelDisplay.participatesInBrandNetwork)}
-              </InfoLine>
+              </DetailField>
             ) : null}
             {fuelDisplay.anpProducts.length > 0 ? (
-              <InfoLine label="Produtos ANP">
-                <ul style={{ margin: "0.25rem 0 0", paddingLeft: "1.25rem" }}>
+              <DetailField label="Produtos ANP">
+                <ul className="client-detail-anp-list">
                   {fuelDisplay.anpProducts.map((item) => (
                     <li key={item}>{item}</li>
                   ))}
                 </ul>
-              </InfoLine>
+              </DetailField>
             ) : null}
-            {hasText(fuelDisplay.userNotes) ? <InfoLine label="Observações">{fuelDisplay.userNotes}</InfoLine> : null}
-          </div>
+            {hasText(fuelDisplay.userNotes) ? <DetailField label="Observações">{fuelDisplay.userNotes}</DetailField> : null}
+          </dl>
         ) : (
           <form onSubmit={saveClient} style={{ marginTop: "0.75rem" }}>
             <div className="field">
@@ -1203,48 +1204,42 @@ export function ClientDetailView({
         <ClientPanelHead
           title="Oportunidades"
           actions={
-            <button
-              type="button"
-              className="btn btn-icon-sm"
-              title="Nova oportunidade"
-              aria-label="Nova oportunidade"
-              onClick={openOppModal}
-            >
-              <Plus size={18} />
+            <button type="button" className="btn btn-primary btn-sm" onClick={openOppModal}>
+              <Plus size={16} aria-hidden /> Nova oportunidade
             </button>
           }
         />
-        {oppList.length === 0 ? <p className="muted" style={{ marginTop: "0.75rem" }}>Nenhuma negociação registrada.</p> : null}
+        {oppList.length === 0 ? <p className="muted client-detail-empty">Nenhuma negociação registrada.</p> : null}
         {oppList.length > 0 ? (
-          <ul style={{ paddingLeft: "1.1rem", margin: "0.75rem 0 0" }}>
+          <ul className="client-opp-cards">
             {oppList.map((o) => (
-              <li key={o.id} style={{ marginBottom: 10, display: "flex", alignItems: "flex-start", gap: 8 }}>
-                <div style={{ flex: 1, minWidth: 0, fontSize: "0.9375rem" }}>
-                  <span>{formatOpportunityListLine(o)}</span>
-                  <div className="client-opp-bdr-row" style={{ marginTop: 4 }}>
-                    <span className="muted" style={{ fontSize: "0.8125rem" }}>
-                      BDR:{" "}
-                    </span>
-                    <select
-                      className="input input-sm client-opp-bdr-select"
-                      value={o.owner_user_id ?? ""}
-                      onChange={(e) => {
-                        const id = Number(e.target.value);
-                        if (id) void patchOpportunityOwner(o, id);
-                      }}
-                    >
-                      <option value="">—</option>
-                      {bdrs.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              <li key={o.id} className="client-opp-card panel">
+                <div className="client-opp-card__main">
+                  <strong className="client-opp-card__product">{o.product_name}</strong>
+                  {o.stage_name ? <span className="client-opp-card__stage badge">{o.stage_name}</span> : null}
+                  <p className="client-opp-card__title muted">{o.title.trim() || "Sem título"}</p>
+                </div>
+                <div className="client-opp-card__bdr">
+                  <span className="muted client-opp-card__bdr-label">BDR</span>
+                  <select
+                    className="input input-sm client-opp-bdr-select"
+                    value={o.owner_user_id ?? ""}
+                    onChange={(e) => {
+                      const id = Number(e.target.value);
+                      if (id) void patchOpportunityOwner(o, id);
+                    }}
+                  >
+                    <option value="">—</option>
+                    {bdrs.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <button
                   type="button"
-                  className="btn btn-icon-sm"
+                  className="btn btn-icon-sm btn-danger-outline"
                   title="Excluir oportunidade"
                   aria-label={`Excluir oportunidade ${o.title}`}
                   onClick={() => void removeOpportunity(o)}
@@ -1257,16 +1252,47 @@ export function ClientDetailView({
         ) : null}
       </div>
 
+      <div className="client-detail-tabs ui-segment" role="tablist" aria-label="Detalhes do cliente">
+        <button
+          type="button"
+          role="tab"
+          className={`ui-segment-btn${detailTab === "contacts" ? " is-active" : ""}`}
+          aria-selected={detailTab === "contacts"}
+          onClick={() => setDetailTab("contacts")}
+        >
+          Contatos
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={`ui-segment-btn${detailTab === "dial" ? " is-active" : ""}`}
+          aria-selected={detailTab === "dial"}
+          onClick={() => setDetailTab("dial")}
+        >
+          Estratégia de ligação
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={`ui-segment-btn${detailTab === "history" ? " is-active" : ""}`}
+          aria-selected={detailTab === "history"}
+          onClick={() => setDetailTab("history")}
+        >
+          Histórico
+        </button>
+      </div>
+
+      {detailTab === "contacts" ? (
       <div className="panel client-detail-section">
         <ClientPanelHead
           title="Contatos"
           actions={
             !addingContact ? (
-              <button type="button" className="btn" onClick={() => setAddingContact(true)}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => setAddingContact(true)}>
                 Novo
               </button>
             ) : (
-              <button type="button" className="btn" onClick={cancelContactsEdit}>
+              <button type="button" className="btn btn-sm" onClick={cancelContactsEdit}>
                 Cancelar
               </button>
             )
@@ -1362,13 +1388,18 @@ export function ClientDetailView({
           </form>
         ) : null}
       </div>
+      ) : null}
 
-      <ClientDialPhonesPanel clientId={initialClient.id} />
+      {detailTab === "dial" ? (
+        <ClientDialPhonesPanel clientId={initialClient.id} />
+      ) : null}
 
+      {detailTab === "history" ? (
       <div className="panel client-detail-section">
         <ClientPanelHead title="Histórico" />
         <ClientTimeline clientId={initialClient.id} />
       </div>
+      ) : null}
     </div>
   );
 }
@@ -1476,7 +1507,7 @@ function ContactReadOnly({
           <span className="muted">Origem: {formatContactOrigin(contact.origin)}</span>
         </div>
       </div>
-      <div className="client-contact-readonly-actions" style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+      <div className="client-contact-readonly-actions">
         {canBePrimary && !isPrimary ? (
           <button
             type="button"

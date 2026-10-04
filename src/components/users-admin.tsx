@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Api4comBdrFields } from "@/components/api4com-bdr-fields";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
-import { UserAccessProfilePicker } from "@/components/user-access-profile-picker";
 import { UserRolePicker } from "@/components/user-role-picker";
 import type { Api4comTokenPolicy } from "@/lib/api4com/token-policy-shared";
 import { ROLE_LABELS, type User, type UserRole } from "@/lib/types";
@@ -291,12 +290,9 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
             selected={form.roles}
             disabled={saving}
             onChange={(roles) => setForm((f) => ({ ...f, roles }))}
-          />
-          <UserAccessProfilePicker
-            options={accessProfileOptions}
-            selectedIds={form.access_profile_ids}
-            disabled={saving}
-            onChange={(access_profile_ids) => setForm((f) => ({ ...f, access_profile_ids }))}
+            accessProfileOptions={accessProfileOptions}
+            selectedAccessProfileIds={form.access_profile_ids}
+            onAccessProfilesChange={(access_profile_ids) => setForm((f) => ({ ...f, access_profile_ids }))}
           />
           <div className="product-form-actions">
             <button type="button" className="btn" onClick={closeModal}>

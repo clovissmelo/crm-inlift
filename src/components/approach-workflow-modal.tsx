@@ -278,15 +278,28 @@ export function ApproachWorkflowModal({
     <CadastroModal open={open} title={`Registrar abordagem — ${clientName}`} onClose={onClose} wide>
       <form className="call-reg-complement-form" onSubmit={submit}>
         {error ? <div className="alert alert-error">{error}</div> : null}
-        <div className="filters-row">
-          <div className="field">
-            <label className="label">Canal</label>
-            <select className="select" value={channel} onChange={(e) => setChannel(e.target.value as typeof channel)}>
-              <option value="call">Ligação</option>
-              <option value="whatsapp">WhatsApp</option>
-              <option value="email">E-mail</option>
-            </select>
+        <div className="field">
+          <span className="label">Canal</span>
+          <div className="ui-segment engagement-channel-segment" role="group" aria-label="Canal">
+            {(
+              [
+                ["call", "Ligação"],
+                ["whatsapp", "WhatsApp"],
+                ["email", "E-mail"]
+              ] as const
+            ).map(([v, l]) => (
+              <button
+                key={v}
+                type="button"
+                className={`ui-segment-btn${channel === v ? " is-active" : ""}`}
+                onClick={() => setChannel(v)}
+              >
+                {l}
+              </button>
+            ))}
           </div>
+        </div>
+        <div className="filters-row">
           <div className="field">
             <label className="label">Contato</label>
             <select className="select" value={contactId} onChange={(e) => setContactId(e.target.value)}>

@@ -28,6 +28,7 @@ export type ClientFilters = {
   offset?: number;
   ids?: number[];
   official_client?: "yes" | "no" | "";
+  existing_customer?: "yes" | "no" | "";
 };
 
 function buildClientFilterSql(filters: ClientFilters) {
@@ -98,6 +99,11 @@ function buildClientFilterSql(filters: ClientFilters) {
     where.push("COALESCE(clients.is_official_client, false) = true");
   } else if (filters.official_client === "no") {
     where.push("COALESCE(clients.is_official_client, false) = false");
+  }
+  if (filters.existing_customer === "yes") {
+    where.push("COALESCE(clients.is_existing_customer, false) = true");
+  } else if (filters.existing_customer === "no") {
+    where.push("COALESCE(clients.is_existing_customer, false) = false");
   }
   if (filters.ids?.length) {
     const safeIds = filters.ids.filter((id) => Number.isInteger(id)).join(",");

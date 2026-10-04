@@ -24,6 +24,7 @@ export async function GET(request: Request) {
     without_approach: url.searchParams.get("without_approach") === "1",
     lead_qualification: (url.searchParams.get("lead_qualification") ?? "") as "" | "cold" | "warm" | "hot",
     official_client: (url.searchParams.get("official_client") ?? "") as "" | "yes" | "no",
+    existing_customer: (url.searchParams.get("existing_customer") ?? "") as "" | "yes" | "no",
     search: url.searchParams.get("search") ?? undefined,
     limit: url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : 50,
     offset: url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : 0
