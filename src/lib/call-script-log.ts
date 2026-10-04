@@ -174,7 +174,7 @@ export function formatCallScriptLogForNotes(log: CallScriptLogEntry[]): string |
 export function isStructuredCallScriptBody(body: string): boolean {
   try {
     const p = JSON.parse(body.trim()) as { v?: number };
-    return p.v === 1;
+    return p.v === 2 || p.v === 1;
   } catch {
     return false;
   }

@@ -1,5 +1,6 @@
 import type { CallScriptCaptureNote } from "@/lib/call-script-log";
-import type { ScriptFlowStep } from "@/lib/script-flow";
+import type { ScriptScreen } from "@/lib/script-flow-screens";
+import { screenContactTag, screenCreatesContact } from "@/lib/script-flow-screens";
 
 const NAME_KEYS = new Set(["nome", "name", "contacted_person_name"]);
 const PHONE_KEYS = new Set(["telefone", "phone", "whatsapp", "tel", "celular"]);
@@ -67,12 +68,14 @@ export function contactPayloadFromCaptureNotes(notes: CallScriptCaptureNote[]): 
   };
 }
 
-export function captureStepCreatesContact(step: ScriptFlowStep | null | undefined): boolean {
-  return step?.type === "capture" && step.create_contact === "create";
+/** @deprecated use screenCreatesContact */
+export function captureStepCreatesContact(screen: ScriptScreen | null | undefined): boolean {
+  return screen ? screenCreatesContact(screen) : false;
 }
 
-export function captureStepContactTag(step: ScriptFlowStep | null | undefined): string | null {
-  if (!captureStepCreatesContact(step)) return null;
-  if (step?.type !== "capture") return null;
-  return step.contact_profile_tag?.trim() || "PERFIL DECISOR";
+/** @deprecated use screenContactTag */
+export function captureStepContactTag(screen: ScriptScreen | null | undefined): string | null {
+  return screen ? screenContactTag(screen) : null;
 }
+
+export { screenContactTag, screenCreatesContact };

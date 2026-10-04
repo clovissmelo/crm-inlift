@@ -5,52 +5,80 @@ import { Plus, Trash2 } from "lucide-react";
 import { TemplatePlaceholderHelp } from "@/components/template-placeholder-help";
 import {
   DEFAULT_CAPTURE_FIELDS,
-  draftsToFlow,
-  ensureInternalStepIds,
-  flowToDrafts,
+  defaultEmptyCallFlow,
+  draftsToScreenFlow,
+  ensureInternalScreenIds,
+  newScreenBlock,
   parseCallScriptBody,
+  screenFlowToDrafts,
+  SCRIPT_BLOCK_LABELS,
   serializeCallScriptFlow,
   type ScriptFlowCaptureField,
-  type ScriptFlowStepDraft
+  type ScriptScreenBlock,
+  type ScriptScreenDraft
 } from "@/lib/script-flow";
+
 type Props = {
   body: string;
   onBodyChange: (body: string) => void;
 };
 
-function newInternalStepId(existing: ScriptFlowStepDraft[]) {
+function newInternalScreenId(existing: ScriptScreenDraft[]) {
   for (let attempt = 0; attempt < 50; attempt++) {
-    const id = `step_${Math.random().toString(36).slice(2, 10)}`;
+    const id = `scr_${Math.random().toString(36).slice(2, 10)}`;
     if (!existing.some((s) => s.id === id)) return id;
   }
-  return `step_${Date.now()}`;
+  return `scr_${Date.now()}`;
 }
 
 export function ScriptFlowEditor({ body, onBodyChange }: Props) {
   const parsed = useMemo(() => parseCallScriptBody(body), [body]);
-  const [drafts, setDrafts] = useState<ScriptFlowStepDraft[]>(() => {
-    const base = parsed ? flowToDrafts(parsed) : flowToDrafts({ v: 1, start: "1", steps: {} });
-    return ensureInternalStepIds(base);
+  const [drafts, setDrafts] = useState<ScriptScreenDraft[]>(() => {
+    const base = parsed ? screenFlowToDrafts(parsed) : screenFlowToDrafts(defaultEmptyCallFlow());
+    return ensureInternalScreenIds(base);
   });
   const [selectedId, setSelectedId] = useState<string | null>(drafts[0]?.id ?? null);
 
   useEffect(() => {
     if (drafts.length === 0) return;
-    const flow = draftsToFlow(drafts);
-    onBodyChange(serializeCallScriptFlow(flow));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- serializa rascunho → body JSON
+    onBodyChange(serializeCallScriptFlow(draftsToScreenFlow(drafts)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drafts]);
 
   const selected = drafts.find((d) => d.id === selectedId) ?? drafts[0] ?? null;
-  const stepIds = drafts.map((d) => d.id);
+  const screenIds = drafts.map((d) => d.id);
   const selectedOrder = selected ? drafts.findIndex((d) => d.id === selected.id) + 1 : 1;
+  const navMode = selected?.navigation.mode ?? "sequential";
 
-  function updateSelected(patch: Partial<ScriptFlowStepDraft>) {
+  function updateSelected(patch: Partial<ScriptScreenDraft>) {
     if (!selected) return;
     setDrafts((list) => list.map((d) => (d.id === selected.id ? { ...d, ...patch } : d)));
   }
 
-  function moveStepToOrder(internalId: string, targetOrder: number) {
+  function updateBlock(blockId: string, patch: Partial<ScriptScreenBlock>) {
+    if (!selected) return;
+    setDrafts((list) =>
+      list.map((d) => {
+        if (d.id !== selected.id) return d;
+        return {
+          ...d,
+          blocks: d.blocks.map((b) => (b.id === blockId ? ({ ...b, ...patch } as ScriptScreenBlock) : b))
+        };
+      })
+    );
+  }
+
+  function removeBlock(blockId: string) {
+    if (!selected) return;
+    updateSelected({ blocks: selected.blocks.filter((b) => b.id !== blockId) });
+  }
+
+  function addBlock(kind: ScriptScreenBlock["kind"]) {
+    if (!selected) return;
+    updateSelected({ blocks: [...selected.blocks, newScreenBlock(kind)] });
+  }
+
+  function moveScreenToOrder(internalId: string, targetOrder: number) {
     setDrafts((list) => {
       const fromIdx = list.findIndex((d) => d.id === internalId);
       if (fromIdx < 0) return list;
@@ -63,36 +91,40 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
     });
   }
 
-  function addStep() {
-    const id = newInternalStepId(drafts);
-    const next: ScriptFlowStepDraft = {
+  function addScreen() {
+    const id = newInternalScreenId(drafts);
+    const next: ScriptScreenDraft = {
       id,
-      type: "linear",
-      title: `Etapa ${drafts.length + 1}`,
-      content: "",
-      next: null
+      title: `Tela ${drafts.length + 1}`,
+      blocks: [newScreenBlock("text")],
+      navigation: { mode: "sequential", next: null }
     };
     setDrafts((list) => {
-      if (list.length === 0) return [...list, next];
-      const updated = list.map((d, i) =>
-        i === list.length - 1 &&
-        (d.type === "linear" || d.type === "capture") &&
-        (d.next == null || d.next === "")
-          ? { ...d, next: id }
-          : d
-      );
+      if (list.length === 0) return [next];
+      const updated = list.map((d, i) => {
+        if (i !== list.length - 1) return d;
+        if (d.navigation.mode === "sequential" && (d.navigation.next == null || d.navigation.next === "")) {
+          return { ...d, navigation: { mode: "sequential" as const, next: id } };
+        }
+        return d;
+      });
       return [...updated, next];
     });
     setSelectedId(id);
   }
 
-  function removeStep(id: string) {
+  function removeScreen(id: string) {
     setDrafts((list) => {
       const next = list.filter((d) => d.id !== id);
       for (const d of next) {
-        if ((d.type === "linear" || d.type === "capture") && d.next === id) d.next = null;
-        if (d.type === "branch" && d.choices) {
-          d.choices = d.choices.map((c) => (c.next === id ? { ...c, next: null } : c));
+        if (d.navigation.mode === "sequential" && d.navigation.next === id) {
+          d.navigation = { mode: "sequential", next: null };
+        }
+        if (d.navigation.mode === "branch") {
+          d.navigation = {
+            ...d.navigation,
+            choices: d.navigation.choices.map((c) => (c.next === id ? { ...c, next: null } : c))
+          };
         }
       }
       return next;
@@ -100,11 +132,34 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
     if (selectedId === id) setSelectedId(drafts.find((d) => d.id !== id)?.id ?? null);
   }
 
-  function stepLabel(id: string) {
+  function screenLabel(id: string) {
     const idx = drafts.findIndex((x) => x.id === id);
     const d = idx >= 0 ? drafts[idx] : undefined;
-    const title = d?.title?.trim() || "Etapa";
+    const title = d?.title?.trim() || "Tela";
     return idx >= 0 ? `${title} (ordem ${idx + 1})` : title;
+  }
+
+  function setNavigationMode(mode: "sequential" | "branch") {
+    if (!selected) return;
+    if (mode === "branch") {
+      updateSelected({
+        navigation: {
+          mode: "branch",
+          question: selected.navigation.mode === "branch" ? selected.navigation.question : "Como seguir?",
+          choices:
+            selected.navigation.mode === "branch"
+              ? selected.navigation.choices
+              : [
+                  { label: "Sim", next: null },
+                  { label: "Não", next: null }
+                ]
+        }
+      });
+    } else {
+      const next =
+        selected.navigation.mode === "sequential" ? selected.navigation.next : null;
+      updateSelected({ navigation: { mode: "sequential", next } });
+    }
   }
 
   return (
@@ -112,9 +167,9 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
       <div className="script-flow-layout">
         <aside className="script-flow-steps">
           <div className="script-flow-steps-head">
-            <span className="label">Etapas</span>
+            <span className="label">Telas</span>
             <div className="script-flow-steps-actions">
-              <button type="button" className="btn btn-icon-sm" onClick={addStep} title="Nova etapa">
+              <button type="button" className="btn btn-icon-sm" onClick={addScreen} title="Nova tela">
                 <Plus size={16} />
               </button>
             </div>
@@ -138,17 +193,17 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
         {selected ? (
           <div className="script-flow-step-panel panel">
             <div className="script-flow-step-panel-head">
-              <span className="label">Editar etapa</span>
-              <button type="button" className="btn btn-icon-sm" onClick={() => removeStep(selected.id)} title="Remover etapa">
+              <span className="label">Editar tela</span>
+              <button type="button" className="btn btn-icon-sm" onClick={() => removeScreen(selected.id)} title="Remover tela">
                 <Trash2 size={16} />
               </button>
             </div>
             <div className="field">
-              <label className="label" htmlFor="script-step-order">
+              <label className="label" htmlFor="script-screen-order">
                 Ordem
               </label>
               <input
-                id="script-step-order"
+                id="script-screen-order"
                 className="input"
                 type="number"
                 min={1}
@@ -156,387 +211,374 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                 value={selectedOrder}
                 onChange={(e) => {
                   const n = Number(e.target.value);
-                  if (Number.isFinite(n)) moveStepToOrder(selected.id, Math.round(n));
+                  if (Number.isFinite(n)) moveScreenToOrder(selected.id, Math.round(n));
                 }}
               />
-              <span className="muted script-flow-field-hint">
-                A posição na lista à esquerda. Links “Ir para” usam id interno automático.
-              </span>
             </div>
             <div className="field">
-              <label className="label" htmlFor="script-step-title">
-                Título da etapa
+              <label className="label" htmlFor="script-screen-title">
+                Título da tela
               </label>
               <input
-                id="script-step-title"
+                id="script-screen-title"
                 className="input"
                 value={selected.title}
                 onChange={(e) => updateSelected({ title: e.target.value })}
               />
             </div>
-            <div className="field">
-              <label className="label" htmlFor="script-step-type">
-                Tipo
-              </label>
-              <select
-                id="script-step-type"
-                className="select"
-                value={selected.type}
-                onChange={(e) => {
-                  const type = e.target.value as ScriptFlowStepDraft["type"];
-                  if (type === "branch") {
-                    updateSelected({
-                      type,
-                      question: selected.question ?? "Como seguir?",
-                      choices: selected.choices ?? [
-                        { label: "Sim", next: null },
-                        { label: "Não", next: null }
-                      ]
-                    });
-                  } else if (type === "capture") {
-                    updateSelected({
-                      type,
-                      next: selected.next ?? null,
-                      fields: selected.fields?.length ? selected.fields : [...DEFAULT_CAPTURE_FIELDS]
-                    });
-                  } else {
-                    updateSelected({ type: "linear", next: selected.next ?? null });
-                  }
-                }}
-              >
-                <option value="linear">Sequencial (botão Próximo)</option>
-                <option value="capture">Anotação (campos para preencher na ligação)</option>
-                <option value="branch">Ramificação (pergunta + opções)</option>
-              </select>
-            </div>
-            <div className="field">
-              <div className="label-with-help">
-                <label className="label" htmlFor="script-step-content">
-                  Texto / fala sugerida
-                </label>
-                <TemplatePlaceholderHelp showFlowNote />
+
+            <div className="script-flow-screen-section">
+              <div className="script-flow-screen-section-head">
+                <span className="label">Conteúdo da tela</span>
+                <div className="script-flow-block-add-row">
+                  {(Object.keys(SCRIPT_BLOCK_LABELS) as ScriptScreenBlock["kind"][]).map((kind) => (
+                    <button key={kind} type="button" className="btn btn-sm" onClick={() => addBlock(kind)}>
+                      + {SCRIPT_BLOCK_LABELS[kind].split(" (")[0]}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <textarea
-                id="script-step-content"
-                className="textarea script-flow-textarea"
-                rows={4}
-                value={selected.content}
-                onChange={(e) => updateSelected({ content: e.target.value })}
-              />
-            </div>
-            {selected.type === "capture" ? (
-              <>
-                <p className="muted script-flow-field-hint">
-                  Defina os campos que o operador preenche na ligação. Use vínculo{" "}
-                  <strong>Nome (complemento)</strong> ou <strong>Cargo (complemento)</strong> para preencher o registro
-                  final automaticamente (com opção de editar).
-                </p>
-                {(selected.fields ?? DEFAULT_CAPTURE_FIELDS).map((field, idx) => (
-                  <div key={idx} className="filters-row script-flow-capture-row">
-                    <div className="field" style={{ flex: 1 }}>
-                      <label className="label">Rótulo do campo</label>
-                      <input
-                        className="input"
-                        value={field.label}
-                        onChange={(e) => {
-                          const fields = [...(selected.fields ?? DEFAULT_CAPTURE_FIELDS)];
-                          fields[idx] = { ...fields[idx]!, label: e.target.value };
-                          updateSelected({ fields });
-                        }}
-                      />
-                    </div>
-                    <div className="field" style={{ flex: 1 }}>
-                      <label className="label">Placeholder</label>
-                      <input
-                        className="input"
-                        value={field.placeholder ?? ""}
-                        onChange={(e) => {
-                          const fields = [...(selected.fields ?? DEFAULT_CAPTURE_FIELDS)];
-                          fields[idx] = { ...fields[idx]!, placeholder: e.target.value };
-                          updateSelected({ fields });
-                        }}
-                      />
-                    </div>
-                    <div className="field" style={{ minWidth: "8.5rem" }}>
-                      <label className="label">Vínculo registro</label>
-                      <select
-                        className="select"
-                        value={
-                          field.key === "nome" ? "nome" : field.key === "cargo" ? "cargo" : ""
-                        }
-                        onChange={(e) => {
-                          const fields = [...(selected.fields ?? DEFAULT_CAPTURE_FIELDS)];
-                          const link = e.target.value;
-                          const base = fields[idx]!;
-                          if (link === "nome") {
-                            fields[idx] = {
-                              ...base,
-                              key: "nome",
-                              label: base.label || "Nome",
-                              input: "text"
-                            };
-                          } else if (link === "cargo") {
-                            fields[idx] = {
-                              ...base,
-                              key: "cargo",
-                              label: base.label || "Função / cargo",
-                              input: "text"
-                            };
-                          } else {
-                            fields[idx] = {
-                              ...base,
-                              key: base.key === "nome" || base.key === "cargo" ? `campo_${idx + 1}` : base.key
-                            };
-                          }
-                          updateSelected({ fields });
-                        }}
-                      >
-                        <option value="">Campo livre</option>
-                        <option value="nome">Nome (complemento)</option>
-                        <option value="cargo">Cargo (complemento)</option>
-                      </select>
-                    </div>
-                    <div className="field" style={{ width: "7rem" }}>
-                      <label className="label">Tipo</label>
-                      <select
-                        className="select"
-                        value={field.input ?? "text"}
-                        onChange={(e) => {
-                          const fields = [...(selected.fields ?? DEFAULT_CAPTURE_FIELDS)];
-                          fields[idx] = {
-                            ...fields[idx]!,
-                            input: e.target.value as ScriptFlowCaptureField["input"]
-                          };
-                          updateSelected({ fields });
-                        }}
-                      >
-                        <option value="text">Texto</option>
-                        <option value="tel">Telefone</option>
-                        <option value="textarea">Texto longo</option>
-                      </select>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-icon-sm"
-                      title="Remover campo"
-                      onClick={() => {
-                        const fields = (selected.fields ?? DEFAULT_CAPTURE_FIELDS).filter((_, i) => i !== idx);
-                        updateSelected({ fields: fields.length ? fields : [...DEFAULT_CAPTURE_FIELDS] });
-                      }}
-                    >
-                      <Trash2 size={16} />
+              {selected.blocks.length === 0 ? (
+                <p className="muted script-flow-field-hint">Adicione ao menos um bloco (ex.: Texto).</p>
+              ) : null}
+              {selected.blocks.map((block) => (
+                <div key={block.id} className="script-flow-block-card panel">
+                  <div className="script-flow-block-card-head">
+                    <strong>{SCRIPT_BLOCK_LABELS[block.kind]}</strong>
+                    <button type="button" className="btn btn-icon-sm" title="Remover bloco" onClick={() => removeBlock(block.id)}>
+                      <Trash2 size={14} />
                     </button>
                   </div>
-                ))}
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() =>
-                    updateSelected({
-                      fields: [
-                        ...(selected.fields ?? DEFAULT_CAPTURE_FIELDS),
-                        { key: `campo_${(selected.fields?.length ?? 3) + 1}`, label: "Novo campo", input: "text" }
-                      ]
-                    })
-                  }
-                >
-                  + Campo
-                </button>
-                <div className="filters-row" style={{ marginTop: 12 }}>
-                  <div className="field" style={{ flex: 1, minWidth: "12rem" }}>
-                    <label className="label" htmlFor="script-capture-create-contact">
-                      Contato no cliente
-                    </label>
-                    <select
-                      id="script-capture-create-contact"
-                      className="select"
-                      value={selected.create_contact === "create" ? "create" : "skip"}
-                      onChange={(e) => {
-                        const create = e.target.value === "create";
-                        updateSelected({
-                          create_contact: create ? "create" : "skip",
-                          contact_profile_tag: create
-                            ? selected.contact_profile_tag?.trim() || "PERFIL DECISOR"
-                            : undefined
-                        });
-                      }}
-                    >
-                      <option value="skip">Não criar (pular)</option>
-                      <option value="create">Criar contato ao salvar anotação</option>
-                    </select>
-                  </div>
-                  {selected.create_contact === "create" ? (
-                    <div className="field" style={{ flex: 1, minWidth: "12rem" }}>
-                      <label className="label" htmlFor="script-capture-contact-tag">
-                        Tag de perfil
-                      </label>
+                  {block.kind === "text" ? (
+                    <div className="field">
+                      <div className="label-with-help">
+                        <label className="label">Texto / fala sugerida</label>
+                        <TemplatePlaceholderHelp showFlowNote />
+                      </div>
+                      <textarea
+                        className="textarea script-flow-textarea"
+                        rows={4}
+                        value={block.content}
+                        onChange={(e) => updateBlock(block.id, { content: e.target.value })}
+                      />
+                    </div>
+                  ) : null}
+                  {block.kind === "notes" ? (
+                    <>
+                      <p className="muted script-flow-field-hint">
+                        Campos salvos na ligação e no complemento de registro. Vínculo Nome/Cargo preenche o registro
+                        final.
+                      </p>
+                      {(block.fields ?? DEFAULT_CAPTURE_FIELDS).map((field, idx) => (
+                        <div key={idx} className="filters-row script-flow-capture-row">
+                          <div className="field" style={{ flex: 1 }}>
+                            <label className="label">Rótulo</label>
+                            <input
+                              className="input"
+                              value={field.label}
+                              onChange={(e) => {
+                                const fields = [...(block.fields ?? DEFAULT_CAPTURE_FIELDS)];
+                                fields[idx] = { ...fields[idx]!, label: e.target.value };
+                                updateBlock(block.id, { fields });
+                              }}
+                            />
+                          </div>
+                          <div className="field" style={{ minWidth: "8.5rem" }}>
+                            <label className="label">Vínculo</label>
+                            <select
+                              className="select"
+                              value={field.key === "nome" ? "nome" : field.key === "cargo" ? "cargo" : ""}
+                              onChange={(e) => {
+                                const fields = [...(block.fields ?? DEFAULT_CAPTURE_FIELDS)];
+                                const link = e.target.value;
+                                const base = fields[idx]!;
+                                if (link === "nome") {
+                                  fields[idx] = { ...base, key: "nome", label: base.label || "Nome", input: "text" };
+                                } else if (link === "cargo") {
+                                  fields[idx] = {
+                                    ...base,
+                                    key: "cargo",
+                                    label: base.label || "Função / cargo",
+                                    input: "text"
+                                  };
+                                } else {
+                                  fields[idx] = {
+                                    ...base,
+                                    key: base.key === "nome" || base.key === "cargo" ? `campo_${idx + 1}` : base.key
+                                  };
+                                }
+                                updateBlock(block.id, { fields });
+                              }}
+                            >
+                              <option value="">Campo livre</option>
+                              <option value="nome">Nome (complemento)</option>
+                              <option value="cargo">Cargo (complemento)</option>
+                            </select>
+                          </div>
+                          <div className="field" style={{ width: "7rem" }}>
+                            <label className="label">Tipo</label>
+                            <select
+                              className="select"
+                              value={field.input ?? "text"}
+                              onChange={(e) => {
+                                const fields = [...(block.fields ?? DEFAULT_CAPTURE_FIELDS)];
+                                fields[idx] = {
+                                  ...fields[idx]!,
+                                  input: e.target.value as ScriptFlowCaptureField["input"]
+                                };
+                                updateBlock(block.id, { fields });
+                              }}
+                            >
+                              <option value="text">Texto</option>
+                              <option value="tel">Telefone</option>
+                              <option value="textarea">Texto longo</option>
+                            </select>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-icon-sm"
+                            onClick={() => {
+                              const fields = (block.fields ?? DEFAULT_CAPTURE_FIELDS).filter((_, i) => i !== idx);
+                              updateBlock(block.id, {
+                                fields: fields.length ? fields : [...DEFAULT_CAPTURE_FIELDS]
+                              });
+                            }}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() =>
+                          updateBlock(block.id, {
+                            fields: [
+                              ...(block.fields ?? DEFAULT_CAPTURE_FIELDS),
+                              {
+                                key: `campo_${(block.fields?.length ?? 3) + 1}`,
+                                label: "Novo campo",
+                                input: "text"
+                              }
+                            ]
+                          })
+                        }
+                      >
+                        + Campo
+                      </button>
+                    </>
+                  ) : null}
+                  {block.kind === "contact_register" ? (
+                    <div className="field">
+                      <label className="label">Tag de perfil no cadastro</label>
                       <input
-                        id="script-capture-contact-tag"
                         className="input"
-                        value={selected.contact_profile_tag ?? "PERFIL DECISOR"}
-                        placeholder="PERFIL DECISOR"
+                        value={block.contact_profile_tag ?? "PERFIL DECISOR"}
                         maxLength={80}
-                        onChange={(e) => updateSelected({ contact_profile_tag: e.target.value })}
+                        onChange={(e) => updateBlock(block.id, { contact_profile_tag: e.target.value })}
+                      />
+                      <p className="muted script-flow-field-hint">
+                        Ao salvar anotações nesta tela, cria/atualiza contato no cliente (nome e telefone dos campos de
+                        anotação).
+                      </p>
+                    </div>
+                  ) : null}
+                  {block.kind === "schedule_meeting" ? (
+                    <div className="field">
+                      <label className="label">Instrução (opcional)</label>
+                      <input
+                        className="input"
+                        value={block.prompt ?? ""}
+                        placeholder="Data e hora da reunião"
+                        onChange={(e) => updateBlock(block.id, { prompt: e.target.value })}
                       />
                     </div>
                   ) : null}
                 </div>
-                {selected.create_contact === "create" ? (
-                  <p className="muted script-flow-field-hint">
-                    Usa os campos com vínculo <strong>Nome</strong> e telefone (tipo Telefone ou chave telefone). Origem
-                    &quot;Roteiro de ligação&quot; na ficha do cliente.
-                  </p>
-                ) : null}
-              </>
-            ) : null}
-            {selected.type === "linear" || selected.type === "capture" ? (
-              <div className="field">
-                <label className="label" htmlFor="script-step-next">
-                  Próxima etapa
-                </label>
-                <select
-                  id="script-step-next"
-                  className="select"
-                  value={selected.next ?? ""}
-                  onChange={(e) => updateSelected({ next: e.target.value || null })}
-                >
-                  <option value="">Fim do fluxo</option>
-                  {stepIds
-                    .filter((id) => id !== selected.id)
-                    .map((id) => (
-                      <option key={id} value={id}>
-                        {stepLabel(id)}
-                      </option>
-                    ))}
-                </select>
-              </div>
-            ) : selected.type === "branch" ? (
-              <>
-                <div className="field">
-                  <label className="label" htmlFor="script-step-question">
-                    Pergunta de ramificação
-                  </label>
+              ))}
+            </div>
+
+            <div className="script-flow-screen-section">
+              <span className="label">Navegação após a tela</span>
+              <div className="script-flow-nav-mode-row">
+                <label className="script-flow-nav-mode-opt">
                   <input
-                    id="script-step-question"
-                    className="input"
-                    value={selected.question ?? ""}
-                    onChange={(e) => updateSelected({ question: e.target.value })}
+                    type="radio"
+                    name={`nav-${selected.id}`}
+                    checked={navMode === "sequential"}
+                    onChange={() => setNavigationMode("sequential")}
                   />
+                  <span>Sequencial (botão Próximo)</span>
+                </label>
+                <label className="script-flow-nav-mode-opt">
+                  <input
+                    type="radio"
+                    name={`nav-${selected.id}`}
+                    checked={navMode === "branch"}
+                    onChange={() => setNavigationMode("branch")}
+                  />
+                  <span>Ramificações (perguntas com opções)</span>
+                </label>
+              </div>
+
+              {navMode === "sequential" ? (
+                <div className="field">
+                  <label className="label">Próxima tela</label>
+                  <select
+                    className="select"
+                    value={selected.navigation.mode === "sequential" ? selected.navigation.next ?? "" : ""}
+                    onChange={(e) =>
+                      updateSelected({
+                        navigation: { mode: "sequential", next: e.target.value || null }
+                      })
+                    }
+                  >
+                    <option value="">Fim do fluxo</option>
+                    {screenIds
+                      .filter((id) => id !== selected.id)
+                      .map((id) => (
+                        <option key={id} value={id}>
+                          {screenLabel(id)}
+                        </option>
+                      ))}
+                  </select>
                 </div>
-                <p className="muted script-flow-field-hint">
-                  Em cada opção: <strong>Contato na ligação</strong> no registro e, se marcar{" "}
-                  <strong>Agendar reunião</strong>, o operador informa data/hora na ligação (resultado Reunião agendada).
-                </p>
-                {(selected.choices ?? []).map((choice, idx) => (
-                  <div key={idx} className="filters-row script-flow-branch-row">
-                    <div className="field" style={{ flex: 1 }}>
-                      <label className="label">Opção {idx + 1}</label>
-                      <input
-                        className="input"
-                        value={choice.label}
-                        onChange={(e) => {
-                          const choices = [...(selected.choices ?? [])];
-                          choices[idx] = { ...choices[idx]!, label: e.target.value };
-                          updateSelected({ choices });
-                        }}
-                      />
-                    </div>
-                    <div className="field" style={{ minWidth: "9.5rem", flex: "0 1 auto" }}>
-                      <label className="label">Contato no registro</label>
-                      <select
-                        className="select"
-                        value={choice.contact_layer ?? ""}
-                        onChange={(e) => {
-                          const choices = [...(selected.choices ?? [])];
-                          const v = e.target.value;
-                          choices[idx] = {
-                            ...choices[idx]!,
-                            contact_layer:
-                              v === "decisor" || v === "outra" || v === "ninguem" ? v : undefined
-                          };
-                          updateSelected({ choices });
-                        }}
-                      >
-                        <option value="">Não preencher</option>
-                        <option value="decisor">Decisor</option>
-                        <option value="outra">Outra pessoa</option>
-                        <option value="ninguem">Ninguém</option>
-                      </select>
-                    </div>
-                    <label
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        alignSelf: "flex-end",
-                        marginBottom: 8,
-                        fontSize: "0.8125rem"
+              ) : selected.navigation.mode === "branch" ? (
+                <>
+                  <div className="field">
+                    <label className="label">Pergunta</label>
+                    <input
+                      className="input"
+                      value={selected.navigation.question}
+                      onChange={(e) => {
+                        const nav = selected.navigation;
+                        if (nav.mode !== "branch") return;
+                        updateSelected({
+                          navigation: { mode: "branch", question: e.target.value, choices: nav.choices }
+                        });
                       }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={choice.schedule_meeting === true}
-                        onChange={(e) => {
-                          const choices = [...(selected.choices ?? [])];
-                          choices[idx] = {
-                            ...choices[idx]!,
-                            schedule_meeting: e.target.checked ? true : undefined
-                          };
-                          updateSelected({ choices });
-                        }}
-                      />
-                      <span>Agendar reunião</span>
-                    </label>
-                    <div className="field" style={{ flex: 1 }}>
-                      <label className="label">Ir para</label>
-                      <select
-                        className="select"
-                        value={choice.next ?? ""}
-                        onChange={(e) => {
-                          const choices = [...(selected.choices ?? [])];
-                          choices[idx] = { ...choices[idx]!, next: e.target.value || null };
-                          updateSelected({ choices });
-                        }}
-                      >
-                        <option value="">Fim</option>
-                        {stepIds
-                          .filter((id) => id !== selected.id)
-                          .map((id) => (
-                            <option key={id} value={id}>
-                              {stepLabel(id)}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-icon-sm"
-                      title="Remover opção"
-                      onClick={() => {
-                        const choices = (selected.choices ?? []).filter((_, i) => i !== idx);
-                        updateSelected({ choices });
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    />
                   </div>
-                ))}
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() =>
-                    updateSelected({
-                      choices: [...(selected.choices ?? []), { label: "Nova opção", next: null }]
-                    })
-                  }
-                >
-                  + Opção
-                </button>
-              </>
-            ) : null}
+                  {selected.navigation.choices.map((choice, idx) => {
+                    const branchNav = selected.navigation.mode === "branch" ? selected.navigation : null;
+                    if (!branchNav) return null;
+                    return (
+                    <div key={idx} className="filters-row script-flow-branch-row">
+                      <div className="field" style={{ flex: 1 }}>
+                        <label className="label">Opção {idx + 1}</label>
+                        <input
+                          className="input"
+                          value={choice.label}
+                          onChange={(e) => {
+                            const choices = [...branchNav.choices];
+                            choices[idx] = { ...choices[idx]!, label: e.target.value };
+                            updateSelected({
+                              navigation: { mode: "branch", question: branchNav.question, choices }
+                            });
+                          }}
+                        />
+                      </div>
+                      <div className="field" style={{ minWidth: "9.5rem" }}>
+                        <label className="label">Contato no registro</label>
+                        <select
+                          className="select"
+                          value={choice.contact_layer ?? ""}
+                          onChange={(e) => {
+                            const choices = [...branchNav.choices];
+                            const v = e.target.value;
+                            choices[idx] = {
+                              ...choices[idx]!,
+                              contact_layer:
+                                v === "decisor" || v === "outra" || v === "ninguem" ? v : undefined
+                            };
+                            updateSelected({
+                              navigation: { mode: "branch", question: branchNav.question, choices }
+                            });
+                          }}
+                        >
+                          <option value="">Não preencher</option>
+                          <option value="decisor">Decisor</option>
+                          <option value="outra">Outra pessoa</option>
+                          <option value="ninguem">Ninguém</option>
+                        </select>
+                      </div>
+                      <label className="script-flow-branch-check">
+                        <input
+                          type="checkbox"
+                          checked={choice.schedule_meeting === true}
+                          onChange={(e) => {
+                            const choices = [...branchNav.choices];
+                            choices[idx] = {
+                              ...choices[idx]!,
+                              schedule_meeting: e.target.checked ? true : undefined
+                            };
+                            updateSelected({
+                              navigation: { mode: "branch", question: branchNav.question, choices }
+                            });
+                          }}
+                        />
+                        <span>Agendar reunião na opção</span>
+                      </label>
+                      <div className="field" style={{ flex: 1 }}>
+                        <label className="label">Ir para</label>
+                        <select
+                          className="select"
+                          value={choice.next ?? ""}
+                          onChange={(e) => {
+                            const choices = [...branchNav.choices];
+                            choices[idx] = { ...choices[idx]!, next: e.target.value || null };
+                            updateSelected({
+                              navigation: { mode: "branch", question: branchNav.question, choices }
+                            });
+                          }}
+                        >
+                          <option value="">Fim</option>
+                          {screenIds
+                            .filter((id) => id !== selected.id)
+                            .map((id) => (
+                              <option key={id} value={id}>
+                                {screenLabel(id)}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-icon-sm"
+                        onClick={() => {
+                          const choices = branchNav.choices.filter((_, i) => i !== idx);
+                          updateSelected({
+                            navigation: { mode: "branch", question: branchNav.question, choices }
+                          });
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      if (selected.navigation.mode !== "branch") return;
+                      updateSelected({
+                        navigation: {
+                          mode: "branch",
+                          question: selected.navigation.question,
+                          choices: [...selected.navigation.choices, { label: "Nova opção", next: null }]
+                        }
+                      });
+                    }}
+                  >
+                    + Opção
+                  </button>
+                </>
+              ) : null}
+            </div>
           </div>
         ) : (
-          <p className="muted script-flow-empty">Adicione uma etapa para começar o fluxo.</p>
+          <p className="muted script-flow-empty">Adicione uma tela para começar o fluxo.</p>
         )}
       </div>
     </div>

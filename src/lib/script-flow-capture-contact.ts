@@ -37,11 +37,15 @@ export async function enrichScriptLogEntryWithContactCreate(
 
   const scriptBody = await loadActiveCallScriptBody(call.product_id);
   const flow = scriptBody ? parseCallScriptBody(scriptBody) : null;
-  const step = flow?.steps[entry.step_id];
-  if (!step || step.type !== "capture") return entry;
-  if (step.create_contact !== "create") return entry;
+  const screen = flow?.screens[entry.step_id];
+  if (!screen) return entry;
+  const contactBlock = screen.blocks.find((b) => b.kind === "contact_register");
+  if (!contactBlock) return entry;
 
-  const tag = step.contact_profile_tag?.trim() || "PERFIL DECISOR";
+  const tag =
+    contactBlock.kind === "contact_register"
+      ? contactBlock.contact_profile_tag?.trim() || "PERFIL DECISOR"
+      : "PERFIL DECISOR";
   const payload = contactPayloadFromCaptureNotes(entry.capture_notes);
   if (!payload) return entry;
 

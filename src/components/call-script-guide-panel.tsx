@@ -12,12 +12,17 @@ import {
   branchChoiceContactLayer,
   branchChoiceScheduleMeeting,
   captureFieldRegistrationLabel,
+  notesFieldsOnScreen,
   parseCallScriptBody,
   renderStepContent,
-  type ScriptFlow,
-  type ScriptFlowStep
+  screenContactTag,
+  screenCreatesContact,
+  screenHasNotesBlock,
+  screenHasScheduleBlock,
+  sequentialNext,
+  type ScriptCallFlow,
+  type ScriptScreen
 } from "@/lib/script-flow";
-import { captureStepContactTag, captureStepCreatesContact } from "@/lib/script-flow-capture-contact-utils";
 import { spLocalDateTimeToIso } from "@/lib/datetime";
 import { CallDialContextBanner } from "@/components/call-dial-context-banner";
 import "./call-script-guide.css";
@@ -57,12 +62,12 @@ export function callScriptStatusLabel(status: string) {
   return "Ligação iniciada";
 }
 
-function stepIdFromLog(log: CallScriptLogEntry[], flow: ScriptFlow): string {
+function stepIdFromLog(log: CallScriptLogEntry[], flow: ScriptCallFlow): string {
   if (log.length === 0) return flow.start;
   const last = log[log.length - 1]!;
   if (last.action === "restart") return flow.start;
-  if (last.next_step_id && flow.steps[last.next_step_id]) return last.next_step_id;
-  if (last.step_id && flow.steps[last.step_id]) return last.step_id;
+  if (last.next_step_id && flow.screens[last.next_step_id]) return last.next_step_id;
+  if (last.step_id && flow.screens[last.step_id]) return last.step_id;
   return flow.start;
 }
 
@@ -121,11 +126,12 @@ export function CallScriptGuidePanel({
       setCaptureDraft({});
       return;
     }
-    const current = flow.steps[stepId];
-    if (current?.type !== "capture") {
+    const current = flow.screens[stepId];
+    if (!current || !screenHasNotesBlock(current)) {
       setCaptureDraft({});
       return;
     }
+    const fields = notesFieldsOnScreen(current);
     const lastForStep = [...savedLog]
       .reverse()
       .find((e) => e.step_id === stepId && e.action === "capture");
@@ -135,7 +141,7 @@ export function CallScriptGuidePanel({
     }
     const draft: Record<string, string> = {};
     for (const note of lastForStep.capture_notes) {
-      const field = current.fields.find((f) => f.label === note.label);
+      const field = fields.find((f) => f.label === note.label || f.key === note.field_key);
       if (field) draft[field.key] = note.value;
     }
     setCaptureDraft(draft);
@@ -168,8 +174,14 @@ export function CallScriptGuidePanel({
 
   async function persistLog(entry: Omit<CallScriptLogEntry, "at"> & { capture_notes?: CallScriptLogEntry["capture_notes"] }) {
     const payload: Omit<CallScriptLogEntry, "at"> = { ...entry };
-    if (entry.action === "choice" && choiceLabelFromEntry(entry) && step?.type === "branch") {
-      const layer = branchChoiceContactLayer(step, choiceLabelFromEntry(entry)!);
+    const screenForLog =
+      flow && entry.step_id ? (flow.screens[entry.step_id] ?? null) : null;
+    if (
+      entry.action === "choice" &&
+      choiceLabelFromEntry(entry) &&
+      screenForLog?.navigation.mode === "branch"
+    ) {
+      const layer = branchChoiceContactLayer(screenForLog, choiceLabelFromEntry(entry)!);
       if (layer) payload.contact_layer = layer;
     }
 
@@ -215,9 +227,9 @@ export function CallScriptGuidePanel({
     );
   }
 
-  const step: ScriptFlowStep | null = flow && stepId ? (flow.steps[stepId] ?? null) : null;
+  const screen: ScriptScreen | null = flow && stepId ? (flow.screens[stepId] ?? null) : null;
   const isSimulation = call.id < 0;
-  const showStepTitleBanner = isSimulation && step;
+  const showStepTitleBanner = isSimulation && screen;
   const canGoBack = normalizeCallScriptLog(call.script_flow_log).length > 0;
   const scriptContactLayer = contactLayerFromScriptLog(normalizeCallScriptLog(call.script_flow_log));
 
@@ -257,18 +269,18 @@ export function CallScriptGuidePanel({
     captureNotes?: CallScriptLogEntry["capture_notes"],
     scheduledMeetingAt?: string | null
   ) {
-    if (!step || !stepId) return;
+    if (!screen || !stepId) return;
     const payload: Omit<CallScriptLogEntry, "at"> = {
       step_id: stepId,
-      step_title: step.title,
+      step_title: screen.title,
       action,
       choice_label: choiceLabel ?? null,
       next_step_id: next,
       capture_notes: captureNotes,
       scheduled_meeting_at: scheduledMeetingAt ?? null
     };
-    if (action === "choice" && choiceLabel?.trim() && step.type === "branch") {
-      const layer = branchChoiceContactLayer(step, choiceLabel.trim());
+    if (action === "choice" && choiceLabel?.trim() && screen.navigation.mode === "branch") {
+      const layer = branchChoiceContactLayer(screen, choiceLabel.trim());
       if (layer) payload.contact_layer = layer;
     }
 
@@ -277,7 +289,7 @@ export function CallScriptGuidePanel({
       const nextLog: CallScriptLogEntry[] = [...prev, { ...payload, at: new Date().toISOString() }];
       setLogCount(nextLog.length);
       onLogUpdated?.(nextLog);
-      if (next && flow?.steps[next]) setStepId(next);
+      if (next && flow?.screens[next]) setStepId(next);
       else {
         setStepId(null);
         maybeOpenRegistrationHandoff();
@@ -286,7 +298,7 @@ export function CallScriptGuidePanel({
     }
 
     void persistLog(payload);
-    if (next && flow?.steps[next]) setStepId(next);
+    if (next && flow?.screens[next]) setStepId(next);
     else {
       setStepId(null);
       maybeOpenRegistrationHandoff();
@@ -299,7 +311,7 @@ export function CallScriptGuidePanel({
     setHandoffPending(false);
     void persistLog({
       step_id: stepId ?? flow.start,
-      step_title: step?.title ?? "Roteiro",
+      step_title: screen?.title ?? "Roteiro",
       action: "restart",
       next_step_id: flow.start
     });
@@ -307,7 +319,7 @@ export function CallScriptGuidePanel({
   }
 
   function onBranchChoice(next: string | null, label: string) {
-    if (step?.type === "branch" && branchChoiceScheduleMeeting(step, label)) {
+    if (screen?.navigation.mode === "branch" && branchChoiceScheduleMeeting(screen, label)) {
       setPendingMeeting({ next, label });
       return;
     }
@@ -325,6 +337,40 @@ export function CallScriptGuidePanel({
     goNext(pendingMeeting.next, "choice", pendingMeeting.label, undefined, iso);
     setPendingMeeting(null);
   }
+
+  function buildCaptureNotes(scr: ScriptScreen) {
+    const fields = notesFieldsOnScreen(scr);
+    return fields
+      .map((f) => ({
+        label: captureFieldRegistrationLabel(f, scriptContactLayer),
+        value: (captureDraft[f.key] ?? "").trim(),
+        field_key: f.key
+      }))
+      .filter((n) => n.value);
+  }
+
+  function advanceSequential() {
+    if (!screen || !flow) return;
+    const next = sequentialNext(screen);
+    let scheduledIso: string | null = null;
+    if (screenHasScheduleBlock(screen)) {
+      if (!meetingDate.trim() || !meetingTime.trim()) {
+        setMeetingInvalid(true);
+        return;
+      }
+      setMeetingInvalid(false);
+      scheduledIso = spLocalDateTimeToIso(meetingDate, meetingTime);
+    }
+    const notes = buildCaptureNotes(screen);
+    if (screenHasNotesBlock(screen) && notes.length > 0) {
+      goNext(next, "capture", undefined, notes, scheduledIso);
+      return;
+    }
+    goNext(next, "next", undefined, undefined, scheduledIso);
+  }
+
+  const seqNext = screen ? sequentialNext(screen) : null;
+  const hasNextScreen = Boolean(seqNext && flow?.screens[seqNext]);
 
   return (
     <>
@@ -347,26 +393,100 @@ export function CallScriptGuidePanel({
 
         <div className="call-script-panel-body">
           {showStepTitleBanner ? (
-            <div className="panel call-script-step-banner">{step.title}</div>
+            <div className="panel call-script-step-banner">{screen!.title}</div>
           ) : (
             <CallDialContextBanner callId={call.id} compact />
           )}
-          {!flow || !step ? (
+          {!flow || !screen ? (
             <p className="muted">
               {!scriptBody
                 ? "Nenhum script de ligação ativo para este produto. Cadastre em Abordagens."
                 : "Abrindo complemento de registro…"}
             </p>
+          ) : screen.navigation.mode === "branch" && pendingMeeting ? (
+            <div className="call-script-meeting-pick">
+              <p className="muted" style={{ fontSize: "0.875rem", margin: "0 0 8px" }}>
+                Opção: <strong>{pendingMeeting.label}</strong> — informe data e hora da reunião.
+              </p>
+              <ApproachMinimalScheduleField
+                mode="meeting"
+                nextDate={meetingDate}
+                nextTime={meetingTime}
+                onNextDateChange={setMeetingDate}
+                onNextTimeChange={setMeetingTime}
+                invalidSchedule={meetingInvalid}
+              />
+              <div className="call-script-nav-row">
+                <button type="button" className="btn" onClick={() => setPendingMeeting(null)}>
+                  Voltar
+                </button>
+                <button type="button" className="btn btn-primary call-script-btn-next" onClick={confirmPendingMeeting}>
+                  Confirmar reunião
+                  <ChevronRight size={18} aria-hidden />
+                </button>
+              </div>
+            </div>
           ) : (
             <>
-              {!showStepTitleBanner ? <h3 className="call-script-step-title">{step.title}</h3> : null}
-              <p className="call-script-step-content">{renderStepContent(step.content, vars)}</p>
-              {step.type === "branch" ? (
-                <>
-                  {pendingMeeting ? (
-                    <div className="call-script-meeting-pick">
+              {!showStepTitleBanner ? <h3 className="call-script-step-title">{screen.title}</h3> : null}
+              {screen.blocks.map((block) => {
+                if (block.kind === "text") {
+                  const text = renderStepContent(block.content, vars);
+                  if (!text.trim()) return null;
+                  return (
+                    <p key={block.id} className="call-script-step-content">
+                      {text}
+                    </p>
+                  );
+                }
+                if (block.kind === "notes") {
+                  return (
+                    <div key={block.id} className="call-script-capture-fields">
+                      {block.fields.map((field) => (
+                        <label key={field.key} className="call-script-capture-field">
+                          <span className="label">
+                            {captureFieldRegistrationLabel(field, scriptContactLayer)}
+                          </span>
+                          {field.input === "textarea" ? (
+                            <textarea
+                              className="textarea"
+                              rows={3}
+                              placeholder={field.placeholder}
+                              value={captureDraft[field.key] ?? ""}
+                              onChange={(e) =>
+                                setCaptureDraft((d) => ({ ...d, [field.key]: e.target.value }))
+                              }
+                            />
+                          ) : (
+                            <input
+                              className="input"
+                              type={field.input === "tel" ? "tel" : "text"}
+                              placeholder={field.placeholder}
+                              value={captureDraft[field.key] ?? ""}
+                              onChange={(e) =>
+                                setCaptureDraft((d) => ({ ...d, [field.key]: e.target.value }))
+                              }
+                            />
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  );
+                }
+                if (block.kind === "contact_register") {
+                  return (
+                    <p key={block.id} className="muted call-script-capture-hint">
+                      Registro de contato no cliente
+                      {block.contact_profile_tag ? ` · tag “${block.contact_profile_tag}”` : ""}.
+                      {isSimulation ? " (simulação — não grava.)" : ""}
+                    </p>
+                  );
+                }
+                if (block.kind === "schedule_meeting") {
+                  return (
+                    <div key={block.id} className="call-script-meeting-pick">
                       <p className="muted" style={{ fontSize: "0.875rem", margin: "0 0 8px" }}>
-                        Opção: <strong>{pendingMeeting.label}</strong> — informe data e hora da reunião.
+                        {block.prompt?.trim() || "Agendar reunião — informe data e hora."}
                       </p>
                       <ApproachMinimalScheduleField
                         mode="meeting"
@@ -376,116 +496,63 @@ export function CallScriptGuidePanel({
                         onNextTimeChange={setMeetingTime}
                         invalidSchedule={meetingInvalid}
                       />
-                      <div className="call-script-nav-row">
-                        <button type="button" className="btn" onClick={() => setPendingMeeting(null)}>
-                          Voltar
-                        </button>
-                        <button type="button" className="btn btn-primary call-script-btn-next" onClick={confirmPendingMeeting}>
-                          Confirmar reunião
-                          <ChevronRight size={18} aria-hidden />
-                        </button>
-                      </div>
                     </div>
-                  ) : (
-                    <div className="call-script-actions">
-                      {step.choices.map((choice) => (
-                        <button
-                          key={choice.label}
-                          type="button"
-                          className="btn btn-primary call-script-btn-choice"
-                          onClick={() => onBranchChoice(choice.next, choice.label)}
-                        >
-                          {choice.label}
-                          {choice.schedule_meeting ? " · agendar" : null}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : step.type === "capture" ? (
+                  );
+                }
+                return null;
+              })}
+              {screenHasNotesBlock(screen) ? (
+                <p className="muted call-script-capture-hint">
+                  Anotações ficam salvas nesta ligação e no complemento de registro.
+                  {screenCreatesContact(screen) ? (
+                    <>
+                      {" "}
+                      Será criado contato no cliente
+                      {screenContactTag(screen) ? ` (tag “${screenContactTag(screen)}”)` : ""}.
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
+              {captureContactNotice ? (
+                <p className="call-script-capture-hint" style={{ color: "var(--success, #86efac)" }}>
+                  {captureContactNotice}
+                </p>
+              ) : null}
+              {screen.navigation.mode === "branch" ? (
                 <>
-                  <div className="call-script-capture-fields">
-                    {step.fields.map((field) => (
-                      <label key={field.key} className="call-script-capture-field">
-                        <span className="label">
-                          {captureFieldRegistrationLabel(field, scriptContactLayer)}
-                        </span>
-                        {field.input === "textarea" ? (
-                          <textarea
-                            className="textarea"
-                            rows={3}
-                            placeholder={field.placeholder}
-                            value={captureDraft[field.key] ?? ""}
-                            onChange={(e) =>
-                              setCaptureDraft((d) => ({ ...d, [field.key]: e.target.value }))
-                            }
-                          />
-                        ) : (
-                          <input
-                            className="input"
-                            type={field.input === "tel" ? "tel" : "text"}
-                            placeholder={field.placeholder}
-                            value={captureDraft[field.key] ?? ""}
-                            onChange={(e) =>
-                              setCaptureDraft((d) => ({ ...d, [field.key]: e.target.value }))
-                            }
-                          />
-                        )}
-                      </label>
+                  <div className="call-script-actions">
+                    <p className="call-script-branch-q">{screen.navigation.question}</p>
+                    {screen.navigation.choices.map((choice) => (
+                      <button
+                        key={choice.label}
+                        type="button"
+                        className="btn btn-primary call-script-btn-choice"
+                        onClick={() => onBranchChoice(choice.next, choice.label)}
+                      >
+                        {choice.label}
+                        {choice.schedule_meeting ? " · agendar" : null}
+                      </button>
                     ))}
                   </div>
-                  <p className="muted call-script-capture-hint">
-                    Ao avançar, o que você preencher fica salvo nesta ligação e nas observações da abordagem.
-                    {captureStepCreatesContact(step) ? (
-                      <>
-                        {" "}
-                        Será criado um contato no cliente
-                        {captureStepContactTag(step) ? ` com a tag “${captureStepContactTag(step)}”` : ""}.
-                      </>
-                    ) : null}
-                    {isSimulation && captureStepCreatesContact(step) ? " (simulação — não grava contato.)" : null}
-                  </p>
-                  {captureContactNotice ? (
-                    <p className="call-script-capture-hint" style={{ color: "var(--success, #86efac)" }}>
-                      {captureContactNotice}
-                    </p>
-                  ) : null}
                   <div className="call-script-nav-row">
                     <button type="button" className="btn call-script-btn-back" disabled={!canGoBack} onClick={goBack}>
                       <ChevronLeft size={18} aria-hidden />
                       Voltar
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary call-script-btn-next"
-                      onClick={() => {
-                        const notes = step.fields
-                          .map((f) => ({
-                            label: captureFieldRegistrationLabel(f, scriptContactLayer),
-                            value: (captureDraft[f.key] ?? "").trim(),
-                            field_key: f.key
-                          }))
-                          .filter((n) => n.value);
-                        goNext(step.next, "capture", undefined, notes);
-                      }}
-                    >
-                      {step.next && flow.steps[step.next] ? "Salvar e continuar" : "Salvar e concluir"}
-                      <ChevronRight size={18} aria-hidden />
-                    </button>
                   </div>
                 </>
-              ) : step.next && flow.steps[step.next] ? (
+              ) : hasNextScreen || screenHasNotesBlock(screen) ? (
                 <div className="call-script-nav-row">
                   <button type="button" className="btn call-script-btn-back" disabled={!canGoBack} onClick={goBack}>
                     <ChevronLeft size={18} aria-hidden />
                     Voltar
                   </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary call-script-btn-next"
-                    onClick={() => goNext(step.type === "linear" ? step.next : null, "next")}
-                  >
-                    Próximo
+                  <button type="button" className="btn btn-primary call-script-btn-next" onClick={() => advanceSequential()}>
+                    {screenHasNotesBlock(screen)
+                      ? hasNextScreen
+                        ? "Salvar e continuar"
+                        : "Salvar e concluir"
+                      : "Próximo"}
                     <ChevronRight size={18} aria-hidden />
                   </button>
                 </div>
@@ -505,7 +572,7 @@ export function CallScriptGuidePanel({
                       type="button"
                       className="btn btn-primary call-script-btn-next"
                       disabled={handoffPending}
-                      onClick={() => goNext(step.type === "linear" ? step.next : null, "next")}
+                      onClick={() => advanceSequential()}
                     >
                       Concluir e registrar
                       <ChevronRight size={18} aria-hidden />
