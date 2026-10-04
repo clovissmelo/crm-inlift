@@ -26,7 +26,7 @@ import {
   useNovosLeadsPageSync,
   type NovosLeadsPageSyncPayload
 } from "@/hooks/use-novos-leads-page-sync";
-import { isGoogleQuotaPauseMessage } from "@/lib/lead-generation/quota";
+import { isGoogleQuotaPauseMessage } from "@/lib/lead-generation/quota-messages";
 import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
 import { formatRunResultsSummary } from "@/lib/lead-generation/run-outcome";
 import type { LeadGenCounts } from "@/lib/lead-generation/types";

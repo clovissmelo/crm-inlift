@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { LeadGenExecutionTechPanel } from "@/components/lead-gen-execution-tech-panel";
 import { sortActivityFeedDesc } from "@/lib/lead-generation/activity-feed";
-import { isGoogleQuotaPauseMessage } from "@/lib/lead-generation/quota";
+import { isGoogleQuotaPauseMessage } from "@/lib/lead-generation/quota-messages";
 import { computeRunProgressPct, runProgressDetail } from "@/lib/lead-generation/run-progress";
 
 export type LeadGenActivityLine = {
