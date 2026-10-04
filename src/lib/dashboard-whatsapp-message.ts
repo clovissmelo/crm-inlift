@@ -1,5 +1,14 @@
 import type { DashboardWhatsAppReport } from "@/lib/dashboard-stats";
-import { openWhatsAppShare, prepareWhatsAppMessage, WA, waBold, waBullet, waHeading, waLabel } from "@/lib/whatsapp-format";
+import {
+  openWhatsAppShare,
+  prepareWhatsAppMessage,
+  type WhatsAppShareResult,
+  WA,
+  waBold,
+  waBullet,
+  waHeading,
+  waLabel
+} from "@/lib/whatsapp-format";
 
 export type DashboardWhatsAppFilterLabels = {
   bdr: string;
@@ -79,6 +88,8 @@ export function buildDashboardWhatsAppMessage(
   return prepareWhatsAppMessage(lines.join("\n"));
 }
 
-export function openDashboardWhatsAppShare(text: string) {
-  openWhatsAppShare(text);
+export function openDashboardWhatsAppShare(text: string): Promise<WhatsAppShareResult> {
+  return openWhatsAppShare(text);
 }
+
+export type { WhatsAppShareResult } from "@/lib/whatsapp-format";

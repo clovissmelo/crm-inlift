@@ -1,4 +1,10 @@
-import { openWhatsAppShare, prepareWhatsAppMessage, WA, waHeading } from "@/lib/whatsapp-format";
+import {
+  openWhatsAppShare,
+  prepareWhatsAppMessage,
+  type WhatsAppShareResult,
+  WA,
+  waHeading
+} from "@/lib/whatsapp-format";
 
 export type MeetingWhatsAppDetail = {
   meeting: Record<string, unknown>;
@@ -101,6 +107,8 @@ export function buildMeetingWhatsAppInvite(detail: MeetingWhatsAppDetail, client
   return prepareWhatsAppMessage(lines.join("\n"));
 }
 
-export function openMeetingWhatsAppShare(text: string) {
-  openWhatsAppShare(text);
+export function openMeetingWhatsAppShare(text: string): Promise<WhatsAppShareResult> {
+  return openWhatsAppShare(text);
 }
+
+export type { WhatsAppShareResult } from "@/lib/whatsapp-format";

@@ -5128,6 +5128,12 @@ table.data-table tbody tr.is-selected {
   color: #eff6ff;
 }
 
+.meeting-detail-wa-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.8125rem;
+  color: #93c5fd;
+}
+
 .meeting-cancel-panel {
   margin-top: 0.75rem;
   padding: 0.85rem 1rem;

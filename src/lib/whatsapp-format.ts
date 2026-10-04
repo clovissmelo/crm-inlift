@@ -1,22 +1,25 @@
-/** Emojis com seletor de apresentação (evita glifo “quadrado/diamante” em alguns clientes). */
+/**
+ * Emojis literais (UTF-8). Evite \uFE0F na URL do WhatsApp — em alguns navegadores
+ * quebra o UTF-8 junto com *negrito* no preview do api.whatsapp.com.
+ */
 export const WA = {
-  chart: "\u{1F4CA}\uFE0F",
-  person: "\u{1F464}\uFE0F",
-  calendar: "\u{1F4C5}\uFE0F",
-  package: "\u{1F4E6}\uFE0F",
-  phone: "\u{1F4DE}\uFE0F",
-  target: "\u{1F3AF}\uFE0F",
-  trending: "\u{1F4C8}\uFE0F",
-  trophy: "\u{1F3C6}\uFE0F",
-  alert: "\u{1F6A8}\uFE0F",
-  building: "\u{1F3E2}\uFE0F",
-  mobile: "\u{1F4F1}\uFE0F",
-  email: "\u{1F4E7}\uFE0F",
-  clock: "\u{1F552}\uFE0F",
-  laptop: "\u{1F4BB}\uFE0F",
-  handshake: "\u{1F91D}\uFE0F",
-  link: "\u{1F517}\uFE0F",
-  people: "\u{1F465}\uFE0F"
+  chart: "📊",
+  person: "👤",
+  calendar: "📅",
+  package: "📦",
+  phone: "📞",
+  target: "🎯",
+  trending: "📈",
+  trophy: "🏆",
+  alert: "🚨",
+  building: "🏢",
+  mobile: "📱",
+  email: "📧",
+  clock: "🕒",
+  laptop: "💻",
+  handshake: "🤝",
+  link: "🔗",
+  people: "👥"
 } as const;
 
 export function waBold(value: string): string {
@@ -40,12 +43,33 @@ export function waBullet(label: string, value: string): string {
 /** WhatsApp ignora formatação se a mensagem termina em * ou _ */
 export function prepareWhatsAppMessage(body: string): string {
   const normalized = body.normalize("NFC").trimEnd();
-  if (normalized.endsWith("*") || normalized.endsWith("_")) return `${normalized} \u200B`;
+  if (normalized.endsWith("*") || normalized.endsWith("_")) return `${normalized} `;
   return normalized;
 }
 
-export function openWhatsAppShare(text: string): void {
+export type WhatsAppShareResult = {
+  copied: boolean;
+  /** Texto foi passado na URL (fallback quando não dá para copiar). */
+  prefilled: boolean;
+};
+
+export async function openWhatsAppShare(text: string): Promise<WhatsAppShareResult> {
   const prepared = prepareWhatsAppMessage(text);
-  const url = `https://wa.me/?text=${encodeURIComponent(prepared)}`;
+  let copied = false;
+
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(prepared);
+      copied = true;
+    } catch {
+      copied = false;
+    }
+  }
+
+  // No desktop, api.whatsapp.com costuma corromper emoji/negrito na query ?text=
+  const url = copied ? "https://wa.me/" : `https://wa.me/?text=${encodeURIComponent(prepared)}`;
+
   window.open(url, "_blank", "noopener,noreferrer");
+
+  return { copied, prefilled: !copied };
 }

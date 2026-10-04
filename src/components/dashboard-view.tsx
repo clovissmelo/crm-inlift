@@ -65,6 +65,7 @@ export function DashboardView({
   const [stats, setStats] = useState<DashboardStatsPayload | null>(initialStats);
   const [loading, setLoading] = useState(!initialStats && !initialError);
   const [error, setError] = useState<string | null>(initialError);
+  const [waShareHint, setWaShareHint] = useState<string | null>(null);
   const skipInitialFetch = useRef(Boolean(initialStats || initialError));
 
   const load = useCallback(async () => {
@@ -109,14 +110,20 @@ export function DashboardView({
     : "Todos os BDRs";
   const productLabel = productId ? (products.find((p) => String(p.id) === productId)?.name ?? "Produto") : "Todos";
 
-  function shareWhatsAppReport() {
+  async function shareWhatsAppReport() {
     if (!stats?.whatsapp_report) return;
     const text = buildDashboardWhatsAppMessage(stats.whatsapp_report, {
       bdr: bdrLabel,
       product: productLabel,
       period: periodNote
     });
-    openDashboardWhatsAppShare(text);
+    const { copied } = await openDashboardWhatsAppShare(text);
+    if (copied) {
+      setWaShareHint("Relatório copiado. No WhatsApp, cole com Ctrl+V para manter ícones e negrito.");
+      window.setTimeout(() => setWaShareHint(null), 8000);
+    } else {
+      setWaShareHint(null);
+    }
   }
 
   return (
@@ -164,6 +171,8 @@ export function DashboardView({
           <Forward size={16} aria-hidden />
         </FilterBarButton>
       </FilterBar>
+
+      {waShareHint ? <p className="dash-wa-share-hint">{waShareHint}</p> : null}
 
       {loading ? <p className="muted">Carregando…</p> : null}
       {error ? <div className="alert alert-error">{error}</div> : null}

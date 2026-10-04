@@ -56,6 +56,7 @@ export function MeetingDetailModal({
 }: Props) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [waShareHint, setWaShareHint] = useState<string | null>(null);
 
   if (!open) return null;
 
@@ -222,6 +223,8 @@ export function MeetingDetailModal({
             </div>
           ) : null}
 
+          {waShareHint ? <p className="meeting-detail-wa-hint">{waShareHint}</p> : null}
+
           <div className="meeting-detail-actions">
             <button
               type="button"
@@ -229,8 +232,16 @@ export function MeetingDetailModal({
               title="Enviar convite no WhatsApp"
               aria-label="Enviar convite no WhatsApp"
               onClick={() => {
-                const text = buildMeetingWhatsAppInvite(detail, clientName);
-                openMeetingWhatsAppShare(text);
+                void (async () => {
+                  const text = buildMeetingWhatsAppInvite(detail, clientName);
+                  const { copied } = await openMeetingWhatsAppShare(text);
+                  if (copied) {
+                    setWaShareHint("Convite copiado. No WhatsApp, cole com Ctrl+V para manter os ícones.");
+                    window.setTimeout(() => setWaShareHint(null), 8000);
+                  } else {
+                    setWaShareHint(null);
+                  }
+                })();
               }}
             >
               <Forward size={16} aria-hidden />
