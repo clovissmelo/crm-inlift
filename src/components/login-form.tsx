@@ -95,8 +95,12 @@ export function LoginForm() {
       </div>
 
       <button className="login-submit" type="submit" disabled={loading}>
-        {loading ? "Entrando…" : "Entrar"}
-        {!loading ? <ArrowRight size={18} strokeWidth={2.25} aria-hidden /> : null}
+        <span>{loading ? "Entrando…" : "Entrar"}</span>
+        {!loading ? (
+          <span className="login-submit__arrow" aria-hidden>
+            <ArrowRight size={20} strokeWidth={2.25} />
+          </span>
+        ) : null}
       </button>
 
       <p className="login-support">Problemas para acessar? Fale com o administrador.</p>
