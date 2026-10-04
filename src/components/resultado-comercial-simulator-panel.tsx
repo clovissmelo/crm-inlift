@@ -8,10 +8,14 @@ import {
 } from "@/components/api4com-call-result-modal";
 import { CallScriptGuidePanel, type ActiveCallForScript } from "@/components/call-script-guide-panel";
 import { CallSidePanelShell } from "@/components/call-side-panel-shell";
-import { callRequiresComplementRegistration } from "@/lib/api4com/call-registration";
+import {
+  callRequiresComplementRegistration,
+  callTelephonyResultLabel
+} from "@/lib/api4com/call-registration";
 import type { TechnicalResultTypeRow } from "@/lib/classifications/technical-result-match";
 import { pickCallScriptBody } from "@/lib/pick-call-script";
 import { technicalResultIconForSlug } from "@/lib/technical-result-icons";
+import type { CallScriptLogEntry } from "@/lib/call-script-log";
 import type { Product } from "@/lib/types";
 import "./resultado-comercial-admin.css";
 
@@ -26,7 +30,7 @@ function telephonyScenario(tech: TechnicalResultTypeRow) {
   });
   return {
     technicalSlug: tech.slug,
-    technicalDisplayName: tech.display_name,
+    technicalDisplayName: callTelephonyResultLabel(tech.slug, tech.display_name),
     answeredAt: answered ? now : null,
     durationSeconds: answered ? 36 : 0
   };
@@ -49,12 +53,14 @@ export function ResultadoComercialSimulatorPanel({
   const [scriptReady, setScriptReady] = useState(false);
   const [runId, setRunId] = useState(0);
   const [skipScript, setSkipScript] = useState(false);
+  const [scriptLog, setScriptLog] = useState<CallScriptLogEntry[]>([]);
 
   const reset = useCallback(() => {
     setPhase("setup");
     setCollapsed(false);
     setRunId(0);
     setSkipScript(false);
+    setScriptLog([]);
   }, []);
 
   useEffect(() => {
@@ -110,9 +116,10 @@ export function ResultadoComercialSimulatorPanel({
     const pid = productId ? Number(productId) : undefined;
     return {
       telephony: telephonyScenario(selectedTech),
-      productId: pid && Number.isFinite(pid) ? pid : undefined
+      productId: pid && Number.isFinite(pid) ? pid : undefined,
+      scriptFlowLog: scriptLog
     };
-  }, [phase, selectedTech, productId]);
+  }, [phase, selectedTech, productId, scriptLog]);
 
   const mockScriptCall = useMemo((): ActiveCallForScript | null => {
     if (phase !== "script") return null;
@@ -125,12 +132,21 @@ export function ResultadoComercialSimulatorPanel({
       product_name: prod?.name ?? null,
       contact_name: "Clóvis Melo",
       user_name: "Simulação",
-      status: "in_progress"
+      status: "in_progress",
+      script_flow_log: scriptLog
     };
-  }, [phase, products, productId]);
+  }, [phase, products, productId, scriptLog]);
+
+  function goToCommercialRegistration() {
+    if (!selectedTech) return;
+    setRunId((n) => n + 1);
+    setPhase("register");
+    setCollapsed(false);
+  }
 
   function startSimulation() {
     if (!selectedTech) return;
+    setScriptLog([]);
     setRunId((n) => n + 1);
     const answered = callRequiresComplementRegistration({
       technical_slug: selectedTech.slug,
@@ -151,16 +167,17 @@ export function ResultadoComercialSimulatorPanel({
   if (phase === "script" && mockScriptCall) {
     return (
       <CallScriptGuidePanel
+        key={`sim-script-${runId}`}
         call={mockScriptCall}
         scriptBody={scriptBody}
         scriptReady={scriptReady}
         collapsed={collapsed}
         onCollapse={() => setCollapsed(true)}
         onExpand={() => setCollapsed(false)}
-        onScriptFlowComplete={() => {
-          setRunId((n) => n + 1);
-          setPhase("register");
-        }}
+        onLogUpdated={setScriptLog}
+        onScriptFlowComplete={goToCommercialRegistration}
+        onGoToCommercialRegistration={goToCommercialRegistration}
+        onCloseSimulator={onClose}
       />
     );
   }
@@ -273,7 +290,7 @@ export function ResultadoComercialSimulatorPanel({
                 onClick={() => setTechnicalSlug(t.slug)}
               >
                 <Icon size={18} strokeWidth={2} aria-hidden className="resultado-simulator-tech-btn-icon" />
-                <span>{t.display_name}</span>
+                <span>{callTelephonyResultLabel(t.slug, t.display_name)}</span>
               </button>
             );
           })}

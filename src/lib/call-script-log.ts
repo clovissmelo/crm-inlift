@@ -1,4 +1,31 @@
-export type CallScriptCaptureNote = { label: string; value: string };
+export type CallScriptCaptureNote = { label: string; value: string; field_key?: string };
+
+const SCRIPT_PERSON_NAME_KEYS = new Set(["nome", "name", "contacted_person_name"]);
+const SCRIPT_PERSON_JOB_KEYS = new Set(["cargo", "funcao", "job_title", "funcao_cargo"]);
+
+/** Nome e cargo capturados no roteiro (chaves nome/cargo ou rótulos compatíveis). */
+export function personFromScriptLog(log: CallScriptLogEntry[]): { name: string; jobTitle: string } {
+  let name = "";
+  let jobTitle = "";
+  for (const e of log) {
+    if (e.action !== "capture" || !e.capture_notes?.length) continue;
+    for (const n of e.capture_notes) {
+      const val = n.value.trim();
+      if (!val) continue;
+      const key = (n.field_key ?? "").trim().toLowerCase();
+      if (SCRIPT_PERSON_NAME_KEYS.has(key) || (!key && /nome/i.test(n.label))) {
+        name = val;
+      }
+      if (
+        SCRIPT_PERSON_JOB_KEYS.has(key) ||
+        (!key && /cargo|função|funcao/i.test(n.label))
+      ) {
+        jobTitle = val;
+      }
+    }
+  }
+  return { name, jobTitle };
+}
 
 export type CallScriptLogEntry = {
   at: string;
@@ -8,7 +35,18 @@ export type CallScriptLogEntry = {
   choice_label?: string | null;
   next_step_id?: string | null;
   capture_notes?: CallScriptCaptureNote[];
+  /** Copiado da opção do roteiro — preenche contato no complemento. */
+  contact_layer?: "decisor" | "outra" | "ninguem";
 };
+
+/** Última escolha do roteiro que define contato na ligação (Decisor / Outra / Ninguém). */
+export function contactLayerFromScriptLog(log: CallScriptLogEntry[]): "decisor" | "outra" | "ninguem" | null {
+  for (let i = log.length - 1; i >= 0; i--) {
+    const e = log[i]!;
+    if (e.action === "choice" && e.contact_layer) return e.contact_layer;
+  }
+  return null;
+}
 
 export function normalizeCallScriptLog(raw: unknown): CallScriptLogEntry[] {
   if (!Array.isArray(raw)) return [];

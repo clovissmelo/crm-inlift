@@ -8,12 +8,21 @@ export type ScriptFlowLinearStep = {
   next: string | null;
 };
 
+/** Preenche “Contato na ligação” no complemento quando o operador escolhe esta opção. */
+export type ScriptFlowContactLayer = "decisor" | "outra" | "ninguem";
+
+export type ScriptFlowBranchChoice = {
+  label: string;
+  next: string | null;
+  contact_layer?: ScriptFlowContactLayer;
+};
+
 export type ScriptFlowBranchStep = {
   type: "branch";
   title: string;
   content: string;
   question: string;
-  choices: Array<{ label: string; next: string | null }>;
+  choices: ScriptFlowBranchChoice[];
 };
 
 export type ScriptFlowCaptureField = {
@@ -47,15 +56,30 @@ export type ScriptFlowStepDraft = {
   content: string;
   next?: string | null;
   question?: string;
-  choices?: Array<{ label: string; next: string | null }>;
+  choices?: ScriptFlowBranchChoice[];
   fields?: ScriptFlowCaptureField[];
 };
 
 export const DEFAULT_CAPTURE_FIELDS: ScriptFlowCaptureField[] = [
   { key: "nome", label: "Nome", placeholder: "Nome do contato / responsável" },
+  { key: "cargo", label: "Função / cargo", placeholder: "Ex.: Gerente, Sócio" },
   { key: "telefone", label: "Telefone", placeholder: "(DDD) 9xxxx-xxxx", input: "tel" },
   { key: "observacao", label: "Observação", placeholder: "Retorno, horário, etc.", input: "textarea" }
 ];
+
+/** Rótulo alinhado ao complemento de registro quando o campo usa chave nome/cargo. */
+export function captureFieldRegistrationLabel(
+  field: ScriptFlowCaptureField,
+  contactLayer: "decisor" | "outra" | "ninguem" | null
+): string {
+  if (field.key === "nome") {
+    if (contactLayer === "decisor") return "Nome do decisor *";
+    if (contactLayer === "outra") return "Nome de quem atendeu *";
+    return "Nome *";
+  }
+  if (field.key === "cargo") return "Função / cargo";
+  return field.label;
+}
 
 function walkStepNext(step: ScriptFlowStep): string | null {
   if (step.type === "branch") return null;
@@ -161,7 +185,8 @@ export function draftsToFlow(drafts: ScriptFlowStepDraft[]): ScriptFlow {
         question: d.question?.trim() || "Como seguir?",
         choices: (d.choices ?? []).filter((c) => c.label.trim()).map((c) => ({
           label: c.label.trim(),
-          next: c.next
+          next: c.next,
+          ...(c.contact_layer ? { contact_layer: c.contact_layer } : {})
         }))
       };
     } else if (d.type === "capture") {
@@ -207,6 +232,14 @@ export function renderStepContent(content: string, vars: TemplateVars) {
   return applyTemplate(content, vars);
 }
 
+export function branchChoiceContactLayer(
+  step: ScriptFlowBranchStep,
+  choiceLabel: string
+): ScriptFlowContactLayer | undefined {
+  const choice = step.choices.find((c) => c.label === choiceLabel);
+  return choice?.contact_layer;
+}
+
 /** Modelo PostoCred — editável em Abordagens. */
 export function defaultPostoCredCallFlow(): ScriptFlow {
   return {
@@ -229,8 +262,8 @@ Posso seguir?`,
         content: "Preciso alinhar com quem decide sobre compra de combustível e condições comerciais no posto.",
         question: "Estou falando com o decisor de compra de combustível?",
         choices: [
-          { label: "Sim, sou o decisor", next: "interesse_decisor" },
-          { label: "Não — outra pessoa decide", next: "nao_decisor" }
+          { label: "Sim, sou o decisor", next: "interesse_decisor", contact_layer: "decisor" },
+          { label: "Não — outra pessoa decide", next: "nao_decisor", contact_layer: "outra" }
         ]
       },
       nao_decisor: {
@@ -239,6 +272,7 @@ Posso seguir?`,
         content: `Entendi. Anote abaixo quem decide e o melhor contato. Confirme também se pode retornar e quando.`,
         fields: [
           { key: "nome", label: "Nome do responsável", placeholder: "Quem decide a compra" },
+          { key: "cargo", label: "Função / cargo", placeholder: "Ex.: Sócio, Gerente" },
           { key: "telefone", label: "Telefone / WhatsApp", input: "tel" },
           { key: "retorno", label: "Melhor dia/horário para retorno", input: "textarea" }
         ],

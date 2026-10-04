@@ -1,5 +1,6 @@
 "use client";
 
+import { Pencil } from "lucide-react";
 import { CallContactLayerField } from "@/components/call-contact-layer-field";
 import {
   matchTechnicalResultFromCatalog,
@@ -8,6 +9,7 @@ import {
   suggestedContactSlugForTechnical,
   type TechnicalResultTypeRow
 } from "@/lib/classifications/technical-result-match";
+import { callTelephonyResultLabel } from "@/lib/api4com/call-registration";
 import type { ContactLayerChoice } from "@/lib/attendance/call-contact-layer";
 import { resolveContactLayerOptions } from "@/lib/attendance/call-contact-layer";
 
@@ -76,6 +78,7 @@ export function applyThreeLayerSuggestions(input: {
 
 export function CallThreeLayerRegistrationFields({
   callAnswered,
+  technicalSlug,
   technicalLabel,
   contactTypes,
   contactLayerChoice,
@@ -91,10 +94,13 @@ export function CallThreeLayerRegistrationFields({
   onContactedPersonNameChange,
   contactedPersonJobTitle,
   onContactedPersonJobTitleChange,
+  personFieldsCompact,
+  onEditPersonFields,
   invalidFields,
   disabled
 }: {
   callAnswered: boolean;
+  technicalSlug?: string | null;
   technicalLabel: string;
   contactTypes: ContactOutcomeOption[];
   contactLayerChoice: ContactLayerChoice | null;
@@ -110,6 +116,9 @@ export function CallThreeLayerRegistrationFields({
   onContactedPersonNameChange: (v: string) => void;
   contactedPersonJobTitle: string;
   onContactedPersonJobTitleChange: (v: string) => void;
+  /** Nome/cargo já vieram do roteiro — mostra resumo com lápis em vez dos campos. */
+  personFieldsCompact?: boolean;
+  onEditPersonFields?: () => void;
   invalidFields?: Partial<
     Record<"commercial" | "contact" | "personName" | "personJob", boolean>
   >;
@@ -133,7 +142,9 @@ export function CallThreeLayerRegistrationFields({
   const showPersonFields =
     contactLayerChoice === "outra" || contactLayerChoice === "decisor";
 
-  const answeredHint = technicalLabel || (callAnswered ? "Atendeu" : "Não atendeu");
+  const telephonyDetail =
+    callTelephonyResultLabel(technicalSlug, technicalLabel) ||
+    (callAnswered ? "Atendeu" : "Chamou e não atendeu");
 
   return (
     <div className="call-three-layer-fields">
@@ -141,7 +152,7 @@ export function CallThreeLayerRegistrationFields({
         <span className="label">Atendeu?</span>
         <p className="call-reg-answered-value">
           <strong>{callAnswered ? "Sim" : "Não"}</strong>
-          <span className="muted"> ({answeredHint})</span>
+          <span className="muted"> · {telephonyDetail}</span>
         </p>
       </div>
 
@@ -197,29 +208,57 @@ export function CallThreeLayerRegistrationFields({
 
       {showPersonFields ? (
         <div className={invalidFields?.personName ? "field field--invalid" : "field"}>
-          <div className="call-reg-person-row">
-            <div className="call-reg-person-row-col">
-              <label className="label">
-                {contactLayerChoice === "decisor" ? "Nome do decisor *" : "Nome de quem atendeu *"}
-              </label>
-              <input
-                className="input"
-                value={contactedPersonName}
-                onChange={(e) => onContactedPersonNameChange(e.target.value)}
-                disabled={disabled}
-                required
-              />
+          {personFieldsCompact && contactedPersonName.trim() ? (
+            <div className="call-reg-person-summary">
+              <div className="call-reg-person-summary-head">
+                <span className="label">
+                  {contactLayerChoice === "decisor" ? "Nome do decisor" : "Nome de quem atendeu"}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-icon-sm"
+                  title="Editar nome e cargo"
+                  disabled={disabled}
+                  onClick={() => onEditPersonFields?.()}
+                >
+                  <Pencil size={16} aria-hidden />
+                </button>
+              </div>
+              <p className="call-reg-person-summary-body">
+                <strong>{contactedPersonName}</strong>
+                {contactedPersonJobTitle.trim() ? (
+                  <span className="muted"> · {contactedPersonJobTitle}</span>
+                ) : null}
+              </p>
+              <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
+                Preenchido no roteiro da ligação.
+              </p>
             </div>
-            <div className="call-reg-person-row-col">
-              <label className="label">Função / cargo</label>
-              <input
-                className="input"
-                value={contactedPersonJobTitle}
-                onChange={(e) => onContactedPersonJobTitleChange(e.target.value)}
-                disabled={disabled}
-              />
+          ) : (
+            <div className="call-reg-person-row">
+              <div className="call-reg-person-row-col">
+                <label className="label">
+                  {contactLayerChoice === "decisor" ? "Nome do decisor *" : "Nome de quem atendeu *"}
+                </label>
+                <input
+                  className="input"
+                  value={contactedPersonName}
+                  onChange={(e) => onContactedPersonNameChange(e.target.value)}
+                  disabled={disabled}
+                  required
+                />
+              </div>
+              <div className="call-reg-person-row-col">
+                <label className="label">Função / cargo</label>
+                <input
+                  className="input"
+                  value={contactedPersonJobTitle}
+                  onChange={(e) => onContactedPersonJobTitleChange(e.target.value)}
+                  disabled={disabled}
+                />
+              </div>
             </div>
-          </div>
+          )}
           {invalidFields?.personName ? (
             <p className="call-reg-invalid-hint">Informe o nome para o histórico.</p>
           ) : null}

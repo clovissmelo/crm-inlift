@@ -19,7 +19,13 @@ import {
   resolveEffectiveBdrRules
 } from "@/lib/attendance/bdr-registration";
 import type { TechnicalResultTypeRow } from "@/lib/classifications/technical-result-match";
-import { formatCallScriptLogForNotes, normalizeCallScriptLog } from "@/lib/call-script-log";
+import {
+  contactLayerFromScriptLog,
+  formatCallScriptLogForNotes,
+  normalizeCallScriptLog,
+  personFromScriptLog,
+  type CallScriptLogEntry
+} from "@/lib/call-script-log";
 import { ApproachMinimalScheduleField } from "@/components/approach-minimal-schedule-field";
 import { type ApproachNextActionKey } from "@/lib/approach-next-actions";
 import {
@@ -33,7 +39,10 @@ import {
 import { CallRegistrationHeader } from "@/components/call-registration-header";
 import { ComplementObservationsTextarea } from "@/components/complement-observations-textarea";
 import { confirmProceedIfClientHasAgenda } from "@/lib/client-agenda-warning";
-import { callRequiresComplementRegistration } from "@/lib/api4com/call-registration";
+import {
+  callRequiresComplementRegistration,
+  callTelephonyResultLabel
+} from "@/lib/api4com/call-registration";
 
 type CallDetail = {
   id: number;
@@ -149,6 +158,7 @@ export type CallRegistrationSimulation = {
     durationSeconds: number;
   };
   productId?: number;
+  scriptFlowLog?: CallScriptLogEntry[];
 };
 
 type ResultFormProps = {
@@ -199,10 +209,13 @@ export function Api4comCallResultForm({
   const [attendanceRules, setAttendanceRules] = useState<AttendanceRuleLite[]>([]);
   const [contactOutcomeId, setContactOutcomeId] = useState("");
   const autoSettleRef = useRef<number | null>(null);
-  const [, setTechnicalSlug] = useState<string | null>(null);
+  const scriptContactPrefillKeyRef = useRef("");
+  const [technicalSlug, setTechnicalSlug] = useState<string | null>(null);
   const [technicalLabel, setTechnicalLabel] = useState("");
   const [contactedPersonName, setContactedPersonName] = useState("");
   const [contactedPersonJobTitle, setContactedPersonJobTitle] = useState("");
+  const [personFieldsFromScript, setPersonFieldsFromScript] = useState(false);
+  const [personFieldsEditing, setPersonFieldsEditing] = useState(false);
   const [simulationFeedback, setSimulationFeedback] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{
     commercial?: boolean;
@@ -241,9 +254,11 @@ export function Api4comCallResultForm({
         ? { display_name: ctxData.call.technical_display_name, slug: slug ?? "" }
         : null);
     setTechnicalLabel(
-      ctxData.call.technical_display_name ??
-        (techRow && "display_name" in techRow ? techRow.display_name : "") ??
-        "Aguardando telefonia"
+      callTelephonyResultLabel(
+        slug,
+        ctxData.call.technical_display_name ??
+          (techRow && "display_name" in techRow ? techRow.display_name : null)
+      )
     );
 
     const suggestions = applyThreeLayerSuggestions({
@@ -349,7 +364,8 @@ export function Api4comCallResultForm({
           technical_slug: tel?.technicalSlug ?? "answered",
           client_name: "Empresa Exemplo Ltda",
           contact_name: "Clóvis Melo",
-          record_url: null
+          record_url: null,
+          script_flow_log: simulation.scriptFlowLog ?? null
         };
         const ctxData: DialContext = {
           call: mockCall,
@@ -510,13 +526,18 @@ export function Api4comCallResultForm({
     setReasonId("");
     setNextDate("");
     setNextTime("");
+    setContactedPersonName("");
+    setContactedPersonJobTitle("");
+    setPersonFieldsFromScript(false);
+    setPersonFieldsEditing(false);
     setStep("result");
     void loadContext();
   }, [active, callId, simulation, loadContext]);
 
   useEffect(() => {
     autoSettleRef.current = null;
-  }, [callId]);
+    scriptContactPrefillKeyRef.current = "";
+  }, [callId, simulation?.scriptFlowLog]);
 
   const modalTitle =
     step === "next_dial" ? "Ligar para outro contato?" : "COMPLEMENTO DE REGISTRO";
@@ -542,11 +563,11 @@ export function Api4comCallResultForm({
       call
         ? callRequiresComplementRegistration({
             answered_at: call.answered_at,
-            technical_slug: call.technical_slug,
+            technical_slug: technicalSlug ?? call.technical_slug,
             duration_seconds: call.duration_seconds
           })
         : false,
-    [call]
+    [call, technicalSlug]
   );
 
   useEffect(() => {
@@ -631,6 +652,49 @@ export function Api4comCallResultForm({
     const contact = contactTypes.find((c) => c.slug === slug);
     if (contact) setContactOutcomeId(String(contact.id));
   }, [contactLayerChoice, contactTypes]);
+
+  useEffect(() => {
+    if (!call || contextLoading || !callWasAnswered || contactLocked) return;
+    const commercial = resultTypes.find((r) => String(r.id) === resultTypeId);
+    if (!commercial || commercial.slug === "sem_contato") return;
+    const layer = contactLayerFromScriptLog(normalizeCallScriptLog(call.script_flow_log));
+    if (!layer) return;
+    const options = resolveContactLayerOptions({
+      callAnswered: callWasAnswered,
+      commercialSlug: commercial.slug,
+      nenhumContatoTypeId: nenhumContatoType?.id ?? null,
+      commercialTypeId: commercial.id,
+      compatMap
+    });
+    if (!options.includes(layer)) return;
+    const logLen = normalizeCallScriptLog(call.script_flow_log).length;
+    const key = `${call.id}:${logLen}:${layer}:${resultTypeId}`;
+    if (scriptContactPrefillKeyRef.current === key) return;
+    scriptContactPrefillKeyRef.current = key;
+    setContactLayerChoice(layer);
+    setContactLayerLocked(false);
+  }, [
+    call,
+    callWasAnswered,
+    contextLoading,
+    contactLocked,
+    resultTypeId,
+    resultTypes,
+    nenhumContatoType,
+    compatMap
+  ]);
+
+  useEffect(() => {
+    if (!call || contextLoading) return;
+    if (contactLayerChoice !== "decisor" && contactLayerChoice !== "outra") return;
+    const { name, jobTitle } = personFromScriptLog(normalizeCallScriptLog(call.script_flow_log));
+    if (!name.trim()) return;
+    setContactedPersonName(name);
+    setContactedPersonJobTitle(jobTitle);
+    setPersonFieldsFromScript(true);
+    setPersonFieldsEditing(false);
+  }, [call, call?.script_flow_log, contactLayerChoice, contextLoading]);
+
   const effectiveProductId = useMemo(() => {
     if (call?.product_id != null) return call.product_id;
     const ids = ctx?.client_product_ids ?? [];
@@ -964,6 +1028,7 @@ export function Api4comCallResultForm({
           endedAt={call.ended_at}
           durationLabel={duration}
           callAnswered={callWasAnswered}
+          technicalSlug={technicalSlug ?? call.technical_slug}
           technicalLabel={technicalLabel}
           hangupCauseLabel={call.hangup_cause_label}
           recordUrl={call.record_url}
@@ -1020,11 +1085,39 @@ export function Api4comCallResultForm({
 
       {step === "result" && !contextLoading && !callWasAnswered ? (
         <div>
-          <p className="muted" style={{ marginTop: 0 }}>
-            Ligação não atendida: o registro técnico e a tentativa sem contato são aplicados automaticamente. Não é
-            necessário preencher resultado comercial.
+          <p className="call-reg-unanswered-lead">
+            {(technicalSlug ?? call?.technical_slug) === "no_answer" ? (
+              <>
+                <strong>Chamou e não atendeu.</strong> O CRM registra a tentativa sem contato —{" "}
+                <strong>sem</strong> complemento comercial manual.
+              </>
+            ) : (
+              <>
+                A ligação foi feita, mas <strong>não houve atendimento</strong>. O CRM registra o resultado técnico e a
+                tentativa sem contato — <strong>sem</strong> complemento comercial manual.
+              </>
+            )}
           </p>
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+          <div className="panel call-reg-unanswered-summary">
+            <p style={{ margin: "0 0 6px" }}>
+              <span className="label" style={{ display: "inline", marginRight: 6 }}>
+                Resultado da ligação
+              </span>
+              <strong>
+                {callTelephonyResultLabel(technicalSlug ?? call?.technical_slug, technicalLabel)}
+              </strong>
+            </p>
+            <p style={{ margin: 0 }}>
+              <span className="label" style={{ display: "inline", marginRight: 6 }}>
+                Registro comercial
+              </span>
+              <strong>
+                {resultTypes.find((r) => String(r.id) === resultTypeId)?.name ?? "Sem contato"}
+              </strong>
+              <span className="muted"> · automático</span>
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap", marginTop: 16 }}>
             {isSimulation ? (
               <button
                 type="button"
@@ -1055,6 +1148,7 @@ export function Api4comCallResultForm({
           ) : null}
           <CallThreeLayerRegistrationFields
             callAnswered={callWasAnswered}
+            technicalSlug={technicalSlug ?? call?.technical_slug}
             technicalLabel={technicalLabel}
             contactTypes={contactTypes}
             contactLayerChoice={contactLayerChoice}
@@ -1088,9 +1182,17 @@ export function Api4comCallResultForm({
             commercialLocked={resultLockedByIntegration}
             compatMap={compatMap}
             contactedPersonName={contactedPersonName}
-            onContactedPersonNameChange={setContactedPersonName}
+            onContactedPersonNameChange={(v) => {
+              setPersonFieldsFromScript(false);
+              setContactedPersonName(v);
+            }}
             contactedPersonJobTitle={contactedPersonJobTitle}
-            onContactedPersonJobTitleChange={setContactedPersonJobTitle}
+            onContactedPersonJobTitleChange={(v) => {
+              setPersonFieldsFromScript(false);
+              setContactedPersonJobTitle(v);
+            }}
+            personFieldsCompact={personFieldsFromScript && !personFieldsEditing}
+            onEditPersonFields={() => setPersonFieldsEditing(true)}
             invalidFields={fieldErrors}
             disabled={loading}
           />

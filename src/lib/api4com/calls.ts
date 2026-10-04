@@ -131,6 +131,29 @@ export async function appendCallScriptLog(callId: number, userId: number, entry:
   return next;
 }
 
+export async function replaceCallScriptLog(callId: number, userId: number, log: CallScriptLogEntry[]) {
+  const row = await get<{ status: string }>(
+    `
+      SELECT status FROM api4com_calls
+      WHERE id = @id AND user_id = @userId
+    `,
+    { callId, userId }
+  );
+  if (!row) throw new Error("Chamada não encontrada");
+  if (!["initiating", "ringing", "in_progress"].includes(row.status)) {
+    throw new Error("O roteiro só pode ser atualizado enquanto a ligação estiver ativa.");
+  }
+  const normalized = normalizeCallScriptLog(log);
+  await run(
+    `
+      UPDATE api4com_calls SET script_flow_log = @log::jsonb, updated_at = @now
+      WHERE id = @id AND user_id = @userId
+    `,
+    { id: callId, userId, log: JSON.stringify(normalized), now: nowIso() }
+  );
+  return normalized;
+}
+
 export async function assertExtensionUnique(extension: string, excludeUserId?: number) {
   const row = await get<{ id: number }>(
     `

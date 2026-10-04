@@ -57,6 +57,14 @@
   padding: 1.25rem;
 }
 
+.call-script-step-banner {
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 .call-script-step-title {
   margin: 0 0 0.75rem;
   font-size: 1.125rem;
@@ -85,11 +93,29 @@
   padding-top: 1rem;
 }
 
+.call-script-nav-row {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 1rem;
+}
+
+.call-script-btn-back,
 .call-script-btn-next {
-  width: 100%;
-  padding: 1rem 1.25rem;
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 1rem 0.75rem;
   font-size: 1.0625rem;
   font-weight: 600;
+}
+
+.call-script-btn-next {
+  width: auto;
 }
 
 .call-script-btn-choice {
@@ -106,6 +132,13 @@
   display: flex;
   gap: 8px;
   justify-content: space-between;
+  align-items: center;
+}
+
+.call-script-panel-foot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   align-items: center;
 }
 

@@ -223,8 +223,9 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
             {selected.type === "capture" ? (
               <>
                 <p className="muted script-flow-field-hint">
-                  Defina os campos que o operador preenche durante a ligação (nome, telefone, etc.). Os valores vão para o
-                  registro da chamada.
+                  Defina os campos que o operador preenche na ligação. Use vínculo{" "}
+                  <strong>Nome (complemento)</strong> ou <strong>Cargo (complemento)</strong> para preencher o registro
+                  final automaticamente (com opção de editar).
                 </p>
                 {(selected.fields ?? DEFAULT_CAPTURE_FIELDS).map((field, idx) => (
                   <div key={idx} className="filters-row script-flow-capture-row">
@@ -251,6 +252,45 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                           updateSelected({ fields });
                         }}
                       />
+                    </div>
+                    <div className="field" style={{ minWidth: "8.5rem" }}>
+                      <label className="label">Vínculo registro</label>
+                      <select
+                        className="select"
+                        value={
+                          field.key === "nome" ? "nome" : field.key === "cargo" ? "cargo" : ""
+                        }
+                        onChange={(e) => {
+                          const fields = [...(selected.fields ?? DEFAULT_CAPTURE_FIELDS)];
+                          const link = e.target.value;
+                          const base = fields[idx]!;
+                          if (link === "nome") {
+                            fields[idx] = {
+                              ...base,
+                              key: "nome",
+                              label: base.label || "Nome",
+                              input: "text"
+                            };
+                          } else if (link === "cargo") {
+                            fields[idx] = {
+                              ...base,
+                              key: "cargo",
+                              label: base.label || "Função / cargo",
+                              input: "text"
+                            };
+                          } else {
+                            fields[idx] = {
+                              ...base,
+                              key: base.key === "nome" || base.key === "cargo" ? `campo_${idx + 1}` : base.key
+                            };
+                          }
+                          updateSelected({ fields });
+                        }}
+                      >
+                        <option value="">Campo livre</option>
+                        <option value="nome">Nome (complemento)</option>
+                        <option value="cargo">Cargo (complemento)</option>
+                      </select>
                     </div>
                     <div className="field" style={{ width: "7rem" }}>
                       <label className="label">Tipo</label>
@@ -334,6 +374,10 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                     onChange={(e) => updateSelected({ question: e.target.value })}
                   />
                 </div>
+                <p className="muted script-flow-field-hint">
+                  Em cada opção você pode definir o que preenche automaticamente em{" "}
+                  <strong>Contato na ligação</strong> no complemento de registro.
+                </p>
                 {(selected.choices ?? []).map((choice, idx) => (
                   <div key={idx} className="filters-row script-flow-branch-row">
                     <div className="field" style={{ flex: 1 }}>
@@ -347,6 +391,28 @@ export function ScriptFlowEditor({ body, onBodyChange }: Props) {
                           updateSelected({ choices });
                         }}
                       />
+                    </div>
+                    <div className="field" style={{ minWidth: "9.5rem", flex: "0 1 auto" }}>
+                      <label className="label">Contato no registro</label>
+                      <select
+                        className="select"
+                        value={choice.contact_layer ?? ""}
+                        onChange={(e) => {
+                          const choices = [...(selected.choices ?? [])];
+                          const v = e.target.value;
+                          choices[idx] = {
+                            ...choices[idx]!,
+                            contact_layer:
+                              v === "decisor" || v === "outra" || v === "ninguem" ? v : undefined
+                          };
+                          updateSelected({ choices });
+                        }}
+                      >
+                        <option value="">Não preencher</option>
+                        <option value="decisor">Decisor</option>
+                        <option value="outra">Outra pessoa</option>
+                        <option value="ninguem">Ninguém</option>
+                      </select>
                     </div>
                     <div className="field" style={{ flex: 1 }}>
                       <label className="label">Ir para</label>

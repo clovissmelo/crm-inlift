@@ -4654,6 +4654,43 @@ table.data-table td.prospeccao-col-fila {
   width: 100%;
 }
 
+.call-reg-person-summary {
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--border, #2d3643);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.call-reg-person-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.call-reg-person-summary-head .label {
+  margin: 0;
+}
+
+.call-reg-person-summary-body {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+
+.call-reg-unanswered-lead {
+  margin: 0 0 1rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--text, #e5e7eb);
+}
+
+.call-reg-unanswered-summary {
+  padding: 0.75rem 0.85rem;
+  font-size: 0.9375rem;
+}
+
 .prospeccao-priority-legend__title {
   margin: 0 0 0.35rem;
   font-size: 0.95rem;

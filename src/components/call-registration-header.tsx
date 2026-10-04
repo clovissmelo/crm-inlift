@@ -1,6 +1,7 @@
 "use client";
 
 import { Headphones } from "lucide-react";
+import { callTelephonyResultLabel } from "@/lib/api4com/call-registration";
 import { formatSpDateTime } from "@/lib/datetime";
 import { formatPhoneDisplay } from "@/lib/format";
 
@@ -12,6 +13,7 @@ export function CallRegistrationHeader({
   endedAt,
   durationLabel,
   callAnswered,
+  technicalSlug,
   technicalLabel,
   hangupCauseLabel,
   recordUrl,
@@ -28,6 +30,7 @@ export function CallRegistrationHeader({
   endedAt: string | null;
   durationLabel: string;
   callAnswered: boolean;
+  technicalSlug?: string | null;
   technicalLabel: string;
   hangupCauseLabel: string | null;
   recordUrl: string | null;
@@ -37,7 +40,9 @@ export function CallRegistrationHeader({
   lastAttemptBucket?: string | null;
   waitingNextAt?: string | null;
 }) {
-  const telephonyResult = technicalLabel || (callAnswered ? "Atendeu" : "Não atendeu");
+  const telephonyResult =
+    callTelephonyResultLabel(technicalSlug, technicalLabel) ||
+    (callAnswered ? "Atendeu" : "Chamou e não atendeu");
   const causePart = hangupCauseLabel ? ` (${hangupCauseLabel})` : "";
 
   return (
