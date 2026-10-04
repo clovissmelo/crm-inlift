@@ -8,6 +8,14 @@ export type DashboardStatsFilters = {
   lead_qualification?: "cold" | "warm" | "hot" | null;
 };
 
+export type DashboardProductBreakdownRow = {
+  product_id: number;
+  product_name: string;
+  clients_available: number;
+  leads_worked_period: number;
+  calls_made_period: number;
+};
+
 export type DashboardWhatsAppReport = {
   leads_worked: number;
   calls_made: number;
@@ -68,4 +76,6 @@ export type DashboardStatsPayload = {
   period: DashboardPeriod;
   activity_metrics_available: boolean;
   whatsapp_report: DashboardWhatsAppReport;
+  /** Preenchido quando nenhum produto está filtrado. */
+  products_breakdown: DashboardProductBreakdownRow[];
 };

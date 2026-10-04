@@ -1,9 +1,19 @@
 import { all, get } from "@/lib/db";
 import { periodToRange, spCurrentWeekDayLabels, spDayEndUtcIso, spDayStartUtcIso, type DashboardPeriod } from "@/lib/datetime";
 import { getOpportunityDashboardMetrics } from "@/lib/opportunity-pipeline";
-import type { DashboardStatsFilters, DashboardStatsPayload, DashboardWhatsAppReport } from "@/lib/dashboard-stats-types";
+import type {
+  DashboardProductBreakdownRow,
+  DashboardStatsFilters,
+  DashboardStatsPayload,
+  DashboardWhatsAppReport
+} from "@/lib/dashboard-stats-types";
 
-export type { DashboardStatsFilters, DashboardStatsPayload, DashboardWhatsAppReport } from "@/lib/dashboard-stats-types";
+export type {
+  DashboardProductBreakdownRow,
+  DashboardStatsFilters,
+  DashboardStatsPayload,
+  DashboardWhatsAppReport
+} from "@/lib/dashboard-stats-types";
 
 function timestampIso(value: string | Date | null | undefined): string {
   if (value == null) return "";
@@ -66,6 +76,56 @@ async function runQueriesLimited(tasks: Array<() => Promise<unknown>>, concurren
   const workers = Math.min(concurrency, tasks.length);
   await Promise.all(Array.from({ length: workers }, () => worker()));
   return results;
+}
+
+async function loadProductsBreakdown(
+  clientFilter: string,
+  approachFilter: string,
+  params: Record<string, string | number>
+): Promise<DashboardProductBreakdownRow[]> {
+  const rows = await all<{
+    product_id: string;
+    product_name: string;
+    clients_available: string;
+    leads_worked_period: string;
+    calls_made_period: string;
+  }>(
+    `
+    SELECT
+      p.id::text AS product_id,
+      p.name AS product_name,
+      COALESCE(av.cnt, 0)::text AS clients_available,
+      COALESCE(ap.leads, 0)::text AS leads_worked_period,
+      COALESCE(ap.calls, 0)::text AS calls_made_period
+    FROM products p
+    LEFT JOIN (
+      SELECT cpp.product_id, COUNT(DISTINCT cpp.client_id)::int AS cnt
+      FROM client_product_prospeccao cpp
+      JOIN clients c ON c.id = cpp.client_id
+      WHERE cpp.in_prospeccao_queue = true AND ${clientFilter}
+      GROUP BY cpp.product_id
+    ) av ON av.product_id = p.id
+    LEFT JOIN (
+      SELECT a.product_id,
+        COUNT(DISTINCT a.client_id)::int AS leads,
+        COUNT(*)::int AS calls
+      FROM approaches a
+      JOIN clients c ON c.id = a.client_id
+      WHERE ${approachFilter} AND a.channel = 'call' AND a.product_id IS NOT NULL
+      GROUP BY a.product_id
+    ) ap ON ap.product_id = p.id
+    ORDER BY p.name ASC
+    `,
+    params
+  );
+
+  return rows.map((r) => ({
+    product_id: Number(r.product_id),
+    product_name: r.product_name,
+    clients_available: Number(r.clients_available),
+    leads_worked_period: Number(r.leads_worked_period),
+    calls_made_period: Number(r.calls_made_period)
+  }));
 }
 
 async function loadWhatsAppReport(
@@ -594,6 +654,10 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
     decisionMakerN
   );
 
+  const products_breakdown = productId
+    ? []
+    : await loadProductsBreakdown(clientFilter, approachFilter, params);
+
   return {
     total_clients: Number(totalRow?.count ?? 0),
     clients_with_verified_phone: Number(verifiedRow?.count ?? 0),
@@ -635,7 +699,8 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
     focus_items,
     period,
     activity_metrics_available: approachesTotal > 0,
-    whatsapp_report
+    whatsapp_report,
+    products_breakdown
   };
 }
 

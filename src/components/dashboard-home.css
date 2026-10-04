@@ -105,6 +105,63 @@
   margin-top: 0.75rem;
 }
 
+.dash-products-panel {
+  margin-top: 1rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.65rem;
+  border: 1px solid #2d3643;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dash-products-panel-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.dash-products-panel-sub {
+  margin: 0.25rem 0 0.65rem !important;
+}
+
+.dash-products-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.dash-products-list-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.dash-products-name {
+  font-weight: 500;
+  color: #f3f4f6;
+}
+
+.dash-products-metrics {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.dash-products-metrics strong {
+  color: #dbeafe;
+  font-weight: 600;
+}
+
+.dash-products-sep {
+  margin: 0 0.2rem;
+  opacity: 0.5;
+}
+
 .dash-kpi-foot {
   margin: 0;
   font-size: 0.6875rem;

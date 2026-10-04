@@ -107,13 +107,35 @@ export function DashboardView({
     ? (bdrs.find((b) => String(b.id) === bdrUserId)?.name ?? "BDR")
     : "Todos os BDRs";
   const productLabel = productId ? (products.find((p) => String(p.id) === productId)?.name ?? "Produto") : "Todos";
+  const allProductsSelected = !productId;
+  const productsBreakdown =
+    stats?.products_breakdown?.length
+      ? stats.products_breakdown
+      : allProductsSelected
+        ? products.map((p) => ({
+            product_id: p.id,
+            product_name: p.name,
+            clients_available: 0,
+            leads_worked_period: 0,
+            calls_made_period: 0
+          }))
+        : [];
 
   function shareWhatsAppReport() {
     if (!stats?.whatsapp_report) return;
     const text = buildDashboardWhatsAppMessage(stats.whatsapp_report, {
       bdr: bdrLabel,
       product: productLabel,
-      period: periodNote
+      period: periodNote,
+      all_products: allProductsSelected,
+      products: allProductsSelected
+        ? productsBreakdown.map((p) => ({
+            name: p.product_name,
+            clients_available: p.clients_available,
+            leads_worked_period: p.leads_worked_period,
+            calls_made_period: p.calls_made_period
+          }))
+        : undefined
     });
     setWaShareText(text);
   }
@@ -243,6 +265,32 @@ export function DashboardView({
                   <span>Clientes para retorno</span>
                 </div>
               </div>
+              {allProductsSelected && productsBreakdown.length > 0 ? (
+                <div className="dash-products-panel">
+                  <p className="dash-products-panel-title">Produtos na carteira</p>
+                  <p className="dash-panel-sub dash-products-panel-sub">
+                    Disponíveis agora · leads e ligações conforme {periodNote.toLowerCase()}
+                  </p>
+                  <ul className="dash-products-list">
+                    {productsBreakdown.map((p) => (
+                      <li key={p.product_id} className="dash-products-list-item">
+                        <span className="dash-products-name">{p.product_name}</span>
+                        <span className="dash-products-metrics">
+                          <strong>{p.clients_available}</strong> disp.
+                          <span className="dash-products-sep" aria-hidden>
+                            ·
+                          </span>
+                          <strong>{p.leads_worked_period}</strong> leads
+                          <span className="dash-products-sep" aria-hidden>
+                            ·
+                          </span>
+                          <strong>{p.calls_made_period}</strong> ligações
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </section>
 
             <section className="dash-panel">
