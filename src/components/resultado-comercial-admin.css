@@ -73,6 +73,43 @@
   font-size: 0.8125rem;
 }
 
+.sim-client-contacts-preview {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border, #2d3643);
+}
+
+.sim-client-contacts-preview-title {
+  margin: 0 0 0.25rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sim-client-contacts-preview-hint {
+  margin: 0 0 0.65rem;
+  font-size: 0.8125rem;
+}
+
+.sim-client-contacts-preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sim-client-contacts-preview-item {
+  margin: 0;
+}
+
+.sim-call-pending-registration {
+  margin: 12px 0 16px;
+  padding: 12px 14px;
+  border-left: 3px solid rgba(129, 140, 248, 0.65);
+}
+
 .resultado-simulator-embedded-root {
   position: relative;
   flex: 1;

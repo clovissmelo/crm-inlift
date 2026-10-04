@@ -8,6 +8,8 @@ import {
   type SimulatedClientTimelineItem
 } from "@/components/api4com-call-result-modal";
 import { formatSpDateTime } from "@/lib/datetime";
+import { formatContactOrigin } from "@/lib/contact-origin";
+import { formatPhoneDisplay } from "@/lib/format";
 import { CallScriptGuidePanel, type ActiveCallForScript } from "@/components/call-script-guide-panel";
 import { CallSidePanelShell } from "@/components/call-side-panel-shell";
 import {
@@ -22,7 +24,7 @@ import type { CallScriptLogEntry } from "@/lib/call-script-log";
 import type { Product } from "@/lib/types";
 import "./resultado-comercial-admin.css";
 
-type Phase = "setup" | "script" | "register" | "history";
+type Phase = "setup" | "script" | "deferred" | "register" | "history";
 
 function telephonyScenario(tech: TechnicalResultTypeRow) {
   const now = new Date().toISOString();
@@ -169,9 +171,10 @@ export function ResultadoComercialSimulatorPanel({
       telephony: telephonyScenario(selectedTech),
       productId: pid && Number.isFinite(pid) ? pid : undefined,
       scriptFlowLog: scriptLog,
+      scriptBody,
       onRegistrationComplete: handleRegistrationComplete
     };
-  }, [phase, selectedTech, productId, scriptLog, handleRegistrationComplete]);
+  }, [phase, selectedTech, productId, scriptLog, scriptBody, handleRegistrationComplete]);
 
   const mockScriptCall = useMemo((): ActiveCallForScript | null => {
     if (phase !== "script") return null;
@@ -193,6 +196,11 @@ export function ResultadoComercialSimulatorPanel({
     if (!selectedTech) return;
     setRunId((n) => n + 1);
     setPhase("register");
+    setCollapsed(false);
+  }
+
+  function deferCommercialRegistration() {
+    setPhase("deferred");
     setCollapsed(false);
   }
 
@@ -232,8 +240,52 @@ export function ResultadoComercialSimulatorPanel({
         onExpand={() => setCollapsed(false)}
         onLogUpdated={setScriptLog}
         onScriptFlowComplete={goToCommercialRegistration}
+        onDeferRegistration={deferCommercialRegistration}
         onCloseSimulator={onClose}
       />
+    );
+  }
+
+  if (phase === "deferred") {
+    return wrapEmbedded(
+      <CallSidePanelShell
+        title="Registro pendente"
+        meta="Simulação — complemento preenchido depois"
+        ariaLabel="Ligação com registro comercial pendente"
+        collapsed={collapsed}
+        embedded={embedded}
+        collapsedLabel="Registro pendente"
+        onCollapse={() => setCollapsed(true)}
+        onExpand={() => setCollapsed(false)}
+        footer={
+          <div className="resultado-simulator-setup-actions">
+            <button type="button" className="btn" onClick={() => setPhase("script")}>
+              Voltar ao roteiro
+            </button>
+            <button type="button" className="btn btn-primary" onClick={goToCommercialRegistration}>
+              Abrir complemento de registro
+            </button>
+          </div>
+        }
+      >
+        <p className="muted" style={{ marginTop: 0, fontSize: "0.8125rem" }}>
+          Como quando a BDR encerra a ligação sem preencher o complemento na hora: o lead continua na prospecção até
+          concluir o registro. Nada é gravado no banco nesta simulação.
+        </p>
+        <div className="panel sim-call-pending-registration">
+          <p style={{ margin: "0 0 8px" }}>
+            <strong>Ligação simulada sem resultado comercial.</strong>
+          </p>
+          <p className="muted" style={{ margin: 0, fontSize: "0.8125rem" }}>
+            {scriptLog.length > 0
+              ? `${scriptLog.length} passo(s) do roteiro já registrados na simulação — o complemento usará esse histórico.`
+              : "Nenhum passo do roteiro foi concluído ainda."}
+          </p>
+        </div>
+        <p className="muted" style={{ fontSize: "0.8125rem", marginBottom: 0 }}>
+          Na prospecção real, o aviso “Registrar agora” aparece no topo da fila até você salvar o complemento.
+        </p>
+      </CallSidePanelShell>
     );
   }
 
@@ -282,6 +334,42 @@ export function ResultadoComercialSimulatorPanel({
             ) : null}
           </li>
         </ul>
+        {historyPreview.contact_previews?.length ? (
+          <div className="sim-client-contacts-preview">
+            <h3 className="label sim-client-contacts-preview-title">Contatos no cadastro do cliente</h3>
+            <p className="muted sim-client-contacts-preview-hint">
+              Simulação — como ficariam na aba Contatos da ficha (origem roteiro de ligação).
+            </p>
+            <ul className="sim-client-contacts-preview-list">
+              {historyPreview.contact_previews.map((c, i) => (
+                <li key={`${c.name}-${i}`} className="client-contact-readonly sim-client-contacts-preview-item">
+                  <div className="client-contact-readonly-body">
+                    <div className="client-contact-name-row">
+                      <strong>{c.name}</strong>
+                      {c.job_title ? <span className="muted"> · {c.job_title}</span> : null}
+                      {c.profile_tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="badge badge-contact-profile-tag client-contact-badge-gap"
+                          title="Tag de perfil"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="client-contact-readonly-meta">
+                      {c.phone ? <span>{formatPhoneDisplay(c.phone)}</span> : null}
+                      <span className="muted">Origem: {formatContactOrigin(c.origin)}</span>
+                      {c.from_step_title ? (
+                        <span className="muted">Tela: {c.from_step_title}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </CallSidePanelShell>
     );
   }

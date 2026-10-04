@@ -243,7 +243,6 @@ export function ResultadoComercialAdmin({
               <th>Nome</th>
               <th>Situação</th>
               <th>Qualificação</th>
-              <th>Registro final</th>
               <th>Exigir obs.</th>
               <th>Retorno obrig.</th>
               <th>Perg. decisor</th>
@@ -257,7 +256,6 @@ export function ResultadoComercialAdmin({
                 <td>{r.name}</td>
                 <td>{r.status === "active" ? "Ativo" : "Inativo"}</td>
                 <td>{r.lead_qualification ? <LeadQualificationBadge value={r.lead_qualification} /> : "—"}</td>
-                <td>{r.require_final_registration !== false ? "Sim" : "Automático"}</td>
                 <td>{r.collect_notes === true ? "Sim" : "—"}</td>
                 <td>{r.require_schedule_return ? "Sim" : "—"}</td>
                 <td>{r.ask_decision_maker ? "Sim" : "—"}</td>
@@ -322,8 +320,8 @@ export function ResultadoComercialAdmin({
           <div className="resultado-modal-section">
             <p className="resultado-modal-section-title">Qualificação do lead</p>
             <p className="muted" style={{ fontSize: "0.8125rem", margin: "0 0 10px" }}>
-              Aplicada automaticamente ao salvar a abordagem. Resultados criados aqui exigem registro final;{" "}
-              <strong>Sem contato</strong> permanece automático (telefonia).
+              Aplicada automaticamente ao salvar a abordagem. O complemento de registro na ligação segue o roteiro e
+              as regras de telefonia (ex.: <strong>Sem contato</strong> automático).
             </p>
             <div className="lead-qual-picker" role="group" aria-label="Qualificação do lead">
               {LEAD_QUALIFICATION_ORDER.map((q) => {

@@ -166,6 +166,8 @@ export type CallRegistrationSimulation = {
   };
   productId?: number;
   scriptFlowLog?: CallScriptLogEntry[];
+  /** Roteiro usado na simulação (para prévia de contatos cadastrados). */
+  scriptBody?: string | null;
   /** Após validar o complemento, devolve prévia do histórico do cliente. */
   onRegistrationComplete?: (item: SimulatedClientTimelineItem) => void;
 };
@@ -340,7 +342,7 @@ export function Api4comCallResultForm({
             c.lead_qualification === "warm" || c.lead_qualification === "hot" || c.lead_qualification === "cold"
               ? c.lead_qualification
               : null,
-          collect_notes: c.collect_notes !== false,
+          collect_notes: c.collect_notes === true,
           require_schedule_return: c.require_schedule_return === true,
           require_final_registration: c.require_final_registration !== false,
           ask_decision_maker: c.ask_decision_maker === true,
@@ -465,12 +467,13 @@ export function Api4comCallResultForm({
           c.lead_qualification === "warm" || c.lead_qualification === "hot" || c.lead_qualification === "cold"
             ? c.lead_qualification
             : null,
-        collect_notes: c.collect_notes !== false,
+        collect_notes: c.collect_notes === true,
         require_schedule_return: c.require_schedule_return === true,
         require_final_registration: c.require_final_registration !== false,
         ask_decision_maker: c.ask_decision_maker === true,
         mark_phone_verified: (c as { mark_phone_verified?: boolean }).mark_phone_verified === true,
-        allowed_next_actions: c.allowed_next_actions
+        allowed_next_actions: c.allowed_next_actions,
+        requires_meeting: (c as { requires_meeting?: boolean }).requires_meeting === true
       }));
       if (!classRes.ok) {
         setError(classJson.error ?? "Não foi possível carregar classificações.");
@@ -967,6 +970,7 @@ export function Api4comCallResultForm({
         spokeWithDecisionMaker: spokeWithDecisionMaker,
         notes: finalNotes || null,
         scriptFlowLog: call.script_flow_log,
+        scriptBody: simulation?.scriptBody ?? null,
         nextType,
         nextScheduledAtIso,
         userName: "Simulação",

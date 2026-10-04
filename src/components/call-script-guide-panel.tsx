@@ -55,6 +55,8 @@ type Props = {
   onScriptFlowComplete?: () => void;
   /** Simulador: encerra o painel (ex.: ao lado de Reiniciar etapas). */
   onCloseSimulator?: () => void;
+  /** Simulador: BDR encerra sem abrir o complemento agora (registro depois). */
+  onDeferRegistration?: () => void;
   embedded?: boolean;
 };
 
@@ -83,6 +85,7 @@ export function CallScriptGuidePanel({
   onLogUpdated,
   onScriptFlowComplete,
   onCloseSimulator,
+  onDeferRegistration,
   embedded = false
 }: Props) {
   const handoffSentRef = useRef(false);
@@ -631,6 +634,11 @@ export function CallScriptGuidePanel({
             <button type="button" className="btn" disabled={!flow} onClick={restartFlow}>
               Reiniciar etapas
             </button>
+            {onDeferRegistration ? (
+              <button type="button" className="btn" onClick={onDeferRegistration} title="Simula fechar o roteiro e preencher o complemento depois">
+                Preenchido posteriormente
+              </button>
+            ) : null}
             {onCloseSimulator ? (
               <button type="button" className="btn" onClick={onCloseSimulator}>
                 Fechar

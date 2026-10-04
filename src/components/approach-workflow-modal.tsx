@@ -185,6 +185,11 @@ export function ApproachWorkflowModal({
       return;
     }
 
+    if (effectiveResult?.collect_notes === true && !notes.trim()) {
+      setError("Informe as observações exigidas para este resultado.");
+      setLoading(false);
+      return;
+    }
     if (effectiveResult) {
       if (
         (showReturnSchedule || showMeetingSchedule) &&
@@ -352,7 +357,7 @@ export function ApproachWorkflowModal({
         {showNotesField ? (
           <div className="field">
             <label className="label">Observações</label>
-            <ComplementObservationsTextarea value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <ComplementObservationsTextarea value={notes} onChange={(e) => setNotes(e.target.value)} required />
           </div>
         ) : null}
         <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
