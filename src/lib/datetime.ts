@@ -28,7 +28,37 @@ function getSpParts(date: Date) {
   return { year, month, day };
 }
 
-export type DashboardPeriod = "today" | "yesterday" | "7d" | "30d" | "all";
+export type DashboardPeriod = "today" | "yesterday" | "week" | "7d" | "30d" | "all";
+
+/** Segunda = 0 … domingo = 6 (calendário em America/Sao_Paulo). */
+function spWeekdayMonFirst(date: Date): number {
+  const wd = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short" }).format(date);
+  const map: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+  return map[wd] ?? 0;
+}
+
+function addDaysToYmd(year: number, month: number, day: number, delta: number) {
+  const t = new Date(Date.UTC(year, month - 1, day + delta));
+  return { year: t.getUTCFullYear(), month: t.getUTCMonth() + 1, day: t.getUTCDate() };
+}
+
+function ymdToSpNoonDate(year: number, month: number, day: number) {
+  return new Date(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T12:00:00-03:00`);
+}
+
+/** Rótulos YYYY-MM-DD de segunda-feira até hoje (SP), inclusive. */
+export function spCurrentWeekDayLabels(): string[] {
+  const now = new Date();
+  const today = getSpParts(now);
+  const daysFromMonday = spWeekdayMonFirst(now);
+  const monday = addDaysToYmd(today.year, today.month, today.day, -daysFromMonday);
+  const labels: string[] = [];
+  for (let i = 0; i <= daysFromMonday; i++) {
+    const d = addDaysToYmd(monday.year, monday.month, monday.day, i);
+    labels.push(`${d.year}-${String(d.month).padStart(2, "0")}-${String(d.day).padStart(2, "0")}`);
+  }
+  return labels;
+}
 
 export function periodToRange(period: DashboardPeriod): { from: string | null; to: string | null } {
   const now = new Date();
@@ -39,6 +69,13 @@ export function periodToRange(period: DashboardPeriod): { from: string | null; t
   if (period === "yesterday") {
     const y = new Date(now.getTime() - 86400000);
     return { from: spDayStartUtcIso(y), to: spDayEndUtcIso(y) };
+  }
+  if (period === "week") {
+    const today = getSpParts(now);
+    const daysFromMonday = spWeekdayMonFirst(now);
+    const monday = addDaysToYmd(today.year, today.month, today.day, -daysFromMonday);
+    const monDate = ymdToSpNoonDate(monday.year, monday.month, monday.day);
+    return { from: spDayStartUtcIso(monDate), to: spDayEndUtcIso(now) };
   }
   if (period === "7d") {
     const from = new Date(now.getTime() - 6 * 86400000);

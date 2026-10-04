@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { resolveEffectiveUserRoles } from "@/lib/access-profiles";
 import { all, get, nowIso, run } from "@/lib/db";
 import type { User, UserRole } from "@/lib/types";
+import { setUserRoles } from "@/lib/users";
 
 const SESSION_COOKIE = "crm_inlift_session";
 const SESSION_DAYS = 14;
@@ -110,6 +111,13 @@ async function getSessionUser(): Promise<User | null> {
 
   const directRoles = await loadUserRoles(session.user_id);
   const roles = await resolveEffectiveUserRoles(session.user_id, directRoles);
+  if (roles.includes("admin") && !directRoles.includes("admin")) {
+    try {
+      await setUserRoles(session.user_id, roles);
+    } catch {
+      /* não bloqueia login */
+    }
+  }
   return rowToUser(session, roles);
 }
 

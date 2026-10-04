@@ -13,7 +13,7 @@ const CHANNEL_COLOR: Record<string, string> = {
 };
 
 function formatTimelineLabel(label: string, period: string) {
-  if (period === "7d" || period === "today" || period === "yesterday") {
+  if (period === "week" || period === "7d" || period === "today" || period === "yesterday") {
     const d = new Date(`${label}T12:00:00`);
     if (!Number.isNaN(d.getTime())) {
       return new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "America/Sao_Paulo" }).format(d);

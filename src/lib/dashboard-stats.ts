@@ -1,5 +1,5 @@
 import { all, get } from "@/lib/db";
-import { periodToRange, spDayEndUtcIso, spDayStartUtcIso, type DashboardPeriod } from "@/lib/datetime";
+import { periodToRange, spCurrentWeekDayLabels, spDayEndUtcIso, spDayStartUtcIso, type DashboardPeriod } from "@/lib/datetime";
 import { getOpportunityDashboardMetrics } from "@/lib/opportunity-pipeline";
 
 function timestampIso(value: string | Date | null | undefined): string {
@@ -510,7 +510,10 @@ export async function loadDashboardStats(input: DashboardStatsFilters = {}): Pro
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([label, count]) => ({ label, count }));
 
-  const timelineLabels = [...new Set([...seriesMap.keys()])].sort((a, b) => a.localeCompare(b));
+  let timelineLabels = [...new Set([...seriesMap.keys()])].sort((a, b) => a.localeCompare(b));
+  if (period === "week") {
+    timelineLabels = spCurrentWeekDayLabels();
+  }
   const channelOrder = ["call", "whatsapp", "email"] as const;
   const approaches_timeline = {
     labels: timelineLabels,

@@ -6,6 +6,6 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminEtapasFunilPage() {
   const user = await requireUser();
-  requireAdminPage(user);
+  await requireAdminPage(user);
   return <PipelineStagesAdmin />;
 }

@@ -12,6 +12,7 @@ import type { Product, User } from "@/lib/types";
 import "./dashboard-home.css";
 
 function periodFootnote(period: string) {
+  if (period === "week") return "Esta semana";
   if (period === "7d") return "Últimos 7 dias";
   if (period === "30d") return "Últimos 30 dias";
   if (period === "today") return "Hoje";
@@ -121,6 +122,7 @@ export function DashboardView({
         <FilterSelect label="Período" value={period} onChange={(e) => setPeriod(e.target.value)}>
           <option value="today">Hoje</option>
           <option value="yesterday">Ontem</option>
+          <option value="week">Esta semana</option>
           <option value="7d">Últimos 7 dias</option>
           <option value="30d">Últimos 30 dias</option>
           <option value="all">Tudo</option>

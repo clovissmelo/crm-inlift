@@ -8,8 +8,6 @@ import {
 } from "@/lib/access-menu";
 import { all, get, nowIso, run } from "@/lib/db";
 import type { UserRole } from "@/lib/types";
-import { isAdmin } from "@/lib/admin";
-
 export type AccessProfileRow = {
   id: number;
   slug: string;
@@ -271,6 +269,11 @@ export async function loadUserAssignedProfiles(userId: number) {
   return out;
 }
 
+async function loadDirectUserRoles(userId: number): Promise<UserRole[]> {
+  const rows = await all<{ role: UserRole }>("SELECT role FROM user_roles WHERE user_id = @userId", { userId });
+  return rows.map((r) => r.role);
+}
+
 async function loadAdministrativeRolesForUserProfiles(userId: number): Promise<UserRole[]> {
   const rows = await all<{ role: UserRole }>(
     `
@@ -286,10 +289,27 @@ async function loadAdministrativeRolesForUserProfiles(userId: number): Promise<U
   return validateAdministrativeRoles(rows.map((r) => r.role));
 }
 
+/** Administrador em user_roles ou no perfil de acesso ativo. */
+export async function userHasFullMenuAccess(userId: number): Promise<boolean> {
+  const direct = await loadDirectUserRoles(userId);
+  if (direct.includes("admin")) return true;
+  try {
+    const fromProfiles = await loadAdministrativeRolesForUserProfiles(userId);
+    if (fromProfiles.includes("admin")) return true;
+  } catch {
+    /* migração 050 pendente */
+  }
+  return false;
+}
+
 /** Papéis diretos em user_roles + papéis dos perfis de acesso ativos atribuídos ao usuário. */
 export async function resolveEffectiveUserRoles(userId: number, directRoles: UserRole[]): Promise<UserRole[]> {
-  const fromProfiles = await loadAdministrativeRolesForUserProfiles(userId);
-  return [...new Set([...directRoles, ...fromProfiles])];
+  try {
+    const fromProfiles = await loadAdministrativeRolesForUserProfiles(userId);
+    return [...new Set([...directRoles, ...fromProfiles])];
+  } catch {
+    return [...new Set(directRoles)];
+  }
 }
 
 /** União dos papéis administrativos de perfis ativos (para sincronizar user_roles ao salvar usuário). */
@@ -307,10 +327,8 @@ export async function resolveAdministrativeRolesFromProfileIds(profileIds: numbe
   return [...merged];
 }
 
-export async function resolveUserMenuAccess(userId: number, roles: UserRole[]): Promise<ResolvedMenuAccess> {
-  const effectiveRoles = await resolveEffectiveUserRoles(userId, roles);
-  /** Papel Administrador (perfil ou user_roles) = menu completo, independente dos itens marcados na aba Acessos. */
-  if (isAdmin({ roles: effectiveRoles })) return "all";
+export async function resolveUserMenuAccess(userId: number): Promise<ResolvedMenuAccess> {
+  if (await userHasFullMenuAccess(userId)) return "all";
   const assigned = await loadUserAssignedProfiles(userId);
   return resolveMenuKeysFromProfiles(assigned);
 }

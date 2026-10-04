@@ -5,6 +5,6 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminSectionLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  requireAdminPage(user);
+  await requireAdminPage(user);
   return children;
 }

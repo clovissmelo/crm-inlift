@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  const menuAccess = serializeMenuAccessForClient(await resolveUserMenuAccess(user.id, user.roles));
+  const menuAccess = serializeMenuAccessForClient(await resolveUserMenuAccess(user.id));
   const prospeccaoLeadsUpdatedAt = await getProspeccaoLeadsLastUpdatedAt();
   const prospeccaoLeadsUpdatedLabel = prospeccaoLeadsUpdatedAt
     ? formatSpDateTime(prospeccaoLeadsUpdatedAt)
