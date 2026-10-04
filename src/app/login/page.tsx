@@ -21,49 +21,6 @@ const FEATURES = [
   { icon: BarChart3, label: "Resultados claros" }
 ] as const;
 
-function LoginHeroPattern() {
-  return (
-    <div className="login-hero-pattern" aria-hidden>
-      <svg viewBox="0 0 800 800" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="login-line" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#00adee" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="#00adee" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        <g stroke="url(#login-line)" strokeWidth="1" fill="none">
-          <path d="M40 120 L220 80 L380 160 L560 90 L760 140" />
-          <path d="M80 320 L260 280 L420 360 L600 300 L720 380" />
-          <path d="M120 520 L300 480 L480 560 L640 500 L780 580" />
-          <path d="M220 80 L260 280 L300 480" />
-          <path d="M380 160 L420 360 L480 560" />
-          <path d="M560 90 L600 300 L640 500" />
-          <path d="M760 140 L720 380 L780 580" />
-        </g>
-        {[
-          [40, 120],
-          [220, 80],
-          [380, 160],
-          [560, 90],
-          [760, 140],
-          [80, 320],
-          [260, 280],
-          [420, 360],
-          [600, 300],
-          [720, 380],
-          [120, 520],
-          [300, 480],
-          [480, 560],
-          [640, 500],
-          [780, 580]
-        ].map(([cx, cy], i) => (
-          <circle key={i} cx={cx} cy={cy} r="3" fill="#00adee" fillOpacity="0.55" />
-        ))}
-      </svg>
-    </div>
-  );
-}
-
 export default async function LoginPage() {
   const user = await getCurrentUser();
   if (user) redirect("/dashboard");
@@ -71,7 +28,6 @@ export default async function LoginPage() {
   return (
     <main className="login-page">
       <aside className="login-page__hero">
-        <LoginHeroPattern />
         <div className="login-page__brand">
           <Image
             src="/inlift-logo.png"
