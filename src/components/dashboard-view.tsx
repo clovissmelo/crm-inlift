@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DashboardStatsPayload } from "@/lib/dashboard-stats";
 import { ArrowUpRight, Calendar, Gem, Target, UserCheck } from "lucide-react";
 import { FilterBar, FilterSelect } from "@/components/filter-bar";
+import { LeadQualificationIcon } from "@/components/lead-qualification-picker";
 import { LEAD_QUALIFICATION_LABELS, LEAD_QUALIFICATION_ORDER } from "@/lib/lead-qualification";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
 import type { Product, User } from "@/lib/types";
@@ -227,21 +228,21 @@ export function DashboardView({
                 <ul className="dash-temp-legend">
                   <li>
                     <span className="dash-temp-legend-left">
-                      <span className="dash-focus-list-dot" style={{ background: "#f87171" }} aria-hidden />
+                      <LeadQualificationIcon value="hot" size={16} className="lead-qual-icon--hot" />
                       Quentes
                     </span>
                     <strong>{stats.qualification.hot}</strong>
                   </li>
                   <li>
                     <span className="dash-temp-legend-left">
-                      <span className="dash-focus-list-dot" style={{ background: "#f39c12" }} aria-hidden />
+                      <LeadQualificationIcon value="warm" size={16} className="lead-qual-icon--warm" />
                       Mornos
                     </span>
                     <strong>{stats.qualification.warm}</strong>
                   </li>
                   <li>
                     <span className="dash-temp-legend-left">
-                      <span className="dash-focus-list-dot" style={{ background: "#2dd4bf" }} aria-hidden />
+                      <LeadQualificationIcon value="cold" size={16} className="lead-qual-icon--cold" />
                       Frios
                     </span>
                     <strong>{stats.qualification.cold}</strong>

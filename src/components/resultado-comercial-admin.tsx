@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { useCallback, useEffect, useState } from "react";
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
-import { LeadQualificationBadge } from "@/components/lead-qualification-picker";
+import { LeadQualificationBadge, LeadQualificationLabel } from "@/components/lead-qualification-picker";
 import {
   deriveSuggestFollowUpFromRules,
   formatAllowedNextActionsSummary,
@@ -15,7 +15,6 @@ import {
 } from "@/lib/approach-next-actions";
 import {
   LEAD_QUALIFICATION_CSS,
-  LEAD_QUALIFICATION_LABELS,
   LEAD_QUALIFICATION_ORDER,
   type LeadQualification
 } from "@/lib/lead-qualification";
@@ -335,7 +334,7 @@ export function ResultadoComercialAdmin({
                     onClick={() => setResultForm((f) => ({ ...f, lead_qualification: q }))}
                     aria-pressed={active}
                   >
-                    {LEAD_QUALIFICATION_LABELS[q]}
+                    <LeadQualificationLabel value={q} />
                   </button>
                 );
               })}

@@ -60,6 +60,51 @@
   width: 100%;
 }
 
-.resultado-simulator-back {
-  margin-bottom: 0.75rem;
+.resultado-simulator-tech-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 0.35rem;
+}
+
+.resultado-simulator-tech-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border, #2d3643);
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--text, #e5e7eb);
+  font-size: 0.9375rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.resultado-simulator-tech-btn:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.resultado-simulator-tech-btn.is-active {
+  border-color: var(--primary, #3b82f6);
+  background: rgba(59, 130, 246, 0.12);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35);
+  font-weight: 600;
+}
+
+.resultado-simulator-tech-btn-icon {
+  flex-shrink: 0;
+  color: currentColor;
+  opacity: 0.85;
+}
+
+.resultado-simulator-tech-btn.is-active .resultado-simulator-tech-btn-icon {
+  opacity: 1;
 }

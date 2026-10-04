@@ -1,5 +1,6 @@
 "use client";
 
+import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Api4comCallResultForm,
@@ -10,6 +11,7 @@ import { CallSidePanelShell } from "@/components/call-side-panel-shell";
 import { callRequiresComplementRegistration } from "@/lib/api4com/call-registration";
 import type { TechnicalResultTypeRow } from "@/lib/classifications/technical-result-match";
 import { pickCallScriptBody } from "@/lib/pick-call-script";
+import { technicalResultIconForSlug } from "@/lib/technical-result-icons";
 import type { Product } from "@/lib/types";
 import "./resultado-comercial-admin.css";
 
@@ -62,12 +64,15 @@ export function ResultadoComercialSimulatorPanel({
   useEffect(() => {
     if (!open) return;
     void Promise.all([
-      fetch("/api/products").then((r) => r.json()),
-      fetch("/api/approach-classifications").then((r) => r.json())
+      fetch("/api/products", { credentials: "same-origin" }).then((r) => r.json()),
+      fetch("/api/approach-classifications", { credentials: "same-origin" }).then((r) => r.json())
     ]).then(([pData, cData]) => {
-      const items = (pData as { items?: Product[] }).items ?? [];
+      const items = (pData as { products?: Product[] }).products ?? [];
       setProducts(items);
-      setProductId((prev) => prev || (items[0] ? String(items[0].id) : ""));
+      setProductId((prev) => {
+        if (prev && items.some((p) => String(p.id) === prev)) return prev;
+        return items[0] ? String(items[0].id) : "";
+      });
       const tech = (cData as { technical?: TechnicalResultTypeRow[] }).technical ?? [];
       setTechnicalTypes(tech);
       if (tech.length > 0) {
@@ -124,7 +129,7 @@ export function ResultadoComercialSimulatorPanel({
     };
   }, [phase, products, productId]);
 
-  function startSimulation(goRegisterOnly = false) {
+  function startSimulation() {
     if (!selectedTech) return;
     setRunId((n) => n + 1);
     const answered = callRequiresComplementRegistration({
@@ -132,7 +137,7 @@ export function ResultadoComercialSimulatorPanel({
       answered_at: selectedTech.slug === "answered" ? new Date().toISOString() : null,
       duration_seconds: selectedTech.slug === "answered" ? 36 : 0
     });
-    if (!goRegisterOnly && !skipScript && answered && scriptBody?.trim() && scriptReady) {
+    if (!skipScript && answered && scriptBody?.trim() && scriptReady) {
       setPhase("script");
       setCollapsed(false);
       return;
@@ -170,12 +175,12 @@ export function ResultadoComercialSimulatorPanel({
         collapsedLabel="Simulador"
         onCollapse={() => setCollapsed(true)}
         onExpand={() => setCollapsed(false)}
-      >
-        <div className="resultado-simulator-back">
+        headerActions={
           <button type="button" className="btn btn-sm" onClick={() => setPhase("setup")}>
-            ← Ajustar cenário
+            Ajustar cenário
           </button>
-        </div>
+        }
+      >
         <Api4comCallResultForm
           key={runId}
           callId={null}
@@ -204,21 +209,11 @@ export function ResultadoComercialSimulatorPanel({
           <button type="button" className="btn" onClick={onClose}>
             Fechar
           </button>
-          {scriptBody && !skipScript ? (
-            <button
-              type="button"
-              className="btn"
-              disabled={!selectedTech || !scriptReady}
-              onClick={() => startSimulation(true)}
-            >
-              Só complemento
-            </button>
-          ) : null}
           <button
             type="button"
             className="btn btn-primary"
-            disabled={!selectedTech || (!scriptReady && !skipScript)}
-            onClick={() => startSimulation(false)}
+            disabled={!selectedTech || !productId || (!scriptReady && !skipScript && Boolean(scriptBody))}
+            onClick={() => startSimulation()}
           >
             Iniciar simulação
           </button>
@@ -231,17 +226,22 @@ export function ResultadoComercialSimulatorPanel({
       </p>
 
       <div className="field">
-        <label className="label">Produto (abordagem)</label>
+        <label className="label">Produto</label>
         <select
           className="select"
           value={productId}
           onChange={(e) => setProductId(e.target.value)}
+          disabled={products.length === 0}
         >
-          {products.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
+          {products.length === 0 ? (
+            <option value="">Nenhum produto cadastrado</option>
+          ) : (
+            products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))
+          )}
         </select>
         {!scriptReady ? (
           <p className="muted" style={{ fontSize: "0.75rem", margin: "6px 0 0" }}>
@@ -259,18 +259,25 @@ export function ResultadoComercialSimulatorPanel({
       </div>
 
       <div className="field">
-        <label className="label">Resultado da ligação (telefonia)</label>
-        <select
-          className="select"
-          value={technicalSlug}
-          onChange={(e) => setTechnicalSlug(e.target.value)}
-        >
-          {technicalTypes.map((t) => (
-            <option key={t.slug} value={t.slug}>
-              {t.display_name}
-            </option>
-          ))}
-        </select>
+        <span className="label">Resultado da ligação (telefonia)</span>
+        <div className="resultado-simulator-tech-picker" role="group" aria-label="Resultado da ligação">
+          {technicalTypes.map((t) => {
+            const active = technicalSlug === t.slug;
+            const Icon = technicalResultIconForSlug(t.slug);
+            return (
+              <button
+                key={t.slug}
+                type="button"
+                className={clsx("resultado-simulator-tech-btn", active && "is-active")}
+                aria-pressed={active}
+                onClick={() => setTechnicalSlug(t.slug)}
+              >
+                <Icon size={18} strokeWidth={2} aria-hidden className="resultado-simulator-tech-btn-icon" />
+                <span>{t.display_name}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {scriptBody ? (

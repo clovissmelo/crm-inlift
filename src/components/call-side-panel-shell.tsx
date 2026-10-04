@@ -12,6 +12,8 @@ type Props = {
   collapsedLabel: string;
   onCollapse?: () => void;
   onExpand?: () => void;
+  /** Ações no canto superior (ex.: voltar ao cenário no simulador). */
+  headerActions?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
 };
@@ -24,6 +26,7 @@ export function CallSidePanelShell({
   collapsedLabel,
   onCollapse,
   onExpand,
+  headerActions,
   children,
   footer
 }: Props) {
@@ -47,9 +50,12 @@ export function CallSidePanelShell({
             <h2>{title}</h2>
             {meta ? <p className="call-script-panel-meta">{meta}</p> : null}
           </div>
-          <button type="button" className="btn btn-icon-sm" onClick={onCollapse} title="Recolher painel">
-            <PanelRightClose size={18} aria-hidden />
-          </button>
+          <div className="call-script-panel-head-actions">
+            {headerActions}
+            <button type="button" className="btn btn-icon-sm" onClick={onCollapse} title="Recolher painel">
+              <PanelRightClose size={18} aria-hidden />
+            </button>
+          </div>
         </header>
         <div className="call-script-panel-body">{children}</div>
         {footer ? <footer className="call-script-panel-foot">{footer}</footer> : null}

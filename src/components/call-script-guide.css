@@ -44,6 +44,13 @@
   color: var(--muted, #9ca3af);
 }
 
+.call-script-panel-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
 .call-script-panel-body {
   flex: 1;
   overflow-y: auto;

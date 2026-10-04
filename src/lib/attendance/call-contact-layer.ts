@@ -51,10 +51,10 @@ export function resolveContactLayerOptions(input: {
   );
 
   if (!allowsNinguem || (input.commercialSlug && NO_NINGUEM_SLUGS.has(input.commercialSlug))) {
-    return ["outra", "decisor"];
+    return ["decisor", "outra"];
   }
 
-  return ["ninguem", "outra", "decisor"];
+  return ["ninguem", "decisor", "outra"];
 }
 
 export function commercialAllowsNinguem(

@@ -1,13 +1,42 @@
 "use client";
 
 import clsx from "clsx";
-import { Check } from "lucide-react";
+import { Flame, Snowflake, SunMedium, type LucideIcon } from "lucide-react";
 import {
   LEAD_QUALIFICATION_CSS,
   LEAD_QUALIFICATION_LABELS,
   LEAD_QUALIFICATION_ORDER,
   type LeadQualification
 } from "@/lib/lead-qualification";
+
+const LEAD_QUALIFICATION_ICONS: Record<LeadQualification, LucideIcon> = {
+  cold: Snowflake,
+  warm: SunMedium,
+  hot: Flame
+};
+
+export function LeadQualificationIcon({
+  value,
+  size = 14,
+  className
+}: {
+  value: LeadQualification;
+  size?: number;
+  className?: string;
+}) {
+  const Icon = LEAD_QUALIFICATION_ICONS[value];
+  return <Icon size={size} strokeWidth={2} aria-hidden className={clsx("lead-qual-icon", className)} />;
+}
+
+/** Ícone + rótulo (herda a cor do texto do elemento pai). */
+export function LeadQualificationLabel({ value }: { value: LeadQualification }) {
+  return (
+    <>
+      <LeadQualificationIcon value={value} size={13} />
+      {LEAD_QUALIFICATION_LABELS[value]}
+    </>
+  );
+}
 
 export function LeadQualificationPicker({
   value,
@@ -29,7 +58,7 @@ export function LeadQualificationPicker({
         <p className="lead-qual-current-line" aria-live="polite">
           Status atual:{" "}
           <span className={clsx("lead-qual-current-pill", LEAD_QUALIFICATION_CSS[value], "is-active")}>
-            {LEAD_QUALIFICATION_LABELS[value]}
+            <LeadQualificationLabel value={value} />
           </span>
         </p>
       ) : null}
@@ -50,8 +79,7 @@ export function LeadQualificationPicker({
               aria-pressed={active}
               aria-current={active ? "true" : undefined}
             >
-              {active ? <Check size={14} strokeWidth={2.5} aria-hidden className="lead-qual-btn-check" /> : null}
-              {LEAD_QUALIFICATION_LABELS[q]}
+              <LeadQualificationLabel value={q} />
             </button>
           );
         })}
@@ -62,6 +90,8 @@ export function LeadQualificationPicker({
 
 export function LeadQualificationBadge({ value }: { value: LeadQualification }) {
   return (
-    <span className={clsx("lead-qual-badge", LEAD_QUALIFICATION_CSS[value])}>{LEAD_QUALIFICATION_LABELS[value]}</span>
+    <span className={clsx("lead-qual-badge", LEAD_QUALIFICATION_CSS[value])}>
+      <LeadQualificationLabel value={value} />
+    </span>
   );
 }

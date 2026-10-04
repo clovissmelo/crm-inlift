@@ -11,10 +11,12 @@ import {
   type StageEnterActionPayload
 } from "@/lib/pipeline-stage-enter";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
+import { LeadQualificationBadge } from "@/components/lead-qualification-picker";
 import { FunilProspeccaoColumnSummary } from "@/components/funil-prospeccao-column-summary";
 import { PageIntro } from "@/components/page-intro";
 import { isProspeccaoPipelineStage } from "@/lib/pipeline-stage-prospeccao";
 import type { ProspeccaoPriorityCountRow } from "@/lib/prospeccao-query";
+import type { LeadQualification } from "@/lib/lead-qualification";
 import type { Product, User } from "@/lib/types";
 
 type Stage = {
@@ -47,6 +49,11 @@ type Card = {
 };
 
 const TEMP_LABEL: Record<string, string> = { cold: "Frio", warm: "Morno", hot: "Quente" };
+
+function cardTemperatureQual(value: string | null | undefined): LeadQualification | null {
+  if (value === "cold" || value === "warm" || value === "hot") return value;
+  return null;
+}
 
 function spInputToIso(date: string, time: string) {
   return new Date(`${date}T${time}:00-03:00`).toISOString();
@@ -455,7 +462,14 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
                       <div className="kanban-card-meta">
                         {card.owner_name ? <span>Resp.: {card.owner_name}</span> : null}
                         {card.closer_name ? <span>Closer: {card.closer_name}</span> : null}
-                        {card.temperature ? <span>{TEMP_LABEL[card.temperature] ?? card.temperature}</span> : null}
+                        {(() => {
+                          const qual = cardTemperatureQual(card.temperature);
+                          if (qual) return <LeadQualificationBadge value={qual} />;
+                          if (card.temperature) {
+                            return <span>{TEMP_LABEL[card.temperature] ?? card.temperature}</span>;
+                          }
+                          return null;
+                        })()}
                       </div>
                       <div className="kanban-card-meta">
                         {card.estimated_value_tbd ? (

@@ -196,32 +196,34 @@ export function CallThreeLayerRegistrationFields({
       ) : null}
 
       {showPersonFields ? (
-        <>
-          <div className={invalidFields?.personName ? "field field--invalid" : "field"}>
-            <label className="label">
-              {contactLayerChoice === "decisor" ? "Nome do decisor *" : "Nome de quem atendeu *"}
-            </label>
-            <input
-              className="input"
-              value={contactedPersonName}
-              onChange={(e) => onContactedPersonNameChange(e.target.value)}
-              disabled={disabled}
-              required
-            />
-            {invalidFields?.personName ? (
-              <p className="call-reg-invalid-hint">Informe o nome para o histórico.</p>
-            ) : null}
+        <div className={invalidFields?.personName ? "field field--invalid" : "field"}>
+          <div className="call-reg-person-row">
+            <div className="call-reg-person-row-col">
+              <label className="label">
+                {contactLayerChoice === "decisor" ? "Nome do decisor *" : "Nome de quem atendeu *"}
+              </label>
+              <input
+                className="input"
+                value={contactedPersonName}
+                onChange={(e) => onContactedPersonNameChange(e.target.value)}
+                disabled={disabled}
+                required
+              />
+            </div>
+            <div className="call-reg-person-row-col">
+              <label className="label">Função / cargo</label>
+              <input
+                className="input"
+                value={contactedPersonJobTitle}
+                onChange={(e) => onContactedPersonJobTitleChange(e.target.value)}
+                disabled={disabled}
+              />
+            </div>
           </div>
-          <div className="field">
-            <label className="label">Função / cargo</label>
-            <input
-              className="input"
-              value={contactedPersonJobTitle}
-              onChange={(e) => onContactedPersonJobTitleChange(e.target.value)}
-              disabled={disabled}
-            />
-          </div>
-        </>
+          {invalidFields?.personName ? (
+            <p className="call-reg-invalid-hint">Informe o nome para o histórico.</p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
