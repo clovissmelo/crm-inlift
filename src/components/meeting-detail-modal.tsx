@@ -1,15 +1,22 @@
 "use client";
 
 import Link from "next/link";
+import { Forward } from "lucide-react";
 import { useState } from "react";
 import { CadastroModal } from "@/components/cadastro-ui";
 import { formatSpDateTime } from "@/lib/datetime";
 import { MEETING_STATUS_LABELS, type MeetingStatus } from "@/lib/meeting-constants";
+import { buildMeetingWhatsAppInvite, openMeetingWhatsAppShare } from "@/lib/meeting-whatsapp-message";
 
 export type MeetingDetailPayload = {
   meeting: Record<string, unknown>;
   internal_participants: Array<{ id: number; name: string; email: string }>;
-  external_participants: Array<{ email: string; display_name: string | null }>;
+  external_participants: Array<{
+    email: string;
+    display_name: string | null;
+    contact_id?: number | null;
+    phone?: string | null;
+  }>;
 };
 
 type Props = {
@@ -216,19 +223,39 @@ export function MeetingDetailModal({
           ) : null}
 
           <div className="meeting-detail-actions">
-            {!isCancelled && onCancel ? (
-              <button type="button" className="btn btn-danger-outline" disabled={cancelling} onClick={() => setCancelOpen(true)}>
-                Cancelar agenda
-              </button>
-            ) : null}
-            {!isCancelled ? (
-              <button type="button" className="btn btn-primary" onClick={onEdit}>
-                Editar agendamento
-              </button>
-            ) : null}
-            <button type="button" className="btn" onClick={onClose}>
-              Fechar
+            <button
+              type="button"
+              className="btn meeting-detail-wa-btn"
+              title="Enviar convite no WhatsApp"
+              aria-label="Enviar convite no WhatsApp"
+              onClick={() => {
+                const text = buildMeetingWhatsAppInvite(detail, clientName);
+                openMeetingWhatsAppShare(text);
+              }}
+            >
+              <Forward size={16} aria-hidden />
+              Encaminhar
             </button>
+            <div className="meeting-detail-actions-main">
+              {!isCancelled && onCancel ? (
+                <button
+                  type="button"
+                  className="btn btn-danger-outline"
+                  disabled={cancelling}
+                  onClick={() => setCancelOpen(true)}
+                >
+                  Cancelar agenda
+                </button>
+              ) : null}
+              {!isCancelled ? (
+                <button type="button" className="btn btn-primary" onClick={onEdit}>
+                  Editar agendamento
+                </button>
+              ) : null}
+              <button type="button" className="btn" onClick={onClose}>
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}

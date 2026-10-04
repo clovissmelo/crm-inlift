@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { requireAdminPage } from "@/lib/admin";
+import { requireAdminPage } from "@/lib/admin-server";
 
 export const dynamic = "force-dynamic";
 

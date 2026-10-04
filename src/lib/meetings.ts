@@ -336,7 +336,24 @@ export async function cancelMeeting(
 }
 
 export async function getMeetingDetail(id: number) {
-  const meeting = await get<Record<string, unknown>>("SELECT * FROM meetings WHERE id = @id", { id });
+  const meeting = await get<Record<string, unknown>>(
+    `
+    SELECT m.*,
+      COALESCE(c.trade_name, c.legal_name, 'Cliente') AS client_name,
+      p.name AS product_name,
+      ub.name AS bdr_name,
+      ct.name AS contact_name,
+      NULLIF(TRIM(COALESCE(ct.phone, ct.whatsapp, '')), '') AS contact_phone,
+      NULLIF(TRIM(COALESCE(ct.email, '')), '') AS contact_email
+    FROM meetings m
+    JOIN clients c ON c.id = m.client_id
+    JOIN users ub ON ub.id = m.bdr_user_id
+    LEFT JOIN products p ON p.id = m.product_id
+    LEFT JOIN contacts ct ON ct.id = m.contact_id
+    WHERE m.id = @id
+    `,
+    { id }
+  );
   if (!meeting) return null;
   const internal = await all<{ id: number; name: string; email: string }>(
     `
@@ -345,8 +362,21 @@ export async function getMeetingDetail(id: number) {
     `,
     { id }
   );
-  const external = await all(
-    "SELECT id, email, display_name, contact_id FROM meeting_external_participants WHERE meeting_id = @id",
+  const external = await all<{
+    id: number;
+    email: string;
+    display_name: string | null;
+    contact_id: number | null;
+    phone: string | null;
+  }>(
+    `
+    SELECT mep.id, mep.email, mep.display_name, mep.contact_id,
+      NULLIF(TRIM(COALESCE(ct.phone, ct.whatsapp, '')), '') AS phone
+    FROM meeting_external_participants mep
+    LEFT JOIN contacts ct ON ct.id = mep.contact_id
+    WHERE mep.meeting_id = @id
+    ORDER BY mep.id ASC
+    `,
     { id }
   );
   return { meeting, internal_participants: internal, external_participants: external };

@@ -5099,9 +5099,33 @@ table.data-table tbody tr.is-selected {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   padding-top: 0.5rem;
   border-top: 1px solid var(--border);
+}
+
+.meeting-detail-actions-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.meeting-detail-wa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-color: rgba(37, 99, 235, 0.55);
+  background: rgba(37, 99, 235, 0.22);
+  color: #dbeafe;
+}
+
+.meeting-detail-wa-btn:hover {
+  border-color: rgba(59, 130, 246, 0.75);
+  background: rgba(37, 99, 235, 0.35);
+  color: #eff6ff;
 }
 
 .meeting-cancel-panel {
