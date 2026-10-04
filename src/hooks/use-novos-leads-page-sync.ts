@@ -2,8 +2,9 @@
 
 import { useEffect, useRef } from "react";
 
-/** Intervalo fixo da “fonte da verdade” — independente do POST /tick (motor). */
+/** Intervalo padrão da “fonte da verdade” (com motor ativo usa intervalo menor). */
 export const NOVOS_LEADS_PAGE_SYNC_MS = 4_000;
+export const NOVOS_LEADS_PAGE_SYNC_MOTOR_MS = 2_500;
 
 const FETCH_INIT: RequestInit = {
   cache: "no-store",
@@ -28,6 +29,9 @@ type Options = {
   enabled: boolean;
   watchRunId: number | null;
   withFeed: boolean;
+  /** Avança a execução no servidor (drain) antes de devolver o estado. */
+  advanceMotor?: boolean;
+  intervalMs?: number;
   onPayload: (payload: NovosLeadsPageSyncPayload) => void;
   onError?: () => void;
 };
@@ -40,6 +44,8 @@ export function useNovosLeadsPageSync({
   enabled,
   watchRunId,
   withFeed,
+  advanceMotor = false,
+  intervalMs = NOVOS_LEADS_PAGE_SYNC_MS,
   onPayload,
   onError
 }: Options) {
@@ -64,6 +70,7 @@ export function useNovosLeadsPageSync({
         const params = new URLSearchParams();
         if (watchRunId != null && watchRunId > 0) params.set("watch", String(watchRunId));
         if (withFeed) params.set("feed", "1");
+        if (advanceMotor) params.set("motor", "1");
         params.set("t", String(Date.now()));
         const res = await fetch(`/api/admin/lead-generation/page-sync?${params}`, FETCH_INIT);
         if (!res.ok) {
@@ -81,7 +88,7 @@ export function useNovosLeadsPageSync({
 
     function schedule() {
       if (cancelled) return;
-      timer = window.setTimeout(() => void runSync(), NOVOS_LEADS_PAGE_SYNC_MS);
+      timer = window.setTimeout(() => void runSync(), intervalMs);
     }
 
     void runSync();
@@ -96,5 +103,5 @@ export function useNovosLeadsPageSync({
       if (timer != null) window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [enabled, watchRunId, withFeed]);
+  }, [enabled, watchRunId, withFeed, advanceMotor, intervalMs]);
 }

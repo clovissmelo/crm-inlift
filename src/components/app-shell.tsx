@@ -110,31 +110,20 @@ function isAdminHubPath(pathname: string) {
   );
 }
 
-function handleSidebarNavClick(
-  e: MouseEvent<HTMLAnchorElement>,
-  href: Route,
-  active: boolean,
-  router: ReturnType<typeof useRouter>
-) {
+function handleSidebarNavClick(e: MouseEvent<HTMLAnchorElement>, active: boolean) {
   closeLeadGenOverlays();
-  if (active) {
-    e.preventDefault();
-    return;
-  }
-  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-  e.preventDefault();
-  router.push(href);
+  if (active) e.preventDefault();
 }
 
 function NavLinkItem({ item, pathname }: { item: NavItem; pathname: string }) {
-  const router = useRouter();
   const Icon = item.icon;
   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
   return (
     <Link
       href={item.href}
+      prefetch={false}
       className={clsx("nav-link", active && "active")}
-      onClick={(e) => handleSidebarNavClick(e, item.href, active, router)}
+      onClick={(e) => handleSidebarNavClick(e, active)}
     >
       <Icon size={18} aria-hidden />
       <span className="nav-link-label">{item.label}</span>
@@ -188,7 +177,7 @@ export function AppShell({
               href="/dashboard"
               className="sidebar-brand-link"
               aria-label="CRM Inlift — início"
-              onClick={(e) => handleSidebarNavClick(e, "/dashboard", pathname === "/dashboard", router)}
+              onClick={(e) => handleSidebarNavClick(e, pathname === "/dashboard")}
             >
               <Image
                 src="/inlift-logo.png"
@@ -222,14 +211,7 @@ export function AppShell({
                       key={item.href}
                       href={item.href}
                       className={clsx("nav-link", isAdminHubPath(pathname) && "active")}
-                      onClick={(e) =>
-                        handleSidebarNavClick(
-                          e,
-                          item.href,
-                          isAdminHubPath(pathname),
-                          router
-                        )
-                      }
+                      onClick={(e) => handleSidebarNavClick(e, isAdminHubPath(pathname))}
                     >
                       <Shield size={18} aria-hidden />
                       <span className="nav-link-label">{item.label}</span>
@@ -270,10 +252,12 @@ export function AppShell({
           </p>
           <UserMenu user={user} />
         </header>
-        <main className="page-content">
-          <Api4comCallProvider user={user}>{children}</Api4comCallProvider>
-        </main>
-        <div ref={overlayHostRef} id="app-main-overlay-root" className="app-main-overlay-root" aria-hidden />
+        <div className="main-column-body">
+          <main className="page-content">
+            <Api4comCallProvider user={user}>{children}</Api4comCallProvider>
+          </main>
+          <div ref={overlayHostRef} id="app-main-overlay-root" className="app-main-overlay-root" aria-hidden />
+        </div>
       </div>
     </div>
     </MainOverlayHostProvider>

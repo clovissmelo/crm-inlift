@@ -1,6 +1,7 @@
 import { requireAdminApi } from "@/lib/admin";
 import { requireApiUser } from "@/lib/auth";
 import { formatLeadGenActivityEntry, runPhaseActivityLine } from "@/lib/lead-generation/activity-feed";
+import { drainLeadGenerationTicks } from "@/lib/lead-generation/drain-ticks";
 import { buildLeadGenQuotaPanel } from "@/lib/lead-generation/quota-panel";
 import { computeRunProgressPct } from "@/lib/lead-generation/run-progress";
 import {
@@ -12,6 +13,9 @@ import {
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const maxDuration = 60;
+
+const ACTIVE = new Set(["queued", "running", "paused"]);
 
 function jsonNoStore(body: unknown, status = 200) {
   return Response.json(body, {
@@ -31,6 +35,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const watchRaw = url.searchParams.get("watch");
   const wantFeed = url.searchParams.get("feed") === "1";
+  const wantMotor = url.searchParams.get("motor") === "1";
 
   const [runs, quota] = await Promise.all([listLeadGenerationRunsForDisplay(40), buildLeadGenQuotaPanel()]);
 
@@ -44,6 +49,15 @@ export async function GET(request: Request) {
     const watchId = Number(watchRaw);
     if (Number.isFinite(watchId) && watchId > 0) {
       let run = await getLeadGenerationRun(watchId);
+      if (run) {
+        if (wantMotor && ACTIVE.has(run.status)) {
+          await drainLeadGenerationTicks({ runId: watchId, maxTicks: 1, maxMs: 22_000 });
+          run = await getLeadGenerationRun(watchId);
+          if (!run) {
+            watch = null;
+          }
+        }
+      }
       if (run) {
         const counts_json = await recomputeRunCountsFromItems(watchId);
         run = {

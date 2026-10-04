@@ -20,8 +20,9 @@ import {
 import { LeadGenOverlayLayer } from "@/components/lead-gen-overlay-layer";
 import { setLeadGenOverlayCloser } from "@/lib/lead-generation/lead-gen-overlay-control";
 import { mergeRunRowByRecency } from "@/lib/lead-generation/merge-run-row";
-import { novosLeadsPollIntervalMs, resolveNovosLeadsPollTarget } from "@/lib/lead-generation/novos-leads-live-sync";
 import {
+  NOVOS_LEADS_PAGE_SYNC_MOTOR_MS,
+  NOVOS_LEADS_PAGE_SYNC_MS,
   useNovosLeadsPageSync,
   type NovosLeadsPageSyncPayload
 } from "@/hooks/use-novos-leads-page-sync";
@@ -76,6 +77,7 @@ const PHASE_LABEL: Record<string, string> = {
 };
 
 const RUN_POLL_STATUSES = new Set(["queued", "running", "paused"]);
+const HISTORY_PAGE_SIZE = 5;
 
 const TICK_BUSY_PHASE_LINE =
   "Consultando ANP / Google… (cada ciclo pode levar até ~40s na nuvem)";
@@ -188,6 +190,7 @@ export function AdminNovosLeadsWizard() {
   const [lastRefreshedLabel, setLastRefreshedLabel] = useState<string | null>(null);
   const [lastPageSyncLabel, setLastPageSyncLabel] = useState<string | null>(null);
   const [pageSyncBusy, setPageSyncBusy] = useState(false);
+  const [historyVisibleCount, setHistoryVisibleCount] = useState(HISTORY_PAGE_SIZE);
   const [anpPreviewOpen, setAnpPreviewOpen] = useState(false);
   const [anpPreviewLoading, setAnpPreviewLoading] = useState(false);
   const [anpPreviewData, setAnpPreviewData] = useState<AnpPreviewPayload | null>(null);
@@ -199,6 +202,17 @@ export function AdminNovosLeadsWizard() {
   } | null>(null);
 
   const maxLeadsRequested = quota?.per_run_limit ?? 100;
+
+  const visibleHistoryRuns = useMemo(
+    () => runs.slice(0, Math.min(historyVisibleCount, runs.length)),
+    [runs, historyVisibleCount]
+  );
+
+  const historyHiddenCount = Math.max(0, runs.length - visibleHistoryRuns.length);
+
+  useEffect(() => {
+    setHistoryVisibleCount((c) => Math.min(c, runs.length || HISTORY_PAGE_SIZE));
+  }, [runs.length]);
 
   const listActiveRun = useMemo(() => {
     const actives = runs.filter((r) => RUN_POLL_STATUSES.has(r.status));
@@ -363,28 +377,43 @@ export function AdminNovosLeadsWizard() {
 
   const pageSyncWithFeed = execOverlayOpen || backgroundRunNotice;
 
+  const pageSyncAdvanceMotor = useMemo(() => {
+    const id = pageSyncWatchRunId;
+    if (id == null || id <= 0) return false;
+    const fromList = runs.find((r) => r.id === id);
+    const status = fromList?.status ?? (activeRun?.id === id ? activeRun.status : null);
+    return status != null && RUN_POLL_STATUSES.has(status);
+  }, [pageSyncWatchRunId, runs, activeRun?.id, activeRun?.status]);
+
+  const pullPageSyncNow = useCallback(
+    async (opts?: { motor?: boolean; watchId?: number; feed?: boolean }) => {
+      setPageSyncBusy(true);
+      try {
+        const watchId = opts?.watchId ?? pageSyncWatchRunId;
+        const params = new URLSearchParams();
+        if (watchId != null && watchId > 0) params.set("watch", String(watchId));
+        const feed = opts?.feed ?? pageSyncWithFeed;
+        if (feed) params.set("feed", "1");
+        const motor = opts?.motor ?? pageSyncAdvanceMotor;
+        if (motor) params.set("motor", "1");
+        params.set("t", String(Date.now()));
+        const res = await fetch(`/api/admin/lead-generation/page-sync?${params}`, { cache: "no-store" });
+        if (res.ok) applyPageSyncPayload((await res.json()) as NovosLeadsPageSyncPayload);
+      } finally {
+        setPageSyncBusy(false);
+      }
+    },
+    [applyPageSyncPayload, pageSyncWatchRunId, pageSyncWithFeed, pageSyncAdvanceMotor]
+  );
+
   useNovosLeadsPageSync({
     enabled: onNovosLeadsPage,
     watchRunId: pageSyncWatchRunId,
     withFeed: pageSyncWithFeed,
+    advanceMotor: pageSyncAdvanceMotor,
+    intervalMs: pageSyncAdvanceMotor ? NOVOS_LEADS_PAGE_SYNC_MOTOR_MS : NOVOS_LEADS_PAGE_SYNC_MS,
     onPayload: applyPageSyncPayload
   });
-
-  const pullPageSyncNow = useCallback(async () => {
-    setPageSyncBusy(true);
-    try {
-      const params = new URLSearchParams();
-      if (pageSyncWatchRunId != null && pageSyncWatchRunId > 0) {
-        params.set("watch", String(pageSyncWatchRunId));
-      }
-      if (pageSyncWithFeed) params.set("feed", "1");
-      params.set("t", String(Date.now()));
-      const res = await fetch(`/api/admin/lead-generation/page-sync?${params}`, { cache: "no-store" });
-      if (res.ok) applyPageSyncPayload((await res.json()) as NovosLeadsPageSyncPayload);
-    } finally {
-      setPageSyncBusy(false);
-    }
-  }, [applyPageSyncPayload, pageSyncWatchRunId, pageSyncWithFeed]);
 
   useEffect(() => {
     if (selectedProduct?.lead_gen_segment_slug) {
@@ -560,7 +589,7 @@ export function AdminNovosLeadsWizard() {
   function openExecOverlay() {
     setExecOverlayOpen(true);
     setBackgroundRunNotice(false);
-    if (shownRun?.id) void tickActiveRun(shownRun.id, true);
+    if (shownRun?.id) void pullPageSyncNow({ motor: true, watchId: shownRun.id, feed: true });
   }
 
   useEffect(() => {
@@ -569,7 +598,6 @@ export function AdminNovosLeadsWizard() {
     }
   }, [listActiveRun, activeRunId]);
 
-  const tickInFlightRef = useRef(false);
   const prevRunStatusRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -582,106 +610,6 @@ export function AdminNovosLeadsWizard() {
     }
     prevRunStatusRef.current = shownRun.status;
   }, [shownRun, shownRun?.status, execOverlayOpen]);
-
-  const runIdToPoll = useMemo(() => {
-    if (starting) return null;
-    if (activeRunId != null && activeRunId > 0) {
-      const status =
-        activeRun?.id === activeRunId
-          ? activeRun.status
-          : (runs.find((r) => r.id === activeRunId)?.status ?? activeRun?.status ?? "queued");
-      if (RUN_POLL_STATUSES.has(status)) return activeRunId;
-    }
-    if (listActiveRun && RUN_POLL_STATUSES.has(listActiveRun.status)) return listActiveRun.id;
-    return null;
-  }, [listActiveRun, activeRunId, activeRun?.id, activeRun?.status, runs, starting]);
-
-  const pollTarget = useMemo(
-    () =>
-      resolveNovosLeadsPollTarget({
-        starting,
-        runIdToPoll,
-        execOverlayOpen,
-        backgroundRunNotice,
-        shownRunId: shownRun?.id,
-        getRun: (id) => {
-          if (activeRunRef.current?.id === id) return activeRunRef.current;
-          return runsRef.current.find((r) => r.id === id);
-        }
-      }),
-    [
-      starting,
-      runIdToPoll,
-      execOverlayOpen,
-      backgroundRunNotice,
-      shownRun?.id,
-      shownRun?.status,
-      shownRun?.phase
-    ]
-  );
-
-  useEffect(() => {
-    if (!onNovosLeadsPage || pollTarget == null) return;
-
-    let cancelled = false;
-    const pollId = pollTarget.id;
-    const pollMode = pollTarget.mode;
-    const withFeed = execOverlayOpen || backgroundRunNotice;
-
-    async function pollOnce() {
-      if (cancelled || document.visibilityState === "hidden") return;
-      const gen = pollGenerationRef.current;
-      if (pollMode === "refresh") {
-        await refreshRunProgress(pollId, withFeed, gen);
-        return;
-      }
-      if (tickInFlightRef.current) {
-        await refreshRunProgress(pollId, withFeed, gen);
-        return;
-      }
-      tickInFlightRef.current = true;
-      try {
-        await pollRunProgress(pollId, withFeed, gen);
-      } finally {
-        tickInFlightRef.current = false;
-      }
-    }
-
-    void pollOnce();
-
-    function intervalMs() {
-      const snap =
-        activeRunRef.current?.id === pollId
-          ? activeRunRef.current
-          : runsRef.current.find((r) => r.id === pollId);
-      return novosLeadsPollIntervalMs({
-        mode: pollMode,
-        execOverlayOpen,
-        backgroundRunNotice,
-        runSnap: snap
-      });
-    }
-
-    const t = window.setInterval(() => void pollOnce(), intervalMs());
-
-    function onVisibility() {
-      if (document.visibilityState === "visible") void pollOnce();
-    }
-    document.addEventListener("visibilitychange", onVisibility);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(t);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [
-    onNovosLeadsPage,
-    pollTarget,
-    execOverlayOpen,
-    backgroundRunNotice,
-    pollRunProgress,
-    refreshRunProgress
-  ]);
 
   function leadGenSelectionPayload() {
     return {
@@ -844,7 +772,7 @@ export function AdminNovosLeadsWizard() {
       }
       setPhaseLine(null);
       void loadMeta();
-      void pollRunProgress(newId, true);
+      void pullPageSyncNow({ motor: true, watchId: newId, feed: true });
     }
   }
 
@@ -1084,7 +1012,14 @@ export function AdminNovosLeadsWizard() {
           <div className="lead-gen-meta-product-flow">
             <div className="field">
               <label className="label">Produto (opcional)</label>
-              <select className="input" value={productId} onChange={(e) => setProductId(e.target.value ? Number(e.target.value) : "")}>
+              <select
+                className="input"
+                value={productId}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  setProductId(e.target.value ? Number(e.target.value) : "");
+                }}
+              >
                 <option value="">—</option>
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -1225,7 +1160,7 @@ export function AdminNovosLeadsWizard() {
                 </tr>
               </thead>
               <tbody>
-                {runs.map((r) => {
+                {visibleHistoryRuns.map((r) => {
                   const filters = r.filters_json ?? {
                     cities: [],
                     all_cities_in_uf: false,
@@ -1365,6 +1300,22 @@ export function AdminNovosLeadsWizard() {
             </table>
           </div>
         )}
+        {runs.length > 0 && historyHiddenCount > 0 ? (
+          <div className="lead-gen-history-more">
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() =>
+                setHistoryVisibleCount((c) => Math.min(c + HISTORY_PAGE_SIZE, runs.length))
+              }
+            >
+              Ver mais {Math.min(HISTORY_PAGE_SIZE, historyHiddenCount)}
+            </button>
+            <span className="muted lead-gen-history-more-hint">
+              Mostrando {visibleHistoryRuns.length} de {runs.length}
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
