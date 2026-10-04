@@ -444,7 +444,6 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
                 <div className="kanban-column-body">
                   {isProspeccaoCol ? (
                     <FunilProspeccaoColumnSummary
-                      total={prospeccaoStats.total}
                       byPriority={prospeccaoStats.byPriority}
                       loading={prospeccaoStatsLoading}
                     />
@@ -452,7 +451,7 @@ export function FunilKanbanView({ products, bdrs, users }: { products: Product[]
                   {!isProspeccaoCol
                     ? (byStage.get(stage.id) ?? []).map((card) => (
                     <div key={card.id} className="kanban-card" draggable onDragStart={(e) => handleDragStart(e, card)}>
-                      <Link href={`/oportunidades/${card.id}`} className="kanban-card-title">
+                      <Link href={`/clientes/${card.client_id}`} className="kanban-card-title">
                         {card.client_name}
                       </Link>
                       <div className="muted" style={{ fontSize: "0.85rem" }}>

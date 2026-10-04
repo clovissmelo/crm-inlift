@@ -79,11 +79,6 @@ export function pageCrumbSegments(pathname: string): string[] {
     return segments;
   }
 
-  if (pathname.startsWith("/oportunidades/")) {
-    segments.push("oportunidade");
-    return segments;
-  }
-
   if (pathname.startsWith("/admin/novos-leads")) {
     segments.push("novos leads");
     return segments;

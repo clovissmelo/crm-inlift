@@ -5,11 +5,9 @@ import type { Route } from "next";
 import type { ProspeccaoPriorityCountRow } from "@/lib/prospeccao-query";
 
 export function FunilProspeccaoColumnSummary({
-  total,
   byPriority,
   loading
 }: {
-  total: number;
   byPriority: ProspeccaoPriorityCountRow[];
   loading?: boolean;
 }) {
@@ -19,11 +17,6 @@ export function FunilProspeccaoColumnSummary({
 
   return (
     <div className="funil-prospeccao-summary">
-      <p className="funil-prospeccao-summary__lead">
-        <Link href={"/prospeccao" as Route} className="funil-prospeccao-summary__link">
-          {total} lead{total === 1 ? "" : "s"} para contato
-        </Link>
-      </p>
       <ul className="funil-prospeccao-summary__list">
         {byPriority.map((row) => (
           <li key={row.slug} className="funil-prospeccao-summary__item">

@@ -1220,7 +1220,7 @@ export function ClientDetailView({
             {oppList.map((o) => (
               <li key={o.id} style={{ marginBottom: 10, display: "flex", alignItems: "flex-start", gap: 8 }}>
                 <div style={{ flex: 1, minWidth: 0, fontSize: "0.9375rem" }}>
-                  <Link href={`/oportunidades/${o.id}`}>{formatOpportunityListLine(o)}</Link>
+                  <span>{formatOpportunityListLine(o)}</span>
                   <div className="client-opp-bdr-row" style={{ marginTop: 4 }}>
                     <span className="muted" style={{ fontSize: "0.8125rem" }}>
                       BDR:{" "}
