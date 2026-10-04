@@ -1,5 +1,9 @@
 import { validateNextActionChoice, type ApproachNextActionKey } from "@/lib/approach-next-actions";
-import { createApproach, markLeadContactPhoneVerified } from "@/lib/approaches";
+import {
+  createApproach,
+  markLeadContactPhoneVerified,
+  shouldMarkPhoneVerifiedForApproach
+} from "@/lib/approaches";
 import { getContactOutcomeTypeById } from "@/lib/classifications/contact-commercial";
 import { getTechnicalResultTypeById } from "@/lib/classifications/technical-result";
 import { associationOverrides, mergeRegistrationRules } from "@/lib/classifications/registration-rules";
@@ -209,7 +213,14 @@ export async function POST(request: Request) {
       }
     }
 
-    if (effectiveRules.mark_phone_verified) {
+    if (
+      registrationStatus === "final" &&
+      (await shouldMarkPhoneVerifiedForApproach({
+        contact_id: data.contact_id,
+        contact_outcome_type_id: data.contact_outcome_type_id,
+        api4com_call_row_id: data.api4com_call_row_id
+      }))
+    ) {
       await markLeadContactPhoneVerified(data.client_id, data.contact_id);
     }
 

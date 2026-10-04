@@ -162,9 +162,13 @@ export function ResultadoComercialAdmin({
     if (resultForm.require_schedule_return && !allowed.includes("schedule_return")) {
       allowed = ["schedule_return", ...allowed.filter((k) => k !== "schedule_return")];
     }
+    const editingRow = resultEditingId ? results.find((r) => r.id === resultEditingId) : null;
+    const requireFinalRegistration =
+      editingRow != null ? editingRow.require_final_registration !== false : true;
+
     const rulesPayload = {
       require_schedule_return: resultForm.require_schedule_return,
-      require_final_registration: resultForm.require_final_registration,
+      require_final_registration: requireFinalRegistration,
       allowed_next_actions: allowed
     };
     const suggestFollowUp = deriveSuggestFollowUpFromRules(rulesPayload);
@@ -176,16 +180,15 @@ export function ResultadoComercialAdmin({
           lead_qualification: qualPayload,
           collect_notes: resultForm.collect_notes,
           require_schedule_return: resultForm.require_schedule_return,
-          require_final_registration: resultForm.require_final_registration,
+          require_final_registration: requireFinalRegistration,
           ask_decision_maker: resultForm.ask_decision_maker,
-          mark_phone_verified: resultForm.mark_phone_verified,
           allowed_next_actions: allowed
         }
       : {
           ...resultForm,
           lead_qualification: qualPayload,
           ask_decision_maker: resultForm.ask_decision_maker,
-          mark_phone_verified: resultForm.mark_phone_verified,
+          require_final_registration: true,
           allowed_next_actions: allowed,
           suggest_follow_up: suggestFollowUp
         };
@@ -244,7 +247,6 @@ export function ResultadoComercialAdmin({
               <th>Exigir obs.</th>
               <th>Retorno obrig.</th>
               <th>Perg. decisor</th>
-              <th>Verif. tel.</th>
               <th>Próximos passos</th>
               <th style={{ width: canDelete ? 120 : 80 }} />
             </tr>
@@ -259,7 +261,6 @@ export function ResultadoComercialAdmin({
                 <td>{r.collect_notes === true ? "Sim" : "—"}</td>
                 <td>{r.require_schedule_return ? "Sim" : "—"}</td>
                 <td>{r.ask_decision_maker ? "Sim" : "—"}</td>
-                <td>{r.mark_phone_verified ? "Sim" : "—"}</td>
                 <td style={{ fontSize: "0.8125rem", maxWidth: 280 }}>{formatAllowedNextActionsSummary(r)}</td>
                 <td>
                   <CadastroRowActions
@@ -321,7 +322,8 @@ export function ResultadoComercialAdmin({
           <div className="resultado-modal-section">
             <p className="resultado-modal-section-title">Qualificação do lead</p>
             <p className="muted" style={{ fontSize: "0.8125rem", margin: "0 0 10px" }}>
-              Aplicada automaticamente ao salvar a abordagem.
+              Aplicada automaticamente ao salvar a abordagem. Resultados criados aqui exigem registro final;{" "}
+              <strong>Sem contato</strong> permanece automático (telefonia).
             </p>
             <div className="lead-qual-picker" role="group" aria-label="Qualificação do lead">
               {LEAD_QUALIFICATION_ORDER.map((q) => {
@@ -351,14 +353,6 @@ export function ResultadoComercialAdmin({
               <label className="resultado-check-row">
                 <input
                   type="checkbox"
-                  checked={resultForm.require_final_registration}
-                  onChange={(e) => setResultForm((f) => ({ ...f, require_final_registration: e.target.checked }))}
-                />
-                <span>Exigir registro final</span>
-              </label>
-              <label className="resultado-check-row">
-                <input
-                  type="checkbox"
                   checked={resultForm.require_schedule_return}
                   onChange={(e) => {
                     const checked = e.target.checked;
@@ -373,13 +367,12 @@ export function ResultadoComercialAdmin({
                       return {
                         ...f,
                         require_schedule_return: checked,
-                        require_final_registration: checked ? true : f.require_final_registration,
                         allowed_next_actions: allowed
                       };
                     });
                   }}
                 />
-                <span>Obrigar agendar retorno</span>
+                <span>Exigir agendar retorno</span>
               </label>
               <label className="resultado-check-row">
                 <input
@@ -397,18 +390,10 @@ export function ResultadoComercialAdmin({
                 />
                 <span>Pergunta sobre decisor</span>
               </label>
-              <label className="resultado-check-row">
-                <input
-                  type="checkbox"
-                  checked={resultForm.mark_phone_verified}
-                  onChange={(e) => setResultForm((f) => ({ ...f, mark_phone_verified: e.target.checked }))}
-                />
-                <span>Marcar telefone como verificado</span>
-              </label>
             </div>
             <p className="muted" style={{ fontSize: "0.75rem", margin: "8px 0 0" }}>
-              Com esta opção ativa, ao registrar a abordagem o contato do lead passa a{" "}
-              <strong>Verificado</strong> (telefone confirmado).
+              Telefone <strong>Verificado</strong> é aplicado automaticamente quando a ligação é atendida e há contato
+              na chamada (não vale para “Sem contato” / ninguém atendeu).
             </p>
           </div>
 

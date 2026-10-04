@@ -1,3 +1,5 @@
+import { callTelephonyWasAnswered } from "@/lib/api4com/call-registration";
+import { getContactOutcomeTypeById } from "@/lib/classifications/contact-commercial";
 import { get, nowIso, run } from "@/lib/db";
 
 export type ApproachChannel = "call" | "whatsapp" | "email";
@@ -94,6 +96,47 @@ export async function createApproach(input: {
   await handleNextAction(input.client_id, approachId, input.user_id, input.next_action);
 
   return approachId;
+}
+
+/** Ligação atendida ou contato na ligação diferente de “ninguém” → marca telefone verificado. */
+export async function shouldMarkPhoneVerifiedForApproach(input: {
+  contact_id?: number | null;
+  contact_outcome_type_id?: number | null;
+  api4com_call_row_id?: number | null;
+}): Promise<boolean> {
+  if (!input.contact_id) return false;
+
+  let contactSlug: string | null = null;
+  if (input.contact_outcome_type_id) {
+    const co = await getContactOutcomeTypeById(input.contact_outcome_type_id);
+    contactSlug = co?.slug ?? null;
+    if (contactSlug === "nenhum_contato") return false;
+  }
+
+  if (input.api4com_call_row_id) {
+    const call = await get<{
+      answered_at: string | null;
+      duration_seconds: number | null;
+      technical_slug: string | null;
+    }>(
+      `
+        SELECT c.answered_at, c.duration_seconds, tr.slug AS technical_slug
+        FROM api4com_calls c
+        LEFT JOIN call_technical_result_types tr ON tr.id = c.technical_result_type_id
+        WHERE c.id = @id
+      `,
+      { id: input.api4com_call_row_id }
+    );
+    if (call) {
+      return callTelephonyWasAnswered({
+        answered_at: call.answered_at,
+        technical_slug: call.technical_slug,
+        duration_seconds: call.duration_seconds
+      });
+    }
+  }
+
+  return contactSlug != null && contactSlug !== "nenhum_contato";
 }
 
 /** Confirma telefone do contato usado na abordagem (ou contato principal do cliente). */
