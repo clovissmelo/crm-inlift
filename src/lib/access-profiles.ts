@@ -143,9 +143,9 @@ export async function createAccessProfile(input: {
   );
   const id = inserted.lastInsertRowid;
   if (id == null) throw new Error("Não foi possível criar o perfil.");
-  const keys = (input.menu_keys ?? []).filter(isMenuKey);
-  await setAccessProfileMenuGrants(Number(id), keys);
-  await setAccessProfileAdministrativeRoles(Number(id), validateAdministrativeRoles(input.administrative_roles ?? []));
+  const grants = normalizeProfileGrants(input);
+  await setAccessProfileMenuGrants(Number(id), grants.menu_keys);
+  await setAccessProfileAdministrativeRoles(Number(id), grants.administrative_roles);
   const row = await getAccessProfile(Number(id));
   if (!row) throw new Error("Perfil criado mas não encontrado.");
   return row;
@@ -183,11 +183,13 @@ export async function updateAccessProfile(
     params.active = input.active;
   }
   await run(`UPDATE access_profiles SET ${sets.join(", ")} WHERE id = @id`, params);
-  if (input.menu_keys) {
-    await setAccessProfileMenuGrants(id, input.menu_keys.filter(isMenuKey));
-  }
-  if (input.administrative_roles) {
-    await setAccessProfileAdministrativeRoles(id, validateAdministrativeRoles(input.administrative_roles));
+  if (input.menu_keys !== undefined || input.administrative_roles !== undefined) {
+    const grants = normalizeProfileGrants({
+      menu_keys: input.menu_keys ?? existing.menu_keys,
+      administrative_roles: input.administrative_roles ?? existing.administrative_roles
+    });
+    await setAccessProfileMenuGrants(id, grants.menu_keys);
+    await setAccessProfileAdministrativeRoles(id, grants.administrative_roles);
   }
   const row = await getAccessProfile(id);
   if (!row) throw new Error("Perfil não encontrado.");
@@ -196,6 +198,16 @@ export async function updateAccessProfile(
 
 export async function deleteAccessProfile(id: number) {
   await run("DELETE FROM access_profiles WHERE id = @id", { id });
+}
+
+function normalizeProfileGrants(input: {
+  menu_keys?: MenuKey[];
+  administrative_roles?: UserRole[];
+}): { menu_keys: MenuKey[]; administrative_roles: UserRole[] } {
+  const administrative_roles = validateAdministrativeRoles(input.administrative_roles ?? []);
+  const menu_keys =
+    administrative_roles.includes("admin") ? [...ALL_MENU_KEYS] : (input.menu_keys ?? []).filter(isMenuKey);
+  return { menu_keys, administrative_roles };
 }
 
 async function setAccessProfileMenuGrants(profileId: number, menuKeys: MenuKey[]) {

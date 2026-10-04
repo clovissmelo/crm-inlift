@@ -3,7 +3,7 @@
 import { CadastroModal, CadastroPageHeader, CadastroRowActions, requestCadastroDelete } from "@/components/cadastro-ui";
 import type { AdministrativeRoleDefinition } from "@/lib/access-administrative";
 import type { MenuDefinition, MenuKey } from "@/lib/access-menu";
-import { MENU_SECTION_LABELS, MENU_SECTION_ORDER } from "@/lib/access-menu";
+import { ALL_MENU_KEYS, MENU_SECTION_LABELS, MENU_SECTION_ORDER } from "@/lib/access-menu";
 import type { UserRole } from "@/lib/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -75,6 +75,10 @@ export function AccessProfilesAdmin() {
     void load();
   }, [load]);
 
+  const adminMenuLocked = form.administrative_roles.includes("admin");
+  const allMenuKeys = useMemo(() => menuCatalog.map((m) => m.key), [menuCatalog]);
+  const displayMenuKeys = adminMenuLocked ? allMenuKeys.length > 0 ? allMenuKeys : ALL_MENU_KEYS : form.menu_keys;
+
   const menuBySection = useMemo(() => {
     const map = new Map<string, MenuDefinition[]>();
     for (const item of menuCatalog) {
@@ -116,6 +120,7 @@ export function AccessProfilesAdmin() {
   }
 
   function toggleMenuKey(key: MenuKey) {
+    if (adminMenuLocked) return;
     setForm((f) => {
       const set = new Set(f.menu_keys);
       if (set.has(key)) set.delete(key);
@@ -131,13 +136,14 @@ export function AccessProfilesAdmin() {
   function sectionState(section: string): "all" | "some" | "none" {
     const keys = sectionKeys(section);
     if (keys.length === 0) return "none";
-    const selected = keys.filter((k) => form.menu_keys.includes(k)).length;
+    const selected = keys.filter((k) => displayMenuKeys.includes(k)).length;
     if (selected === 0) return "none";
     if (selected === keys.length) return "all";
     return "some";
   }
 
   function toggleSection(section: string) {
+    if (adminMenuLocked) return;
     const keys = sectionKeys(section);
     const state = sectionState(section);
     setForm((f) => {
@@ -154,6 +160,14 @@ export function AccessProfilesAdmin() {
   function toggleAdministrativeRole(role: UserRole) {
     setForm((f) => {
       const set = new Set(f.administrative_roles);
+      if (role === "admin") {
+        if (set.has("admin")) {
+          set.delete("admin");
+          return { ...f, administrative_roles: [...set] };
+        }
+        const keys = allMenuKeys.length > 0 ? allMenuKeys : [...ALL_MENU_KEYS];
+        return { ...f, administrative_roles: [...set, "admin"], menu_keys: keys };
+      }
       if (set.has(role)) set.delete(role);
       else set.add(role);
       return { ...f, administrative_roles: [...set] };
@@ -169,12 +183,17 @@ export function AccessProfilesAdmin() {
     setSaving(true);
     setError(null);
     setMessage(null);
+    const menu_keys = adminMenuLocked
+      ? allMenuKeys.length > 0
+        ? allMenuKeys
+        : [...ALL_MENU_KEYS]
+      : form.menu_keys;
     const payload = {
       name: form.name.trim(),
       description: form.description.trim(),
       access_rank: form.access_rank,
       active: form.active,
-      menu_keys: form.menu_keys,
+      menu_keys,
       administrative_roles: form.administrative_roles
     };
     const res = await fetch("/api/admin/access-profiles", {
@@ -297,32 +316,36 @@ export function AccessProfilesAdmin() {
             />
           </div>
           <div className="field">
-            <label className="label" htmlFor="ap-rank">
-              Nível de acesso
-            </label>
-            <input
-              id="ap-rank"
-              className="input"
-              type="number"
-              min={0}
-              max={9999}
-              value={form.access_rank}
-              onChange={(e) => setForm((f) => ({ ...f, access_rank: Number(e.target.value) }))}
-              disabled={saving}
-            />
-            <p className="muted" style={{ fontSize: "0.8125rem", marginTop: "0.35rem" }}>
-              Quanto maior, mais prioritário quando o usuário tiver mais de um perfil (itens de menu do perfil vencedor).
+            <div className="access-profile-rank-row">
+              <div className="access-profile-rank-field">
+                <label className="label" htmlFor="ap-rank">
+                  Nível de acesso
+                </label>
+                <input
+                  id="ap-rank"
+                  className="input"
+                  type="number"
+                  min={0}
+                  max={9999}
+                  value={form.access_rank}
+                  onChange={(e) => setForm((f) => ({ ...f, access_rank: Number(e.target.value) }))}
+                  disabled={saving}
+                />
+              </div>
+              <label className="access-profile-active-check label">
+                <input
+                  type="checkbox"
+                  checked={form.active}
+                  onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
+                  disabled={saving}
+                />
+                Ativo
+              </label>
+            </div>
+            <p className="muted" style={{ fontSize: "0.8125rem", marginTop: "0.35rem", marginBottom: 0 }}>
+              Quanto maior, mais prioritário.
             </p>
           </div>
-          <label className="label" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <input
-              type="checkbox"
-              checked={form.active}
-              onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
-              disabled={saving}
-            />
-            Ativo
-          </label>
 
           <div className="access-profile-editor-tabs" role="tablist" aria-label="Configuração do perfil">
             <button
@@ -351,7 +374,9 @@ export function AccessProfilesAdmin() {
             <div className="field" style={{ marginTop: "0.75rem" }} role="tabpanel">
               <span className="label">Menu lateral</span>
               <p className="muted" style={{ fontSize: "0.8125rem", marginTop: 0 }}>
-                Mesma estrutura da barra lateral. Marque a seção inteira ou item a item.
+                {adminMenuLocked
+                  ? "Perfil Administrador: todos os itens do menu estão liberados."
+                  : "Mesma estrutura da barra lateral. Marque a seção inteira ou item a item."}
               </p>
               {MENU_SECTION_ORDER.map((section) => {
                 const items = menuBySection.get(section) ?? [];
@@ -367,32 +392,24 @@ export function AccessProfilesAdmin() {
                         ref={(el) => {
                           if (el) el.indeterminate = state === "some";
                         }}
-                        disabled={saving}
+                        disabled={saving || adminMenuLocked}
                         onChange={() => toggleSection(section)}
                       />
                       <span className="access-profile-menu-section-title">{sectionLabel}</span>
                     </label>
                     <ul className="access-profile-menu-grid">
                       {items.map((item) => {
-                        const checked = form.menu_keys.includes(item.key);
+                        const checked = displayMenuKeys.includes(item.key);
                         return (
                           <li key={item.key}>
                             <label className="access-profile-menu-check">
                               <input
                                 type="checkbox"
                                 checked={checked}
-                                disabled={saving}
+                                disabled={saving || adminMenuLocked}
                                 onChange={() => toggleMenuKey(item.key)}
                               />
-                              <span>
-                                {item.label}
-                                {item.requiresAdministrativeRole === "admin" ? (
-                                  <span className="muted" style={{ fontSize: "0.75rem" }}>
-                                    {" "}
-                                    (exige papel Administrador)
-                                  </span>
-                                ) : null}
-                              </span>
+                              <span>{item.label}</span>
                             </label>
                           </li>
                         );

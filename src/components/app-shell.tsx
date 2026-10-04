@@ -159,11 +159,11 @@ export function AppShell({
   }, [pathname]);
 
   useEffect(() => {
-    if (userIsAdmin) return;
-    if (!canAccessPath(pathname, resolvedMenuAccess, userIsAdmin)) {
+    if (resolvedMenuAccess === "all") return;
+    if (!canAccessPath(pathname, resolvedMenuAccess)) {
       router.replace("/dashboard");
     }
-  }, [pathname, resolvedMenuAccess, router, userIsAdmin]);
+  }, [pathname, resolvedMenuAccess, router]);
 
   return (
     <MainOverlayHostProvider host={overlayHost}>

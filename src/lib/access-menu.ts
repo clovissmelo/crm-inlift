@@ -32,8 +32,6 @@ export type MenuDefinition = {
   href: string;
   label: string;
   section: keyof typeof MENU_SECTION_LABELS;
-  /** Rotas protegidas exigem papel Administrador (aba Administrativos do perfil). */
-  requiresAdministrativeRole?: "admin";
 };
 
 export const MENU_DEFINITIONS: MenuDefinition[] = [
@@ -41,18 +39,18 @@ export const MENU_DEFINITIONS: MenuDefinition[] = [
   { key: "prospeccao", href: "/prospeccao", label: "Leads para contato", section: "top" },
   { key: "funil", href: "/funil", label: "Funil de vendas", section: "top" },
   { key: "agendamentos", href: "/agendamentos", label: "Agendamentos", section: "top" },
-  { key: "novos_leads", href: "/admin/novos-leads", label: "Novos leads", section: "clientes_leads", requiresAdministrativeRole: "admin" },
+  { key: "novos_leads", href: "/admin/novos-leads", label: "Novos leads", section: "clientes_leads" },
   { key: "organizacao_leads", href: "/organizacao-leads", label: "Organizar leads", section: "clientes_leads" },
   { key: "clientes", href: "/clientes", label: "Clientes", section: "clientes_leads" },
   { key: "abordagens", href: "/abordagens", label: "Abordagem", section: "configuracao" },
-  { key: "prospeccao_config", href: "/admin/prospeccao", label: "Prospecção", section: "configuracao", requiresAdministrativeRole: "admin" },
+  { key: "prospeccao_config", href: "/admin/prospeccao", label: "Prospecção", section: "configuracao" },
   { key: "resultado_comercial", href: "/resultado-comercial", label: "Resultado Comercial", section: "configuracao" },
-  { key: "etapas_funil", href: "/admin/etapas-funil", label: "Etapas do Funil", section: "configuracao", requiresAdministrativeRole: "admin" },
+  { key: "etapas_funil", href: "/admin/etapas-funil", label: "Etapas do Funil", section: "configuracao" },
   { key: "negocios_convertidos", href: "/negocios-convertidos", label: "Negócios convertidos", section: "cadastros" },
   { key: "empresas", href: "/empresas", label: "Nossas empresas", section: "cadastros" },
   { key: "produtos", href: "/produtos", label: "Nossos produtos", section: "cadastros" },
-  { key: "usuarios", href: "/admin/usuarios", label: "Usuários", section: "cadastros", requiresAdministrativeRole: "admin" },
-  { key: "admin_hub", href: "/admin", label: "Admin", section: "cadastros", requiresAdministrativeRole: "admin" }
+  { key: "usuarios", href: "/admin/usuarios", label: "Usuários", section: "cadastros" },
+  { key: "admin_hub", href: "/admin", label: "Admin", section: "cadastros" }
 ];
 
 export const ALL_MENU_KEYS = MENU_DEFINITIONS.map((d) => d.key);
@@ -122,11 +120,9 @@ export function parseMenuAccessFromClient(payload: MenuKey[] | "all"): ResolvedM
   return new Set(payload.filter(isMenuKey));
 }
 
-export function canAccessPath(pathname: string, access: ResolvedMenuAccess, isAdminRole: boolean): boolean {
+export function canAccessPath(pathname: string, access: ResolvedMenuAccess): boolean {
   if (access === "all") return true;
   const key = menuKeyForPathname(pathname);
   if (!key) return true;
-  const def = MENU_DEFINITIONS.find((d) => d.key === key);
-  if (def?.requiresAdministrativeRole === "admin" && !isAdminRole) return false;
   return access.has(key);
 }
