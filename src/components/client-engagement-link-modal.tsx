@@ -28,7 +28,9 @@ export function ClientEngagementLinkModal({
   onContinue: (ctx: ClientEngagementContext) => void;
   onCreateOpportunity: () => void;
 }) {
-  const openOpps = opportunities.filter((o) => o.outcome === "open");
+  const openOpps = opportunities.filter(
+    (o) => o.outcome === "open" && (o.engagement_status ?? "active") === "active"
+  );
   const [choice, setChoice] = useState<LinkChoice>("client");
 
   useEffect(() => {

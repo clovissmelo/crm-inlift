@@ -1,7 +1,6 @@
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { closeSupersededOpenOpportunities, createOpportunity } from "@/lib/opportunity-pipeline";
-import { reenterProspeccaoProduct } from "@/lib/client-product-prospeccao";
-import { returnClientToProspeccaoQueue } from "@/lib/prospeccao-return";
+import { createProductOpportunityWithEnrollment } from "@/lib/opportunity-prospection-enroll";
 import { opportunityCreateSchema } from "@/lib/validators";
 
 export async function POST(request: Request) {
@@ -13,22 +12,25 @@ export async function POST(request: Request) {
     return Response.json({ error: parsed.error.issues[0]?.message ?? "Dados inválidos" }, { status: 400 });
   }
   const data = parsed.data;
-  await closeSupersededOpenOpportunities(data.client_id, data.product_id, user.id);
-  const id = await createOpportunity({
-    ...data,
-    title: data.title ?? "",
-    created_by_user_id: user.id
-  });
-
-  if (data.return_to_prospection !== false) {
-    await reenterProspeccaoProduct(data.client_id, data.product_id);
-    await returnClientToProspeccaoQueue(
-      data.client_id,
-      user.id,
-      data.product_id,
-      data.owner_user_id ?? data.origin_bdr_user_id ?? null
-    );
-  }
+  const id =
+    data.return_to_prospection !== false
+      ? await createProductOpportunityWithEnrollment({
+          client_id: data.client_id,
+          product_id: data.product_id,
+          title: data.title ?? "",
+          origin_bdr_user_id: data.origin_bdr_user_id,
+          owner_user_id: data.owner_user_id,
+          created_by_user_id: user.id,
+          enrollment: "prospection"
+        })
+      : await (async () => {
+          await closeSupersededOpenOpportunities(data.client_id, data.product_id, user.id);
+          return createOpportunity({
+            ...data,
+            title: data.title ?? "",
+            created_by_user_id: user.id
+          });
+        })();
 
   return Response.json({ id }, { status: 201 });
 }

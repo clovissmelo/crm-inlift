@@ -26,7 +26,9 @@ export function ClientScheduleIntentModal({
   onContinue: (intent: ScheduleIntent, ctx: ClientEngagementContext) => void;
   onCreateOpportunity: () => void;
 }) {
-  const openOpps = opportunities.filter((o) => o.outcome === "open");
+  const openOpps = opportunities.filter(
+    (o) => o.outcome === "open" && (o.engagement_status ?? "active") === "active"
+  );
   const [scheduleType, setScheduleType] = useState<ScheduleIntent>("meeting");
   const [link, setLink] = useState<LinkChoice>("client");
 

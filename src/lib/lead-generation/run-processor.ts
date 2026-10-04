@@ -1027,7 +1027,8 @@ async function processOneItemBody(
       bdr_user_id: runRow.bdr_user_id,
       product_id: runRow.product_id,
       run_id: runId,
-      google_place_id: googleSnap?.place_id ?? presetPlaceId
+      google_place_id: googleSnap?.place_id ?? presetPlaceId,
+      created_by_user_id: runRow.requested_by_user_id
     });
     stepLog.push({ step_key: "create_crm_client", status: "ok" });
     await updateItem(itemId, {

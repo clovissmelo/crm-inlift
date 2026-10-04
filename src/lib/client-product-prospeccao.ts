@@ -1,4 +1,8 @@
 import { all, get, nowIso, run } from "@/lib/db";
+import {
+  deactivateOpenOpportunitiesForProduct,
+  reactivateOpenOpportunitiesForProduct
+} from "@/lib/opportunity-engagement";
 
 export async function ensureClientProductProspeccao(clientId: number, productId: number) {
   await run(
@@ -52,6 +56,7 @@ export async function exitProspeccaoForProduct(
     `,
     { clientId, productId, reason, now }
   );
+  await deactivateOpenOpportunitiesForProduct(clientId, productId);
 }
 
 export async function exitProspeccaoAllProducts(clientId: number, reason: string): Promise<void> {
@@ -94,6 +99,7 @@ export async function reenterProspeccaoProduct(clientId: number, productId: numb
     `,
     { clientId, productId, now }
   );
+  await reactivateOpenOpportunitiesForProduct(clientId, productId);
 }
 
 export async function listActiveProductIdsInQueue(clientId: number): Promise<number[]> {

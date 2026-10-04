@@ -4,7 +4,7 @@ import {
   clientFiltersFromOrganizacaoParams,
   organizacaoFiltersToRecord
 } from "@/lib/organizacao-leads-filters";
-import { closeSupersededOpenOpportunities, createOpportunity } from "@/lib/opportunity-pipeline";
+import { createProductOpportunityWithEnrollment } from "@/lib/opportunity-prospection-enroll";
 import { get, nowIso, run } from "@/lib/db";
 
 export async function POST(request: Request) {
@@ -61,13 +61,14 @@ export async function POST(request: Request) {
       id: clientId
     });
 
-    await closeSupersededOpenOpportunities(clientId, body.product_id, user.id);
-    await createOpportunity({
+    await createProductOpportunityWithEnrollment({
       client_id: clientId,
       product_id: body.product_id,
       title: "",
       origin_bdr_user_id: client?.bdr_user_id,
-      created_by_user_id: user.id
+      owner_user_id: client?.bdr_user_id,
+      created_by_user_id: user.id,
+      enrollment: "prospection"
     });
     opportunities += 1;
 

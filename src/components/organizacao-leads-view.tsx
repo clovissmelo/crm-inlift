@@ -265,89 +265,83 @@ export function OrganizacaoLeadsView({
         </FilterBar>
       </div>
 
-      <div className="panel organizacao-bulk-bar">
-        <div className="organizacao-bulk-bar-group">
-          <div className="field organizacao-bulk-bar-field">
-            <label className="label" htmlFor="organizacao-new-bdr">
-              Nova BDR responsável
-            </label>
-            <select
-              id="organizacao-new-bdr"
-              className="select"
-              value={toBdr}
-              onChange={(e) => setToBdr(e.target.value)}
-            >
-              <option value="">Selecione</option>
-              {bdrs.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            className="btn btn-primary organizacao-bulk-bar-btn"
-            type="button"
-            disabled={!toBdr || selectedCount === 0}
-            onClick={() => setConfirmOpen(true)}
-          >
-            Transferir BDR
-          </button>
-        </div>
-        <div className="organizacao-bulk-bar-group">
-          <div className="field organizacao-bulk-bar-field">
-            <label className="label" htmlFor="organizacao-new-product">
-              Vincular produto (criar oportunidade)
-            </label>
-            <select
-              id="organizacao-new-product"
-              className="select"
-              value={toProduct}
-              onChange={(e) => setToProduct(e.target.value)}
-            >
-              <option value="">Selecione</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            className="btn btn-primary organizacao-bulk-bar-btn"
-            type="button"
-            disabled={!toProduct || selectedCount === 0}
-            onClick={() => setConfirmProductOpen(true)}
-          >
-            Vincular produto
-          </button>
-        </div>
-        <div className="organizacao-bulk-bar-trailing">
-          {isAdmin ? (
-            <button
-              className="btn btn-danger organizacao-bulk-bar-btn"
-              type="button"
-              disabled={selectedCount === 0}
-              onClick={() => {
-                setDeletePhrase("");
-                setDeleteStep(1);
-              }}
-            >
-              Apagar leads
-            </button>
-          ) : null}
-          <label className="organizacao-bulk-select-all">
-            <input
-              type="checkbox"
-              checked={selectAllResults}
-              onChange={(e) => {
-                setSelectAllResults(e.target.checked);
-                if (e.target.checked) setSelected(new Set());
-              }}
-            />
-            <span>Selecionar os {total} resultados do filtro</span>
+      <div className={`panel organizacao-bulk-bar${isAdmin ? "" : " organizacao-bulk-bar--no-delete"}`}>
+        <div className="field organizacao-bulk-bar-field">
+          <label className="label" htmlFor="organizacao-new-bdr">
+            Nova BDR responsável
           </label>
+          <select
+            id="organizacao-new-bdr"
+            className="select"
+            value={toBdr}
+            onChange={(e) => setToBdr(e.target.value)}
+          >
+            <option value="">Selecione</option>
+            {bdrs.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
         </div>
+        <button
+          className="btn btn-primary organizacao-bulk-bar-btn"
+          type="button"
+          disabled={!toBdr || selectedCount === 0}
+          onClick={() => setConfirmOpen(true)}
+        >
+          Transferir BDR
+        </button>
+        <div className="field organizacao-bulk-bar-field organizacao-bulk-bar-field--product">
+          <label className="label" htmlFor="organizacao-new-product">
+            Vincular produto (criar oportunidade)
+          </label>
+          <select
+            id="organizacao-new-product"
+            className="select"
+            value={toProduct}
+            onChange={(e) => setToProduct(e.target.value)}
+          >
+            <option value="">Selecione</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          className="btn btn-primary organizacao-bulk-bar-btn"
+          type="button"
+          disabled={!toProduct || selectedCount === 0}
+          onClick={() => setConfirmProductOpen(true)}
+        >
+          Vincular produto
+        </button>
+        {isAdmin ? (
+          <button
+            className="btn btn-danger organizacao-bulk-bar-btn organizacao-bulk-bar-btn--delete"
+            type="button"
+            disabled={selectedCount === 0}
+            onClick={() => {
+              setDeletePhrase("");
+              setDeleteStep(1);
+            }}
+          >
+            Apagar leads
+          </button>
+        ) : null}
+        <label className="organizacao-bulk-select-all">
+          <input
+            type="checkbox"
+            checked={selectAllResults}
+            onChange={(e) => {
+              setSelectAllResults(e.target.checked);
+              if (e.target.checked) setSelected(new Set());
+            }}
+          />
+          <span>Selecionar os {total} resultados do filtro</span>
+        </label>
       </div>
 
       {message ? <div className="alert alert-info">{message}</div> : null}

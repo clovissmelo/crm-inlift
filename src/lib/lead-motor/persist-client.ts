@@ -4,6 +4,7 @@ import { pickPrimaryContactRowIndex } from "@/lib/contact-profile-tags";
 import type { EnrichmentResult } from "@/lib/lead-motor/enrichment";
 import { resolveNomeFantasia } from "@/lib/lead-motor/trade-name";
 import type { AnpStation } from "@/lib/lead-motor/anp";
+import { createProductOpportunityWithEnrollment } from "@/lib/opportunity-prospection-enroll";
 
 /** Apenas INSERT — nunca altera cliente existente. */
 export async function findExistingClientIdByCnpj(cnpj: string): Promise<number | null> {
@@ -18,8 +19,9 @@ export async function createClientFromLead(input: {
   product_id: number | null;
   run_id: number;
   google_place_id: string | null;
+  created_by_user_id?: number | null;
 }): Promise<number> {
-  const { station, enrichment, bdr_user_id, product_id, run_id, google_place_id } = input;
+  const { station, enrichment, bdr_user_id, product_id, run_id, google_place_id, created_by_user_id } = input;
   const fuelBrand = station.bandeira?.trim() || station.distribuidora?.trim() || null;
   const anpProductsSummary = station.produtos_anp?.trim() || null;
 
@@ -68,6 +70,19 @@ export async function createClientFromLead(input: {
       await run("INSERT INTO client_products (client_id, product_id) VALUES (@clientId, @productId)", {
         clientId,
         productId: product_id
+      });
+    }
+
+    const actorUserId = created_by_user_id ?? bdr_user_id;
+    if (actorUserId) {
+      await createProductOpportunityWithEnrollment({
+        client_id: clientId,
+        product_id,
+        origin_bdr_user_id: bdr_user_id,
+        owner_user_id: bdr_user_id,
+        created_by_user_id: actorUserId,
+        enrollment: "prospection",
+        close_superseded: true
       });
     }
   }

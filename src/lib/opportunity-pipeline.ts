@@ -50,7 +50,14 @@ const SUPERSEDE_CLOSE_NOTE = "Encerrada ao criar nova oportunidade do mesmo prod
 
 /** Fecha oportunidades abertas do par cliente/produto antes de abrir outra. */
 export async function closeSupersededOpenOpportunities(clientId: number, productId: number, userId: number) {
-  const openOpps = await findOpenOpportunitiesForProduct(clientId, productId);
+  const openOpps = await all<{ id: number; title: string; created_at: string }>(
+    `
+      SELECT id, title, created_at FROM opportunities
+      WHERE client_id = @clientId AND product_id = @productId AND outcome = 'open'
+      ORDER BY updated_at DESC
+    `,
+    { clientId, productId }
+  );
   if (!openOpps.length) return;
 
   const lostStageId =
@@ -354,7 +361,7 @@ export async function listClientOpportunityCards(clientId: number) {
 }
 
 function buildKanbanFilters(filters: KanbanFilters) {
-  const where: string[] = ["o.outcome = 'open'"];
+  const where: string[] = ["o.outcome = 'open'", "COALESCE(o.engagement_status, 'active') = 'active'"];
   const params: Record<string, string | number> = {};
 
   if (filters.product_id) {

@@ -10,6 +10,7 @@ export type ClientOpportunityOption = {
   product_name: string;
   title: string;
   outcome: string;
+  engagement_status?: string;
   owner_user_id: number | null;
   owner_name: string | null;
 };
@@ -29,7 +30,9 @@ export function ClientEngagementContextModal({
   onChoose: (ctx: ClientEngagementContext) => void;
   onCreateOpportunity: () => void;
 }) {
-  const openOpps = opportunities.filter((o) => o.outcome === "open");
+  const openOpps = opportunities.filter(
+    (o) => o.outcome === "open" && (o.engagement_status ?? "active") === "active"
+  );
 
   return (
     <CadastroModal open={open} title="Contexto do contato" onClose={onClose}>

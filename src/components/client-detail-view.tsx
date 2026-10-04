@@ -203,7 +203,8 @@ export function ClientDetailView({
   const [linkProductId, setLinkProductId] = useState("");
   const [linkProductCreateOpp, setLinkProductCreateOpp] = useState(false);
   const [savingProductLink, setSavingProductLink] = useState(false);
-  const [returnToProspeccao, setReturnToProspeccao] = useState(true);
+  const [returnToProspeccao, setReturnToProspeccao] = useState(false);
+  const [showAllOpportunities, setShowAllOpportunities] = useState(false);
   const [inProspeccao, setInProspeccao] = useState(Boolean(initialClient.in_prospeccao_queue ?? true));
   const [prospeccaoModalOpen, setProspeccaoModalOpen] = useState(false);
   const [prospeccaoProductId, setProspeccaoProductId] = useState("");
@@ -301,9 +302,22 @@ export function ClientDetailView({
     setNewOppProductId(String(linkedProducts[0]!.product_id));
   }, [oppModalOpen, linkedProducts]);
 
+  const visibleOpportunities = useMemo(() => {
+    if (showAllOpportunities) return oppList;
+    return oppList.filter((o) => (o.engagement_status ?? "active") === "active" || o.outcome !== "open");
+  }, [oppList, showAllOpportunities]);
+
+  const hasHiddenInactiveOpportunities = useMemo(
+    () => oppList.some((o) => o.outcome === "open" && (o.engagement_status ?? "active") === "inactive"),
+    [oppList]
+  );
+
   const opportunityProductOptions = useMemo(() => {
     const map = new Map<number, string>();
-    for (const o of oppList) map.set(o.product_id, o.product_name);
+    for (const o of oppList) {
+      if (o.outcome === "open" && (o.engagement_status ?? "active") !== "active") continue;
+      map.set(o.product_id, o.product_name);
+    }
     return [...map.entries()]
       .map(([product_id, name]) => ({ product_id, name }))
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
@@ -1204,19 +1218,35 @@ export function ClientDetailView({
         <ClientPanelHead
           title="Oportunidades"
           actions={
-            <button type="button" className="btn btn-primary btn-sm" onClick={openOppModal}>
-              <Plus size={16} aria-hidden /> Nova oportunidade
-            </button>
+            <>
+              {hasHiddenInactiveOpportunities ? (
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => setShowAllOpportunities((v) => !v)}
+                >
+                  {showAllOpportunities ? "Só ativas" : "Ver todas"}
+                </button>
+              ) : null}
+              <button type="button" className="btn btn-primary btn-sm" onClick={openOppModal}>
+                <Plus size={16} aria-hidden /> Nova oportunidade
+              </button>
+            </>
           }
         />
-        {oppList.length === 0 ? <p className="muted client-detail-empty">Nenhuma negociação registrada.</p> : null}
-        {oppList.length > 0 ? (
+        {visibleOpportunities.length === 0 ? (
+          <p className="muted client-detail-empty">Nenhuma negociação registrada.</p>
+        ) : null}
+        {visibleOpportunities.length > 0 ? (
           <ul className="client-opp-cards">
-            {oppList.map((o) => (
+            {visibleOpportunities.map((o) => (
               <li key={o.id} className="client-opp-card panel">
                 <div className="client-opp-card__main">
                   <strong className="client-opp-card__product">{o.product_name}</strong>
                   {o.stage_name ? <span className="client-opp-card__stage badge">{o.stage_name}</span> : null}
+                  {o.outcome === "open" && o.engagement_status === "inactive" ? (
+                    <span className="client-opp-card__stage badge">Inativa</span>
+                  ) : null}
                   <p className="client-opp-card__title muted">{o.title.trim() || "Sem título"}</p>
                 </div>
                 <div className="client-opp-card__bdr">

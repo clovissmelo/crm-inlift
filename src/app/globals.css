@@ -312,44 +312,35 @@ a.app-text-link:hover {
 }
 
 .organizacao-bulk-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1.25rem;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) auto minmax(0, 1.25fr) auto auto minmax(0, 1fr);
+  gap: 0.65rem 0.85rem;
+  align-items: end;
 }
 
 .organizacao-bulk-bar-field {
   margin-bottom: 0;
-  flex: 0 1 260px;
-  min-width: min(100%, 200px);
-}
-
-.organizacao-bulk-bar-group {
-  display: inline-flex;
-  flex-wrap: nowrap;
-  align-items: flex-end;
-  gap: 0.75rem;
-  flex: 0 1 auto;
-  max-width: 100%;
-}
-
-.organizacao-bulk-bar-trailing {
-  display: inline-flex;
-  flex-wrap: nowrap;
-  align-items: flex-end;
-  gap: 1rem;
-  flex: 1 1 auto;
-  min-width: min(100%, 280px);
+  min-width: 0;
 }
 
 .organizacao-bulk-bar-btn {
-  flex-shrink: 0;
+  justify-self: start;
   white-space: nowrap;
+  margin-bottom: 0;
+}
+
+.organizacao-bulk-bar--no-delete {
+  grid-template-columns: minmax(0, 1.1fr) auto minmax(0, 1.25fr) auto minmax(0, 1fr);
+}
+
+.organizacao-bulk-bar-btn--delete {
+  justify-self: end;
 }
 
 .organizacao-bulk-select-all {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.5rem;
   margin: 0;
   min-height: 2.35rem;
@@ -357,8 +348,54 @@ a.app-text-link:hover {
   color: var(--muted);
   cursor: pointer;
   line-height: 1.35;
-  flex: 0 1 auto;
-  white-space: nowrap;
+  justify-self: end;
+  text-align: right;
+}
+
+@media (max-width: 1100px) {
+  .organizacao-bulk-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .organizacao-bulk-bar-field--product {
+    grid-column: 1;
+  }
+
+  .organizacao-bulk-bar-field--product + .organizacao-bulk-bar-btn {
+    grid-column: 2;
+  }
+
+  .organizacao-bulk-bar-btn--delete,
+  .organizacao-bulk-select-all {
+    grid-column: 1 / -1;
+  }
+
+  .organizacao-bulk-select-all {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .organizacao-bulk-bar-btn--delete {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 560px) {
+  .organizacao-bulk-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .organizacao-bulk-bar-btn,
+  .organizacao-bulk-bar-field--product + .organizacao-bulk-bar-btn,
+  .organizacao-bulk-bar-btn--delete,
+  .organizacao-bulk-select-all {
+    grid-column: 1;
+    justify-self: stretch;
+  }
+
+  .organizacao-bulk-bar-btn {
+    width: 100%;
+  }
 }
 
 .organizacao-bulk-select-all input[type="checkbox"] {

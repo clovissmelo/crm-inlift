@@ -6,6 +6,8 @@ import { formatSpDateTime } from "@/lib/datetime";
 
 const TIMELINE_PAGE = 5;
 
+type OpportunityTimelineScope = "active" | "inactive" | "all";
+
 type Item = {
   id: string;
   kind: string;
@@ -23,13 +25,15 @@ export function ClientTimeline({ clientId }: { clientId: number }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(TIMELINE_PAGE);
+  const [opportunityScope, setOpportunityScope] = useState<OpportunityTimelineScope>("active");
 
   useEffect(() => {
     let cancelled = false;
 
     async function load(showSpinner: boolean) {
       if (showSpinner) setLoading(true);
-      const res = await fetch(`/api/clients/${clientId}/timeline`);
+      const qs = new URLSearchParams({ opportunity_scope: opportunityScope });
+      const res = await fetch(`/api/clients/${clientId}/timeline?${qs.toString()}`);
       if (cancelled) return;
       if (!res.ok) {
         setError("Não foi possível carregar o histórico.");
@@ -50,7 +54,7 @@ export function ClientTimeline({ clientId }: { clientId: number }) {
       cancelled = true;
       window.clearInterval(t);
     };
-  }, [clientId]);
+  }, [clientId, opportunityScope]);
 
   if (loading) return <p className="muted">Carregando histórico…</p>;
   if (error) return <div className="alert alert-error">{error}</div>;
@@ -78,6 +82,24 @@ export function ClientTimeline({ clientId }: { clientId: number }) {
 
   return (
     <>
+      <div className="client-timeline-toolbar" style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        <span className="muted" style={{ fontSize: "0.8125rem" }}>
+          Oportunidades no histórico:
+        </span>
+        <select
+          className="select input-sm"
+          value={opportunityScope}
+          onChange={(e) => {
+            setVisibleCount(TIMELINE_PAGE);
+            setOpportunityScope(e.target.value as OpportunityTimelineScope);
+          }}
+          aria-label="Filtrar histórico por status da oportunidade"
+        >
+          <option value="active">Ativas</option>
+          <option value="inactive">Inativas</option>
+          <option value="all">Todas</option>
+        </select>
+      </div>
       <ul className="client-timeline-list">
         {visible.map((item) => (
           <li key={item.id} className="client-timeline-item">

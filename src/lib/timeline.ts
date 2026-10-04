@@ -15,6 +15,7 @@ export type TimelineItem = {
   title: string;
   /** Ex.: Oportunidade: PostoCred ou Contato relacionado */
   context_label?: string | null;
+  product_id?: number | null;
   detail: string | null;
   script_detail?: string | null;
   occurred_at: string;
@@ -22,7 +23,41 @@ export type TimelineItem = {
   meet_link?: string | null;
 };
 
-export async function getClientTimeline(clientId: number): Promise<TimelineItem[]> {
+export type OpportunityTimelineScope = "active" | "inactive" | "all";
+
+async function openOpportunityEngagementByProduct(clientId: number): Promise<Map<number, string>> {
+  const rows = await all<{ product_id: number; engagement_status: string }>(
+    `
+      SELECT DISTINCT ON (product_id) product_id, COALESCE(engagement_status, 'active') AS engagement_status
+      FROM opportunities
+      WHERE client_id = @clientId AND outcome = 'open'
+      ORDER BY product_id, updated_at DESC
+    `,
+    { clientId }
+  );
+  return new Map(rows.map((r) => [r.product_id, r.engagement_status]));
+}
+
+function filterTimelineByOpportunityScope(
+  items: TimelineItem[],
+  engagementByProduct: Map<number, string>,
+  scope: OpportunityTimelineScope
+): TimelineItem[] {
+  if (scope === "all") return items;
+  return items.filter((item) => {
+    const productId = item.product_id;
+    if (productId == null) return scope === "active";
+    const engagement = engagementByProduct.get(productId) ?? "active";
+    if (scope === "active") return engagement === "active";
+    return engagement === "inactive";
+  });
+}
+
+export async function getClientTimeline(
+  clientId: number,
+  scope: OpportunityTimelineScope = "active"
+): Promise<TimelineItem[]> {
+  const engagementByProduct = await openOpportunityEngagementByProduct(clientId);
   const items: TimelineItem[] = [];
 
   const apiCalls = await all<{
@@ -49,12 +84,14 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     bdr_name: string | null;
     script_flow_log: unknown;
     product_name: string | null;
+    product_id: number | null;
   }>(
     `
       SELECT c.id, c.status, c.created_at, c.ended_at, c.started_at, c.duration_seconds, c.phone_dialed,
         c.hangup_cause_label, c.technical_provider_code, c.technical_provider_label, c.error_message,
         c.script_flow_log,
         u.name AS user_name, c.approach_id,
+        c.product_id,
         p.name AS product_name,
         COALESCE(a.commercial_result_name_snapshot, rt.name) AS result_name,
         a.notes AS approach_notes,
@@ -129,6 +166,7 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       kind: "api4com_call",
       title,
       context_label: contextLabel,
+      product_id: call.product_id,
       detail: detailParts.join(" · ") || null,
       script_detail: scriptDetail,
       occurred_at: when,
@@ -189,6 +227,7 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     result_name: string | null;
     user_name: string | null;
     product_name: string | null;
+    product_id: number | null;
     contact_outcome_name: string | null;
     commercial_name: string | null;
     technical_name: string | null;
@@ -198,7 +237,7 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     `
       SELECT a.id, a.occurred_at, a.channel, a.notes,
         COALESCE(a.commercial_result_name_snapshot, rt.name) AS result_name,
-        u.name AS user_name, p.name AS product_name,
+        u.name AS user_name, a.product_id, p.name AS product_name,
         a.contact_outcome_name_snapshot AS contact_outcome_name,
         COALESCE(a.commercial_result_name_snapshot, rt.name) AS commercial_name,
         a.technical_result_name_snapshot AS technical_name,
@@ -234,6 +273,7 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       kind: "approach",
       title: `Abordagem (${channelLabel})${a.result_name ? ` — ${a.result_name}` : ""}`,
       context_label: formatEngagementContextLabel(a.product_name),
+      product_id: a.product_id,
       detail:
         [...layerParts, stripScriptBlockFromApproachNotes(a.notes)].filter(Boolean).join(" · ") || null,
       script_detail: approachScript,
@@ -252,9 +292,10 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     assigned_name: string | null;
     completed_at: string | null;
     product_name: string | null;
+    product_id: number | null;
   }>(
     `
-      SELECT f.id, f.scheduled_at, f.status, f.notes, f.kind, f.completed_at,
+      SELECT f.id, f.scheduled_at, f.status, f.notes, f.kind, f.completed_at, f.product_id,
         cu.name AS created_by_name, au.name AS assigned_name,
         p.name AS product_name
       FROM follow_ups f
@@ -275,6 +316,7 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       kind: "follow_up",
       title: `${label} agendado${f.status === "completed" ? " (concluído)" : ""}`,
       context_label: followContext,
+      product_id: f.product_id,
       detail: f.notes,
       occurred_at: f.scheduled_at,
       user_name: f.created_by_name
@@ -285,6 +327,7 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
         kind: "follow_up_completed",
         title: `${label} concluído`,
         context_label: followContext,
+        product_id: f.product_id,
         detail: null,
         occurred_at: f.completed_at,
         user_name: f.assigned_name
@@ -326,10 +369,11 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     created_at: string;
     new_temperature: string | null;
     product_name: string;
+    product_id: number;
     user_name: string | null;
   }>(
     `
-      SELECT l.id, l.created_at, l.new_temperature, p.name AS product_name, u.name AS user_name
+      SELECT l.id, l.created_at, l.new_temperature, l.product_id, p.name AS product_name, u.name AS user_name
       FROM opportunity_temperature_logs l
       JOIN products p ON p.id = l.product_id
       LEFT JOIN users u ON u.id = l.user_id
@@ -344,6 +388,7 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       id: `temp-${t.id}`,
       kind: "temperature",
       title: `Temperatura (${t.product_name})`,
+      product_id: t.product_id,
       detail: t.new_temperature,
       occurred_at: t.created_at,
       user_name: t.user_name
@@ -386,12 +431,13 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     updated_at: string;
     engagement_status: string;
     product_name: string;
+    product_id: number;
     pause_name: string | null;
     close_name: string | null;
     user_name: string | null;
   }>(
     `
-      SELECT o.id, o.status_changed_at AS updated_at, o.engagement_status, p.name AS product_name,
+      SELECT o.id, o.product_id, o.status_changed_at AS updated_at, o.engagement_status, p.name AS product_name,
         pr.name AS pause_name, cr.name AS close_name, u.name AS user_name
       FROM opportunities o
       JOIN products p ON p.id = o.product_id
@@ -480,9 +526,11 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
     user_name: string | null;
     to_stage_name: string;
     opp_title: string;
+    product_id: number;
   }>(
     `
-      SELECT l.id, l.created_at, l.notes, u.name AS user_name, ts.name AS to_stage_name, o.title AS opp_title
+      SELECT l.id, l.created_at, l.notes, u.name AS user_name, ts.name AS to_stage_name, o.title AS opp_title,
+        o.product_id
       FROM opportunity_stage_logs l
       JOIN opportunities o ON o.id = l.opportunity_id
       JOIN pipeline_stages ts ON ts.id = l.to_stage_id
@@ -498,6 +546,7 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
       id: `opp-stage-${s.id}`,
       kind: "opportunity_stage",
       title: `Oportunidade "${s.opp_title}": etapa ${s.to_stage_name}`,
+      product_id: s.product_id,
       detail: s.notes,
       occurred_at: s.created_at,
       user_name: s.user_name
@@ -505,10 +554,17 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
   }
 
   for (const e of engagements) {
+    const title =
+      e.engagement_status === "paused"
+        ? `Pausa (${e.product_name})`
+        : e.engagement_status === "inactive"
+          ? `Oportunidade inativa (${e.product_name})`
+          : `Encerramento (${e.product_name})`;
     items.push({
       id: `eng-${e.id}`,
       kind: e.engagement_status,
-      title: e.engagement_status === "paused" ? `Pausa (${e.product_name})` : `Encerramento (${e.product_name})`,
+      title,
+      product_id: e.product_id,
       detail: e.pause_name || e.close_name,
       occurred_at: e.updated_at ?? new Date(0).toISOString(),
       user_name: e.user_name
@@ -516,7 +572,7 @@ export async function getClientTimeline(clientId: number): Promise<TimelineItem[
   }
 
   items.sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
-  return items;
+  return filterTimelineByOpportunityScope(items, engagementByProduct, scope);
 }
 
 export { formatSpDateTime };

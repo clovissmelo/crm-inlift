@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ClientPanelHead } from "@/components/client-section-title";
 import { formatSpDateTime } from "@/lib/datetime";
 import { formatPhoneDisplay } from "@/lib/format";
 import type { PhoneDialContextItem } from "@/lib/call-strategy/eligible-phones";
@@ -30,8 +29,6 @@ export function ClientDialPhonesPanel({ clientId }: { clientId: number }) {
   const [loading, setLoading] = useState(true);
   const [reason, setReason] = useState("");
   const [reactivateId, setReactivateId] = useState<number | null>(null);
-  const [expanded, setExpanded] = useState(false);
-
   const load = useCallback(async () => {
     setLoading(true);
     const res = await fetch(`/api/clients/${clientId}/dial-phones`);
@@ -70,14 +67,6 @@ export function ClientDialPhonesPanel({ clientId }: { clientId: number }) {
 
   return (
     <div className="panel client-detail-section">
-      <ClientPanelHead
-        title="Estratégia de ligação por telefone"
-        collapsible
-        open={expanded}
-        onToggle={() => setExpanded((v) => !v)}
-      />
-      {!expanded ? null : (
-      <>
       {phones.map((p) => (
         <div key={p.client_phone_id} style={{ borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 8 }}>
           <strong>
@@ -140,8 +129,6 @@ export function ClientDialPhonesPanel({ clientId }: { clientId: number }) {
           </ul>
         </details>
       ) : null}
-      </>
-      )}
     </div>
   );
 }
