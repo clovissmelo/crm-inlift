@@ -46,6 +46,18 @@ export async function api4comStartCall(
   return data;
 }
 
+export async function api4comHangupCall(apiCallId: string, apiToken: string): Promise<void> {
+  const cfg = await getApi4comConfig();
+  const res = await fetch(`${cfg.baseUrl}/api/v1/calls/${encodeURIComponent(apiCallId)}/hangup`, {
+    method: "POST",
+    headers: { Authorization: apiToken }
+  });
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    throw new Error(apiErrorText(data, `API4COM hangup respondeu ${res.status}`));
+  }
+}
+
 export async function api4comRegisterWebhookIntegration(webhookUrl: string) {
   const cfg = await getApi4comConfig();
   if (!cfg.apiToken) {

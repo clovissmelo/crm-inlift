@@ -15,6 +15,7 @@ export type MenuKey =
   | "funil"
   | "agendamentos"
   | "novos_leads"
+  | "aquecedor_leads"
   | "organizacao_leads"
   | "clientes"
   | "abordagens"
@@ -40,6 +41,7 @@ export const MENU_DEFINITIONS: MenuDefinition[] = [
   { key: "funil", href: "/funil", label: "Funil de vendas", section: "top" },
   { key: "agendamentos", href: "/agendamentos", label: "Agendamentos", section: "top" },
   { key: "novos_leads", href: "/admin/novos-leads", label: "Novos leads", section: "clientes_leads" },
+  { key: "aquecedor_leads", href: "/aquecedor-leads", label: "Aquecedor leads", section: "clientes_leads" },
   { key: "organizacao_leads", href: "/organizacao-leads", label: "Organizar leads", section: "clientes_leads" },
   { key: "clientes", href: "/clientes", label: "Clientes", section: "clientes_leads" },
   { key: "abordagens", href: "/abordagens", label: "Abordagem", section: "configuracao" },

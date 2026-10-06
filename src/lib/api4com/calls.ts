@@ -1,5 +1,6 @@
 import { get, all, nowIso, run } from "@/lib/db";
-import { api4comStartCall } from "@/lib/api4com/client";
+import { api4comHangupCall, api4comStartCall } from "@/lib/api4com/client";
+import { WARM_SCREEN_PURPOSE } from "@/lib/warm-screen/constants";
 import { getApi4comConfig } from "@/lib/api4com/config";
 import { resolveApi4comApiTokenForUser } from "@/lib/api4com/user-token";
 import { API4COM_NO_EXTENSION_MESSAGE } from "@/lib/api4com/dial-identity-shared";
@@ -208,6 +209,7 @@ export async function initiateApi4comCall(input: {
   productId?: number | null;
   phone: string;
   dialSessionRootId?: number | null;
+  warmScreen?: { executionId: number; itemId: number };
 }) {
   const dialIdentityUserId = input.dialIdentityUserId ?? input.userId;
   const extension = await getUserExtension(dialIdentityUserId);
@@ -286,6 +288,11 @@ export async function initiateApi4comCall(input: {
   if (input.productId) metadata.product_id = String(input.productId);
   if (dialIdentityUserId !== input.userId) {
     metadata.dial_identity_user_id = String(dialIdentityUserId);
+  }
+  if (input.warmScreen) {
+    metadata.purpose = WARM_SCREEN_PURPOSE;
+    metadata.warm_screen_execution_id = String(input.warmScreen.executionId);
+    metadata.warm_screen_item_id = String(input.warmScreen.itemId);
   }
 
   const apiToken = await resolveApi4comApiTokenForUser(dialIdentityUserId);
@@ -706,7 +713,18 @@ export async function processApi4comWebhook(payload: Api4comWebhookPayload, webh
   if (isAnswer) status = "in_progress";
   if (isHangup) status = "completed";
 
-  const resultPending = isHangup && !callRow.approach_id;
+  const rowMeta = (() => {
+    try {
+      return JSON.parse(callRow.metadata_json ?? "{}") as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  })();
+  const isWarmScreen =
+    rowMeta.purpose === WARM_SCREEN_PURPOSE ||
+    (typeof payload.metadata?.purpose === "string" && payload.metadata.purpose === WARM_SCREEN_PURPOSE);
+
+  const resultPending = isHangup && !callRow.approach_id && !isWarmScreen;
   if (resultPending) {
     await ensureDialSessionRoot(callRow.id);
     await clearPendingOnSiblingCalls(callRow.id);
@@ -750,9 +768,28 @@ export async function processApi4comWebhook(payload: Api4comWebhookPayload, webh
     }
   );
 
+  if (isAnswer && isWarmScreen && payload.id) {
+    try {
+      const dialUserRaw = rowMeta.dial_identity_user_id ?? rowMeta.user_id ?? callRow.user_id;
+      const dialUserId = Number(dialUserRaw);
+      const token = await resolveApi4comApiTokenForUser(
+        Number.isFinite(dialUserId) ? dialUserId : callRow.user_id
+      );
+      if (token) {
+        await api4comHangupCall(String(payload.id), token);
+      }
+    } catch {
+      /* hangup best-effort */
+    }
+  }
+
   if (isHangup) {
     const { persistCallTechnicalResult } = await import("@/lib/api4com/persist-technical-result");
     await persistCallTechnicalResult(callRow.id);
+    if (isWarmScreen) {
+      const { finalizeWarmScreenCall } = await import("@/lib/warm-screen/call-outcome");
+      await finalizeWarmScreenCall(callRow.id);
+    }
   }
 
   return { ok: true, call_id: callRow.id, completed: isHangup };

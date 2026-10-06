@@ -7,7 +7,8 @@ export const PROSPECCAO_RULE_KIND_LABELS: Record<string, string> = {
   return_due: "Retorno vencido na fila",
   scheduled_return: "Retorno agendado (legado)",
   has_approach: "Já houve abordagem",
-  no_phone: "Sem telefone válido"
+  no_phone: "Sem telefone válido",
+  warm_confirmed: "Aquecido (motor de aquecimento)"
 };
 
 export const CREATABLE_RULE_KINDS = [

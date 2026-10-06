@@ -29,6 +29,8 @@ export type ClientFilters = {
   ids?: number[];
   official_client?: "yes" | "no" | "";
   existing_customer?: "yes" | "no" | "";
+  /** Oculta leads já confirmados pelo motor de aquecimento. */
+  exclude_warm_screen_confirmed?: boolean;
 };
 
 function buildClientFilterSql(filters: ClientFilters) {

@@ -11,6 +11,7 @@ export type ClientQueueSignals = {
   completedDialRounds: number;
   pendingReturnAt: string | null;
   returnOverdue: boolean;
+  warmScreenConfirmed?: boolean;
 };
 
 export type ResolvedQueuePriority = {
@@ -38,6 +39,8 @@ function matchesNonReturnType(type: ProspeccaoPriorityTypeRow, s: ClientQueueSig
       return s.hasApproach;
     case "no_phone":
       return !s.hasPhones;
+    case "warm_confirmed":
+      return Boolean(s.warmScreenConfirmed);
     case "overdue_return":
     case "return_due":
     case "scheduled_return":
@@ -92,6 +95,11 @@ export function resolveQueuePriorityForClient(
     }
     const ret = findReturnType(sorted);
     if (ret) return toResolved(ret, signals.returnOverdue);
+  }
+
+  if (signals.warmScreenConfirmed) {
+    const warm = sorted.find((t) => t.rule_kind === "warm_confirmed" || t.slug === "aquecido");
+    if (warm) return toResolved(warm, false);
   }
 
   for (const type of sorted) {

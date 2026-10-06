@@ -12,14 +12,22 @@ type CallSignals = {
 
 /** Persiste resultado técnico normalizado + códigos originais do provedor. Não altera classificação BDR. */
 export async function persistCallTechnicalResult(callId: number) {
-  const row = await get<CallSignals>(
+  const row = await get<CallSignals & { metadata_json: string | null }>(
     `
-      SELECT id, hangup_cause_code, hangup_cause_label, duration_seconds, answered_at, approach_id
+      SELECT id, hangup_cause_code, hangup_cause_label, duration_seconds, answered_at, approach_id, metadata_json
       FROM api4com_calls WHERE id = @id
     `,
     { id: callId }
   );
   if (!row) return null;
+
+  let isWarmScreen = false;
+  try {
+    const meta = JSON.parse(row.metadata_json ?? "{}") as Record<string, unknown>;
+    isWarmScreen = meta.purpose === "warm_screen";
+  } catch {
+    isWarmScreen = false;
+  }
 
   const matched = await resolveTechnicalResultForCall({
     hangup_cause_code: row.hangup_cause_code,
@@ -58,7 +66,7 @@ export async function persistCallTechnicalResult(callId: number) {
     );
   }
 
-  if (!row.approach_id && matched && !matched.answered) {
+  if (!isWarmScreen && !row.approach_id && matched && !matched.answered) {
     const { tryServerAutoRegisterNoContact } = await import("@/lib/attendance/auto-register-no-contact");
     await tryServerAutoRegisterNoContact(callId);
   }

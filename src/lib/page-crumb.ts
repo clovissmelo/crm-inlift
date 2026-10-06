@@ -36,6 +36,10 @@ export function pageCrumbSegments(pathname: string): string[] {
     segments.push("Leads para contato");
     return segments;
   }
+  if (pathname.startsWith("/aquecedor-leads")) {
+    segments.push("aquecedor leads");
+    return segments;
+  }
   if (pathname.startsWith("/retornos")) {
     segments.push("retornos");
     return segments;

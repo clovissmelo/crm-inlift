@@ -41,6 +41,7 @@ type RawRow = {
   pending_return_at: string | null;
   return_overdue: boolean;
   prospeccao_phone_summary: string | null;
+  warm_screen_confirmed_at: string | null;
 };
 
 function contactPhoneDigits(phonesRaw: string | null, whatsappsRaw: string | null): string[] {
@@ -144,6 +145,9 @@ function buildFilters(filters: ClientFilters, todayStart: string, todayEnd: stri
   } else if (filters.queue_status === "em_andamento") {
     where.push(`EXISTS (SELECT 1 FROM approaches a WHERE a.client_id = clients.id)`);
   }
+  if (filters.exclude_warm_screen_confirmed) {
+    where.push("clients.warm_screen_confirmed_at IS NULL");
+  }
   return { where: where.join(" AND "), params };
 }
 
@@ -240,7 +244,8 @@ async function loadEnrichedProspeccaoRows(filters: ClientFilters): Promise<Enric
         ) AS phone_count,
         pending_fu.scheduled_at AS pending_return_at,
         (pending_fu.scheduled_at IS NOT NULL AND pending_fu.scheduled_at < @todayStart) AS return_overdue,
-        clients.prospeccao_phone_summary
+        clients.prospeccao_phone_summary,
+        clients.warm_screen_confirmed_at
       FROM clients
       LEFT JOIN users bdr ON bdr.id = clients.bdr_user_id
       LEFT JOIN contacts ON contacts.client_id = clients.id
@@ -262,7 +267,8 @@ async function loadEnrichedProspeccaoRows(filters: ClientFilters): Promise<Enric
         hasAnyDialAttempt: row.dial_attempt_count > 0,
         completedDialRounds: row.completed_dial_rounds,
         pendingReturnAt: row.pending_return_at,
-        returnOverdue: row.return_overdue
+        returnOverdue: row.return_overdue,
+        warmScreenConfirmed: Boolean(row.warm_screen_confirmed_at)
       },
       priorityTypes
     );
