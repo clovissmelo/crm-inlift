@@ -36,7 +36,7 @@ async function getDialingItem(executionId: number) {
   );
 }
 
-async function settleDialingItemIfCallEnded(executionId: number, dialUserId: number) {
+async function settleDialingItemIfCallEnded(executionId: number) {
   const dialing = await getDialingItem(executionId);
   if (!dialing?.api4com_call_row_id) return false;
 
@@ -81,7 +81,7 @@ export async function advanceWarmScreenExecution(executionId: number): Promise<{
   if (exec.status !== "running") return { advanced: false, message: "Execução não está rodando.", execution: exec };
 
   await expireWarmScreenStaleCalls({ userId: exec.dial_user_id });
-  await settleDialingItemIfCallEnded(executionId, exec.dial_user_id);
+  await settleDialingItemIfCallEnded(executionId);
 
   const stillDialing = await getDialingItem(executionId);
   if (stillDialing) {

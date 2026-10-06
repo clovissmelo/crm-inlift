@@ -98,6 +98,7 @@ export type Api4comCallRow = {
   result_deferred_at: string | null;
   error_message: string | null;
   dial_session_root_id: number | null;
+  metadata_json: string | null;
   script_flow_log?: unknown;
   created_at: string;
 };
