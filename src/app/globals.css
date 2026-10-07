@@ -4894,6 +4894,32 @@ table.data-table tbody tr.is-selected {
   background: color-mix(in srgb, var(--brand-blue) 6%, transparent);
 }
 
+.warm-screen-exec-actions-head,
+.warm-screen-exec-actions {
+  text-align: right;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.warm-screen-exec-actions-head {
+  width: 6.5rem;
+}
+
+.warm-screen-exec-actions-inner {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.warm-screen-exec-actions-inner.is-active {
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 5.5rem;
+  margin-left: auto;
+}
+
 .lead-gen-history-error {
   color: var(--danger);
   display: block;

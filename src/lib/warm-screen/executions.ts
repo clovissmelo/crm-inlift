@@ -326,6 +326,15 @@ async function maybeFinishExecution(executionId: number) {
   );
 }
 
+export async function deleteWarmScreenExecution(executionId: number) {
+  const exec = await getExecutionById(executionId);
+  if (!exec) throw new Error("Execução não encontrada.");
+  if (exec.status === "running" || exec.status === "paused") {
+    throw new Error("Encerre a execução antes de excluir do histórico.");
+  }
+  await run("DELETE FROM warm_screen_executions WHERE id = @id", { id: executionId });
+}
+
 export async function listExecutionsForViewer(input: {
   viewerUserId: number;
   isManagerOrAdmin: boolean;

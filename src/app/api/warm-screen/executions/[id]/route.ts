@@ -1,6 +1,10 @@
 import { requireWarmScreenApiUser, isManagerOrAdmin } from "@/lib/warm-screen/api-auth";
 import { canViewWarmScreenExecution } from "@/lib/warm-screen/permissions";
-import { getExecutionById, listExecutionItemsForRealtime } from "@/lib/warm-screen/executions";
+import {
+  deleteWarmScreenExecution,
+  getExecutionById,
+  listExecutionItemsForRealtime
+} from "@/lib/warm-screen/executions";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { user, denied } = await requireWarmScreenApiUser();
@@ -26,4 +30,26 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
   const items = await listExecutionItemsForRealtime(id, execution);
   return Response.json({ execution, items });
+}
+
+export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const { user, denied } = await requireWarmScreenApiUser();
+  if (denied) return denied;
+
+  if (!user!.roles.includes("admin")) {
+    return Response.json({ error: "Apenas administradores podem excluir execuções." }, { status: 403 });
+  }
+
+  const { id: idRaw } = await context.params;
+  const id = Number(idRaw);
+  if (!Number.isFinite(id)) {
+    return Response.json({ error: "ID inválido" }, { status: 400 });
+  }
+
+  try {
+    await deleteWarmScreenExecution(id);
+    return Response.json({ ok: true });
+  } catch (e) {
+    return Response.json({ error: e instanceof Error ? e.message : "Erro ao excluir" }, { status: 400 });
+  }
 }

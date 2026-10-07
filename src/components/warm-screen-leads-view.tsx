@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Play, Pause, Square, Radio, List, Info } from "lucide-react";
+import { Play, Pause, Square, Radio, List, Info, Trash2 } from "lucide-react";
 import { ProspeccaoPriorityBadge } from "@/components/prospeccao-priority-badge";
 import { CadastroModal } from "@/components/cadastro-ui";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
@@ -78,6 +78,7 @@ export function WarmScreenLeadsView({
   const [ramalModalOpen, setRamalModalOpen] = useState(false);
   const [detailExecutionId, setDetailExecutionId] = useState<number | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [deletingExecutionId, setDeletingExecutionId] = useState<number | null>(null);
 
   const bdrsWithRamal = bdrs.filter((b) => Boolean(normalizeApi4comExtension(b.api4com_extension ?? "")));
 
@@ -223,6 +224,30 @@ export function WarmScreenLeadsView({
     setMessage("Motor iniciado.");
     setTab("tempo_real");
     void loadExecutions();
+  }
+
+  async function deleteExecution(ex: Execution) {
+    const when = new Date(ex.started_at).toLocaleString("pt-BR");
+    const ok = window.confirm(
+      `Excluir a execução #${ex.id} de ${when}?\n\nRemove apenas o registro desta execução e seus itens. Leads e ligações no CRM não são apagados.`
+    );
+    if (!ok) return;
+    setDeletingExecutionId(ex.id);
+    setMessage(null);
+    const res = await fetch(`/api/warm-screen/executions/${ex.id}`, { method: "DELETE" });
+    const data = (await res.json()) as { error?: string };
+    setDeletingExecutionId(null);
+    if (!res.ok) {
+      setMessage(data.error ?? "Não foi possível excluir");
+      return;
+    }
+    if (detailExecutionId === ex.id) {
+      setDetailModalOpen(false);
+      setDetailExecutionId(null);
+    }
+    if (activeExecution?.id === ex.id) setActiveExecution(null);
+    void loadExecutions();
+    void pollActive();
   }
 
   async function execAction(id: number, action: "pause" | "resume" | "stop") {
@@ -500,7 +525,7 @@ export function WarmScreenLeadsView({
                 <th>Início</th>
                 <th>Resultado</th>
                 <th>Progresso</th>
-                <th>Ações</th>
+                <th className="warm-screen-exec-actions-head">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -557,22 +582,36 @@ export function WarmScreenLeadsView({
                   <td className="muted">
                     {ex.items_done}/{ex.items_total} · {ex.items_warmed} aquecidos
                   </td>
-                  <td style={{ display: "flex", gap: 4 }}>
-                    {ex.status === "running" ? (
-                      <button type="button" className="btn btn-sm" onClick={() => void execAction(ex.id, "pause")}>
-                        Pausar
-                      </button>
-                    ) : null}
-                    {ex.status === "paused" ? (
-                      <button type="button" className="btn btn-sm btn-primary" onClick={() => void execAction(ex.id, "resume")}>
-                        Play
-                      </button>
-                    ) : null}
-                    {ex.status === "running" || ex.status === "paused" ? (
-                      <button type="button" className="btn btn-sm" onClick={() => void execAction(ex.id, "stop")}>
-                        Stop
-                      </button>
-                    ) : null}
+                  <td className="warm-screen-exec-actions">
+                    <div className={`warm-screen-exec-actions-inner${active ? " is-active" : ""}`}>
+                      {ex.status === "running" ? (
+                        <button type="button" className="btn btn-sm" onClick={() => void execAction(ex.id, "pause")}>
+                          Pausar
+                        </button>
+                      ) : null}
+                      {ex.status === "paused" ? (
+                        <button type="button" className="btn btn-sm btn-primary" onClick={() => void execAction(ex.id, "resume")}>
+                          Play
+                        </button>
+                      ) : null}
+                      {active ? (
+                        <button type="button" className="btn btn-sm" onClick={() => void execAction(ex.id, "stop")}>
+                          Stop
+                        </button>
+                      ) : null}
+                      {!active && isAdmin ? (
+                        <button
+                          type="button"
+                          className="btn btn-icon-sm lead-gen-history-delete"
+                          title="Excluir do histórico"
+                          aria-label="Excluir execução"
+                          disabled={deletingExecutionId === ex.id}
+                          onClick={() => void deleteExecution(ex)}
+                        >
+                          <Trash2 size={16} aria-hidden />
+                        </button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               );
