@@ -336,16 +336,6 @@ export function WarmScreenLeadsView({
                 </option>
               ))}
             </FilterSelect>
-            {isAdmin ? (
-              <FilterSelect label="Ramal como" value={dialAsUserId} onChange={(e) => setDialAsUserId(e.target.value)}>
-                <option value="">Eu (admin)</option>
-                {bdrs.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </FilterSelect>
-            ) : null}
           </FilterBar>
 
           <div className="panel table-wrap">
