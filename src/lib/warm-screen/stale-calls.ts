@@ -1,8 +1,20 @@
-import { all, nowIso, run } from "@/lib/db";
+import { all, get, nowIso, run } from "@/lib/db";
 import { WARM_SCREEN_PURPOSE, WARM_SCREEN_STALE_CALL_MS, WARM_SCREEN_STALE_MESSAGE } from "@/lib/warm-screen/constants";
 import { completeWarmScreenItem } from "@/lib/warm-screen/executions";
+import {
+  dismissWarmScreenConnectionFailureCall,
+  isWarmScreenConnectionFailure
+} from "@/lib/warm-screen/connection-failure";
 
 async function finalizeExpiredWarmCall(callId: number) {
+  const call = await get<{ id: number; status: string; api4com_call_id: string | null; approach_id: number | null }>(
+    "SELECT id, status, api4com_call_id, approach_id FROM api4com_calls WHERE id = @id",
+    { id: callId }
+  );
+  if (call && isWarmScreenConnectionFailure(call)) {
+    await dismissWarmScreenConnectionFailureCall(callId);
+    return;
+  }
   const { persistCallTechnicalResult } = await import("@/lib/api4com/persist-technical-result");
   await persistCallTechnicalResult(callId);
   const { finalizeWarmScreenCall } = await import("@/lib/warm-screen/call-outcome");

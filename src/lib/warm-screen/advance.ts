@@ -9,6 +9,11 @@ import {
 } from "@/lib/warm-screen/executions";
 import { expireWarmScreenStaleCalls, recoverStuckWarmScreenItems } from "@/lib/warm-screen/stale-calls";
 import { finalizeWarmScreenCall } from "@/lib/warm-screen/call-outcome";
+import {
+  dismissWarmScreenConnectionFailureCall,
+  handleWarmScreenDialSetupFailure,
+  isWarmScreenConnectionFailure
+} from "@/lib/warm-screen/connection-failure";
 
 async function getNextPendingItem(executionId: number) {
   return get<{
@@ -40,12 +45,23 @@ async function settleDialingItemIfCallEnded(executionId: number) {
   const dialing = await getDialingItem(executionId);
   if (!dialing?.api4com_call_row_id) return false;
 
-  const call = await get<{ id: number; status: string; ended_at: string | null; approach_id: number | null }>(
-    "SELECT id, status, ended_at, approach_id FROM api4com_calls WHERE id = @id",
+  const call = await get<{
+    id: number;
+    status: string;
+    ended_at: string | null;
+    approach_id: number | null;
+    api4com_call_id: string | null;
+  }>(
+    "SELECT id, status, ended_at, approach_id, api4com_call_id FROM api4com_calls WHERE id = @id",
     { id: dialing.api4com_call_row_id }
   );
   if (!call) return false;
   if (call.status !== "completed" && call.status !== "failed") return false;
+
+  if (call.status === "failed" && isWarmScreenConnectionFailure(call)) {
+    await dismissWarmScreenConnectionFailureCall(call.id);
+    return true;
+  }
 
   if (call.status === "failed" && !call.approach_id) {
     const { persistCallTechnicalResult } = await import("@/lib/api4com/persist-technical-result");
@@ -165,19 +181,11 @@ export async function advanceWarmScreenExecution(executionId: number): Promise<{
     return { advanced: true, execution: await getExecutionById(executionId) };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Falha ao discar";
-    await completeWarmScreenItem({
-      itemId: item.id,
+    await handleWarmScreenDialSetupFailure({
       executionId,
-      status: "failed",
-      errorMessage: message
+      itemId: item.id,
+      message
     });
-    await run(
-      `
-        UPDATE warm_screen_executions SET last_error = @msg, last_call_ended_at = @now, updated_at = @now
-        WHERE id = @id
-      `,
-      { id: executionId, msg: message, now: nowIso() }
-    );
     return { advanced: false, message, execution: await getExecutionById(executionId) };
   }
 }

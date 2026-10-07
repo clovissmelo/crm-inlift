@@ -344,18 +344,18 @@ export async function initiateApi4comCall(input: {
     metadata.warm_screen_item_id = String(input.warmScreen.itemId);
   }
 
-  const apiToken = await resolveApi4comApiTokenForUser(dialIdentityUserId);
-  if (!apiToken) {
-    throw new Error(
-      "Token API4COM não configurado. BDR: cadastre em Meu perfil; admin: Variáveis ou cadastro do usuário."
-    );
-  }
-
-  await assertApi4comExtensionLinkedToToken(apiToken, extension);
-
   const calledForApi = toApi4comCalledE164(called);
 
   try {
+    const apiToken = await resolveApi4comApiTokenForUser(dialIdentityUserId);
+    if (!apiToken) {
+      throw new Error(
+        "Token API4COM não configurado. BDR: cadastre em Meu perfil; admin: Variáveis ou cadastro do usuário."
+      );
+    }
+
+    await assertApi4comExtensionLinkedToToken(apiToken, extension);
+
     const apiRes = await api4comStartCall(
       {
         caller: extension,

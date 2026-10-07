@@ -7,6 +7,10 @@ import { listActiveProductIdsInQueue } from "@/lib/client-product-prospeccao";
 import { get, nowIso, run } from "@/lib/db";
 import { WARM_SCREEN_MOTOR_LABEL } from "@/lib/warm-screen/constants";
 import { completeWarmScreenItem } from "@/lib/warm-screen/executions";
+import {
+  dismissWarmScreenConnectionFailureCall,
+  isWarmScreenConnectionFailure
+} from "@/lib/warm-screen/connection-failure";
 
 type CallRow = {
   id: number;
@@ -14,6 +18,7 @@ type CallRow = {
   client_id: number | null;
   contact_id: number | null;
   approach_id: number | null;
+  status: string;
   ended_at: string | null;
   started_at: string | null;
   api4com_call_id: string | null;
@@ -36,7 +41,14 @@ function parseMeta(raw: string | null): Record<string, string> {
 }
 
 export function isWarmScreenCallRow(row: { metadata_json: string | null }): boolean {
-  return parseMeta(row.metadata_json).purpose === "warm_screen";
+  if (parseMeta(row.metadata_json).purpose === "warm_screen") return true;
+  if (!row.metadata_json?.trim()) return false;
+  try {
+    const j = JSON.parse(row.metadata_json) as { metadata?: { purpose?: string } };
+    return j.metadata?.purpose === "warm_screen";
+  } catch {
+    return false;
+  }
 }
 
 async function afterAttemptForAllProducts(clientId: number) {
@@ -54,13 +66,17 @@ async function afterAttemptForAllProducts(clientId: number) {
 export async function finalizeWarmScreenCall(callId: number): Promise<boolean> {
   const call = await get<CallRow>(
     `
-      SELECT id, user_id, client_id, contact_id, approach_id, ended_at, started_at,
+      SELECT id, user_id, client_id, contact_id, approach_id, status, ended_at, started_at,
         api4com_call_id, technical_result_type_id, metadata_json
       FROM api4com_calls WHERE id = @id
     `,
     { id: callId }
   );
   if (!call?.client_id || !isWarmScreenCallRow(call)) return false;
+  if (isWarmScreenConnectionFailure(call)) {
+    await dismissWarmScreenConnectionFailureCall(call.id);
+    return true;
+  }
   if (call.approach_id) {
     await syncExecutionFromCall(call);
     return true;
