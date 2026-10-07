@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { Api4comWebphoneProvider } from "@/components/api4com-webphone-provider";
 import { CallSessionSidePanel, type CallSessionPanelMode } from "@/components/call-session-side-panel";
 import { type ActiveCallForScript } from "@/components/call-script-guide-panel";
 import { normalizeApi4comExtension } from "@/lib/api4com/phone";
@@ -225,6 +226,7 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
     canDial && onProspeccaoPage && pendingCount > 0 && panelMode !== "result" && !activeCall;
 
   return (
+    <Api4comWebphoneProvider user={user} canDial={canDial}>
     <Api4comContext.Provider
       value={{ canDial, hasOwnExtension, isAdmin, userId: user.id, userName: user.name }}
     >
@@ -282,5 +284,8 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
         />
       ) : null}
     </Api4comContext.Provider>
+    </Api4comWebphoneProvider>
   );
 }
+
+export { useApi4comWebphone } from "@/components/api4com-webphone-provider";

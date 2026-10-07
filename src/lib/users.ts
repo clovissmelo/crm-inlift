@@ -10,6 +10,7 @@ type UserRow = {
   status: "active" | "inactive";
   api4com_extension: string | null;
   api4com_api_token: string | null;
+  api4com_sip_password: string | null;
   created_at: string;
   last_access_at: string | null;
 };
@@ -44,12 +45,16 @@ async function attachRoles(users: UserRow[]): Promise<User[]> {
   );
 }
 
-export function sanitizeUserForClient(user: User & { api4com_api_token?: string | null }): User {
+export function sanitizeUserForClient(
+  user: User & { api4com_api_token?: string | null; api4com_sip_password?: string | null }
+): User {
   const has_api4com_api_token =
     user.has_api4com_api_token ?? Boolean(user.api4com_api_token?.trim());
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- strip secret before client
-  const { api4com_api_token, ...rest } = user;
-  return { ...rest, has_api4com_api_token };
+  const has_api4com_sip_password =
+    user.has_api4com_sip_password ?? Boolean(user.api4com_sip_password?.trim());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- strip secrets before client
+  const { api4com_api_token, api4com_sip_password, ...rest } = user;
+  return { ...rest, has_api4com_api_token, has_api4com_sip_password };
 }
 
 export async function listUsers(activeOnly = false) {

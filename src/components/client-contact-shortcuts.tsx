@@ -8,7 +8,7 @@ import { API4COM_NO_EXTENSION_MESSAGE, type Api4comDialIdentity } from "@/lib/ap
 import type { ContactVerification } from "@/lib/types";
 import { WhatsAppTemplateModal } from "@/components/whatsapp-template-modal";
 import { CadastroModal } from "@/components/cadastro-ui";
-import { useApi4comSession } from "@/components/api4com-call-provider";
+import { useApi4comSession, useApi4comWebphone } from "@/components/api4com-call-provider";
 import { apiErrorText } from "@/lib/api-error-text";
 import { EmailApproachModal } from "@/components/email-approach-modal";
 import type { PhoneDialContextItem } from "@/lib/call-strategy/eligible-phones";
@@ -162,6 +162,7 @@ export function ClientContactShortcuts({
   resolveEngagement?: () => Promise<{ productId?: number | null; productName?: string | null } | void>;
 }) {
   const api4com = useApi4comSession();
+  const webphone = useApi4comWebphone();
   const [waOpen, setWaOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -204,6 +205,14 @@ export function ClientContactShortcuts({
     if (!clientId || !api4com) return;
     const dialAs = asUserId ?? resolvedDialAsUserId();
     if (!dialAs) return;
+    if (webphone) {
+      const online = await webphone.ensureRegistered({ userId: dialAs });
+      if (!online) {
+        setDialError("Conecte o ramal no painel de telefonia do CRM antes de ligar.");
+        if (!fromPicker) setDialFeedbackOpen(true);
+        return;
+      }
+    }
     setDialing(true);
     setDialError(null);
     const payload: Record<string, unknown> = {

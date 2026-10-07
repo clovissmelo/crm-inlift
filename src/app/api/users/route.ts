@@ -2,6 +2,7 @@ import { hashPassword, jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { nowIso, run } from "@/lib/db";
 import { applyUserApi4comExtension } from "@/lib/api4com/user-extension";
 import { applyUserApi4comApiToken } from "@/lib/api4com/user-token";
+import { applyUserApi4comSipPassword } from "@/lib/api4com/user-sip-password";
 import { requireAdminApi } from "@/lib/admin";
 import { resolveAdministrativeRolesFromProfileIds, setUserAccessProfiles } from "@/lib/access-profiles";
 import { getUserById, listUsers, setUserRoles } from "@/lib/users";
@@ -60,6 +61,9 @@ export async function POST(request: Request) {
     }
     if (data.api4com_api_token) {
       await applyUserApi4comApiToken(userId, roles, data.api4com_api_token);
+    }
+    if (data.api4com_sip_password) {
+      await applyUserApi4comSipPassword(userId, roles, data.api4com_sip_password);
     }
     const created = await getUserById(userId);
     return Response.json({ id: userId, user: created }, { status: 201 });

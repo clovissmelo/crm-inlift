@@ -17,6 +17,17 @@ const api4comApiTokenField = z
   })
   .refine((v) => v === null || v.length >= 8, "Token inválido (mínimo 8 caracteres)");
 
+const api4comSipPasswordField = z
+  .string()
+  .trim()
+  .optional()
+  .nullable()
+  .transform((v) => {
+    const t = v?.trim() ?? "";
+    return t ? t : null;
+  })
+  .refine((v) => v === null || v.length >= 4, "Senha SIP inválida (mínimo 4 caracteres)");
+
 const api4comExtensionField = z
   .string()
   .trim()
@@ -37,7 +48,8 @@ const userBodySchema = z.object({
   access_profile_ids: z.array(z.number().int().positive()).optional(),
   password: z.string().min(8, "Senha com no mínimo 8 caracteres"),
   api4com_extension: api4comExtensionField,
-  api4com_api_token: api4comApiTokenField
+  api4com_api_token: api4comApiTokenField,
+  api4com_sip_password: api4comSipPasswordField
 });
 
 function userHasAccessProfileOrRole(data: {
@@ -56,7 +68,8 @@ export const userUpdateSchema = userBodySchema
   .partial()
   .extend({
     password: z.string().min(8).optional(),
-    clear_api4com_api_token: z.boolean().optional()
+    clear_api4com_api_token: z.boolean().optional(),
+    clear_api4com_sip_password: z.boolean().optional()
   })
   .refine(
     (data) => {
@@ -75,7 +88,9 @@ export const profileUpdateSchema = z.object({
   phone: z.string().trim().optional().nullable(),
   api4com_extension: api4comExtensionField,
   api4com_api_token: api4comApiTokenField,
+  api4com_sip_password: api4comSipPasswordField,
   clear_api4com_api_token: z.boolean().optional(),
+  clear_api4com_sip_password: z.boolean().optional(),
   current_password: z.string().optional(),
   new_password: z.string().min(8).optional()
 });

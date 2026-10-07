@@ -16,6 +16,8 @@ export type User = {
   api4com_extension?: string | null;
   /** Indica token pessoal salvo; o valor nunca é enviado ao navegador. */
   has_api4com_api_token?: boolean;
+  /** Indica senha SIP salva (discador embutido); o valor nunca é enviado ao navegador. */
+  has_api4com_sip_password?: boolean;
   created_at: string;
   last_access_at: string | null;
   /** Perfis de acesso ao menu (Admin → Usuários). */

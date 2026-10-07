@@ -15,6 +15,8 @@ export function ProfileForm({ user }: { user: User }) {
   const [api4comExtension, setApi4comExtension] = useState(user.api4com_extension ?? "");
   const [api4comApiToken, setApi4comApiToken] = useState("");
   const [hasApiToken, setHasApiToken] = useState(Boolean(user.has_api4com_api_token));
+  const [api4comSipPassword, setApi4comSipPassword] = useState("");
+  const [hasSipPassword, setHasSipPassword] = useState(Boolean(user.has_api4com_sip_password));
   const isBdr = user.roles.includes("bdr");
   const [changingPassword, setChangingPassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -92,6 +94,9 @@ export function ProfileForm({ user }: { user: User }) {
       if (api4comTokenPolicy === "per_bdr" && api4comApiToken.trim()) {
         payload.api4com_api_token = api4comApiToken.trim();
       }
+      if (api4comSipPassword.trim()) {
+        payload.api4com_sip_password = api4comSipPassword.trim();
+      }
     }
 
     const res = await fetch("/api/users/me", {
@@ -111,6 +116,8 @@ export function ProfileForm({ user }: { user: User }) {
     }
     if (data.user) {
       setHasApiToken(Boolean(data.user.has_api4com_api_token));
+      setHasSipPassword(Boolean(data.user.has_api4com_sip_password));
+      setApi4comSipPassword("");
       setApi4comExtension(data.user.api4com_extension ?? "");
     }
     setMessage(changingPassword && newPassword ? "Perfil e senha atualizados." : "Perfil atualizado.");
@@ -170,6 +177,25 @@ export function ProfileForm({ user }: { user: User }) {
             onClearToken={api4comTokenPolicy === "per_bdr" ? () => void clearApiToken() : undefined}
             clearingToken={loading}
             allowPersonalToken={api4comTokenPolicy === "per_bdr"}
+            sipPassword={api4comSipPassword}
+            onSipPasswordChange={setApi4comSipPassword}
+            hasSipPassword={hasSipPassword}
+            onClearSipPassword={() =>
+              void (async () => {
+                setLoading(true);
+                const res = await fetch("/api/users/me", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ clear_api4com_sip_password: true })
+                });
+                setLoading(false);
+                if (res.ok) {
+                  setHasSipPassword(false);
+                  setApi4comSipPassword("");
+                  setMessage("Senha SIP removida.");
+                }
+              })()
+            }
           />
           {api4comTokenPolicy === "per_bdr" ? (
             <div style={{ marginBottom: "1rem" }}>

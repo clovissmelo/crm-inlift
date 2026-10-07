@@ -18,8 +18,11 @@ function Api4comHelpTooltip() {
         , copie a string completa (ou crie um novo se expirou). Guardado só no servidor.
         <br />
         <br />
-        <strong>Ramal:</strong> no painel API4COM, menu <em>Usuários</em>, veja o ramal do usuário. Sem senha SIP aqui. Sem
-        token pessoal só no modo &quot;cada BDR no perfil&quot; (Admin → API4COM).
+        <strong>Ramal:</strong> no painel API4COM, menu <em>Usuários</em>, veja o ramal do usuário.
+        <br />
+        <br />
+        <strong>Senha SIP:</strong> a mesma exibida ao instalar o Webphone no portal (Usuários → instalar). Necessária
+        para o discador embutido no CRM. Sem token pessoal só no modo &quot;cada BDR no perfil&quot; (Admin → API4COM).
       </span>
     </span>
   );
@@ -68,6 +71,10 @@ export function Api4comBdrFields({
   hasApiToken,
   onClearToken,
   clearingToken,
+  sipPassword,
+  onSipPasswordChange,
+  hasSipPassword,
+  onClearSipPassword,
   allowPersonalToken = true
 }: {
   extension: string;
@@ -77,15 +84,21 @@ export function Api4comBdrFields({
   hasApiToken?: boolean;
   onClearToken?: () => void;
   clearingToken?: boolean;
+  sipPassword?: string;
+  onSipPasswordChange?: (value: string) => void;
+  hasSipPassword?: boolean;
+  onClearSipPassword?: () => void;
   /** false quando o admin usa token global único */
   allowPersonalToken?: boolean;
 }) {
   const [extensionModalOpen, setExtensionModalOpen] = useState(false);
   const [tokenModalOpen, setTokenModalOpen] = useState(false);
+  const [sipModalOpen, setSipModalOpen] = useState(false);
 
   const extensionTrimmed = extension.trim();
   const hasExtension = extensionTrimmed.length > 0;
   const tokenConfigured = Boolean(hasApiToken);
+  const sipConfigured = Boolean(hasSipPassword);
 
   return (
     <div className="api4com-bdr-fields">
@@ -132,6 +145,26 @@ export function Api4comBdrFields({
             )}
           </button>
         ) : null}
+        {onSipPasswordChange ? (
+          <button
+            type="button"
+            className={
+              sipConfigured
+                ? "btn api4com-bdr-action-btn api4com-bdr-btn--token-ok"
+                : "btn api4com-bdr-action-btn"
+            }
+            onClick={() => setSipModalOpen(true)}
+          >
+            {sipConfigured ? (
+              <>
+                Senha SIP cadastrada
+                <Check size={16} aria-hidden className="api4com-bdr-btn-check" />
+              </>
+            ) : (
+              "Senha SIP (discador)"
+            )}
+          </button>
+        ) : null}
       </div>
 
       <CadastroModal
@@ -158,6 +191,37 @@ export function Api4comBdrFields({
           </button>
         </div>
       </CadastroModal>
+
+      {onSipPasswordChange ? (
+        <CadastroModal
+          open={sipModalOpen}
+          title={sipConfigured ? "Alterar senha SIP" : "Configurar senha SIP"}
+          onClose={() => setSipModalOpen(false)}
+        >
+          <div className="field">
+            <label className="label">Senha SIP do ramal</label>
+            <TokenInput
+              value={sipPassword ?? ""}
+              onChange={onSipPasswordChange}
+              hasApiToken={hasSipPassword}
+              placeholder={hasSipPassword ? "•••••••• (preencha para substituir)" : "Senha do Webphone API4COM"}
+            />
+            {hasSipPassword && onClearSipPassword ? (
+              <button type="button" className="btn" style={{ marginTop: 8 }} onClick={onClearSipPassword}>
+                Remover senha SIP salva
+              </button>
+            ) : null}
+            <p className="muted" style={{ marginTop: "0.5rem", fontSize: "0.8125rem" }}>
+              Copie do painel API4COM ao instalar o Webphone do usuário. Salve o perfil para aplicar.
+            </p>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.75rem" }}>
+            <button type="button" className="btn btn-primary" onClick={() => setSipModalOpen(false)}>
+              Concluir
+            </button>
+          </div>
+        </CadastroModal>
+      ) : null}
 
       {allowPersonalToken ? (
         <CadastroModal

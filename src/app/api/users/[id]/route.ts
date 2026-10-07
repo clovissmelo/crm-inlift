@@ -3,6 +3,7 @@ import { hashPassword, jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { get, run } from "@/lib/db";
 import { applyUserApi4comExtension } from "@/lib/api4com/user-extension";
 import { applyUserApi4comApiToken } from "@/lib/api4com/user-token";
+import { applyUserApi4comSipPassword } from "@/lib/api4com/user-sip-password";
 import { resolveAdministrativeRolesFromProfileIds, setUserAccessProfiles } from "@/lib/access-profiles";
 import { deleteUser, getUserById, setUserRoles } from "@/lib/users";
 import { userUpdateSchema } from "@/lib/validators";
@@ -71,6 +72,13 @@ export async function PATCH(request: Request, { params }: Params) {
     await applyUserApi4comApiToken(userId, roles, data.api4com_api_token);
   } else if (data.roles && !data.roles.includes("bdr")) {
     await applyUserApi4comApiToken(userId, data.roles, null, { clear: true });
+  }
+  if (data.clear_api4com_sip_password) {
+    await applyUserApi4comSipPassword(userId, roles, null, { clear: true });
+  } else if (data.api4com_sip_password) {
+    await applyUserApi4comSipPassword(userId, roles, data.api4com_sip_password);
+  } else if (data.roles && !data.roles.includes("bdr")) {
+    await applyUserApi4comSipPassword(userId, roles, null, { clear: true });
   }
 
   const updated = await getUserById(userId);

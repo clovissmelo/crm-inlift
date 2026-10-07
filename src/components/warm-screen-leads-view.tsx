@@ -12,6 +12,7 @@ import type { ProspeccaoListItem } from "@/lib/prospeccao-query";
 import { WarmScreenPromptCell } from "@/components/warm-screen-prompt-cell";
 import { WarmScreenExecutionDetailModal } from "@/components/warm-screen-execution-detail-modal";
 import { formatWarmScreenResultSummary, showWarmScreenResultColumn } from "@/lib/warm-screen/execution-outcome";
+import { useApi4comWebphone } from "@/components/api4com-call-provider";
 
 type Tab = "lista" | "tempo_real" | "execucoes";
 
@@ -76,6 +77,7 @@ export function WarmScreenLeadsView({
   const [detailExecutionId, setDetailExecutionId] = useState<number | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [deletingExecutionId, setDeletingExecutionId] = useState<number | null>(null);
+  const webphone = useApi4comWebphone();
 
   const bdrsWithRamal = bdrs.filter((b) => Boolean(normalizeApi4comExtension(b.api4com_extension ?? "")));
 
@@ -191,7 +193,23 @@ export function WarmScreenLeadsView({
       setRamalModalOpen(true);
       return;
     }
-    void startWarm();
+    void confirmStartWarm(operatorUserId);
+  }
+
+  async function confirmStartWarm(dialUserId: number) {
+    if (!webphone) {
+      setMessage("Telefonia indisponível nesta sessão.");
+      return;
+    }
+    setStarting(true);
+    setMessage(null);
+    const online = await webphone.ensureRegistered({ userId: dialUserId });
+    if (!online) {
+      setStarting(false);
+      setMessage("Conecte o ramal no painel de telefonia antes de iniciar o aquecimento.");
+      return;
+    }
+    await startWarm();
   }
 
   async function startWarm() {
@@ -335,9 +353,9 @@ export function WarmScreenLeadsView({
           abaixo para ficar igual à ligação manual.
         </p>
         <p className="muted">
-          A API4COM precisa do <strong>Webphone ou softphone aberto e conectado</strong> com esse ramal antes de
-          iniciar; senão a execução pausa com erro de telefonia. Com execução ativa, o motor segue nas abas Lista e
-          Execuções (não precisa ficar só em Em tempo real).
+          O CRM vai <strong>registrar o ramal selecionado aqui na tela</strong> (discador embutido). Permita o microfone
+          se o navegador pedir. Sem ramal online a execução pausa com erro de telefonia. Com execução ativa, o motor
+          segue nas abas Lista e Execuções.
         </p>
         <label className="filter-chip" style={{ display: "block", marginBottom: "1rem" }}>
           <span className="filter-chip-label">Rodar como</span>
@@ -363,7 +381,7 @@ export function WarmScreenLeadsView({
             type="button"
             className="btn btn-brand"
             disabled={starting || !dialAsUserId}
-            onClick={() => void startWarm()}
+            onClick={() => void confirmStartWarm(Number(dialAsUserId))}
           >
             {starting ? "Iniciando…" : "Iniciar aquecimento"}
           </button>

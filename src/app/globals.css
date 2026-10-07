@@ -1610,7 +1610,7 @@ table.data-table td.prospeccao-col-phone-count__value {
 
 .api4com-bdr-actions--split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   gap: 0.5rem;
 }
 
@@ -1692,6 +1692,86 @@ table.data-table td.prospeccao-col-phone-count__value {
   visibility: visible;
   opacity: 1;
   pointer-events: auto;
+}
+
+.api4com-webphone-dock {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 55;
+  width: min(22rem, calc(100vw - 2rem));
+}
+
+.api4com-webphone-dock-inner {
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+}
+
+.api4com-webphone-dock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.api4com-webphone-dock-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.api4com-webphone-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--muted, #94a3b8);
+}
+
+.api4com-webphone-dot--online {
+  background: #22c55e;
+}
+
+.api4com-webphone-dot--busy {
+  background: #f59e0b;
+}
+
+.api4com-webphone-dot--error {
+  background: #ef4444;
+}
+
+.api4com-webphone-dock-status {
+  margin: 0 0 0.35rem;
+  font-size: 0.875rem;
+}
+
+.api4com-webphone-dock-detail {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.api4com-webphone-dock-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.api4com-webphone-dock-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  color: #15803d;
+}
+
+.api4com-webphone-hidden-host {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .input-with-icon {

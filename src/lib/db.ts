@@ -107,6 +107,14 @@ async function runMigrations(sql: Sql) {
 
   await ensureLeadGenerationIbgeCacheTable(sql);
   await ensureWarmScreenSchemaColumns(sql);
+  await ensureApi4comWebphoneColumns(sql);
+}
+
+async function ensureApi4comWebphoneColumns(sql: Sql) {
+  await sql.unsafe(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS api4com_sip_password TEXT
+  `);
 }
 
 /** Repara colunas do aquecedor quando migração manual ficou pendente em produção. */

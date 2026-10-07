@@ -17,6 +17,7 @@ type UserForm = {
   access_profile_ids: number[];
   api4com_extension: string;
   api4com_api_token: string;
+  api4com_sip_password: string;
 };
 
 function formHasBdrRole(
@@ -37,7 +38,8 @@ const emptyForm = (): UserForm => ({
   roles: [] as UserRole[],
   access_profile_ids: [],
   api4com_extension: "",
-  api4com_api_token: ""
+  api4com_api_token: "",
+  api4com_sip_password: ""
 });
 
 export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
@@ -49,6 +51,7 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
   const [form, setForm] = useState<UserForm>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [editingHasApiToken, setEditingHasApiToken] = useState(false);
+  const [editingHasSipPassword, setEditingHasSipPassword] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [api4comTokenPolicy, setApi4comTokenPolicy] = useState<Api4comTokenPolicy>("global");
   const [accessProfileOptions, setAccessProfileOptions] = useState<
@@ -105,9 +108,11 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
       roles: [...user.roles],
       access_profile_ids: [...(user.access_profile_ids ?? [])],
       api4com_extension: user.api4com_extension ?? "",
-      api4com_api_token: ""
+      api4com_api_token: "",
+      api4com_sip_password: ""
     });
     setEditingHasApiToken(Boolean(user.has_api4com_api_token));
+    setEditingHasSipPassword(Boolean(user.has_api4com_sip_password));
     setChangingPassword(false);
     setError(null);
     setModalOpen(true);
@@ -137,6 +142,9 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
     };
     if (api4comTokenPolicy === "per_bdr" && effectiveBdr && form.api4com_api_token.trim()) {
       payload.api4com_api_token = form.api4com_api_token.trim();
+    }
+    if (effectiveBdr && form.api4com_sip_password.trim()) {
+      payload.api4com_sip_password = form.api4com_sip_password.trim();
     }
     if (form.password.trim()) payload.password = form.password;
 
@@ -306,6 +314,9 @@ export function UsersAdmin({ canDelete = false }: { canDelete?: boolean }) {
               onApiTokenChange={(v) => setForm((f) => ({ ...f, api4com_api_token: v }))}
               hasApiToken={editingHasApiToken}
               allowPersonalToken={api4comTokenPolicy === "per_bdr"}
+              sipPassword={form.api4com_sip_password}
+              onSipPasswordChange={(v) => setForm((f) => ({ ...f, api4com_sip_password: v }))}
+              hasSipPassword={editingHasSipPassword}
             />
           ) : null}
           <UserRolePicker

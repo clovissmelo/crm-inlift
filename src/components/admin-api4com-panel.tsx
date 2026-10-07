@@ -26,12 +26,19 @@ type SettingRow = {
   has_value?: boolean;
 };
 
-const API4COM_KEYS = ["api4com_api_token", "api4com_gateway", "api4com_webhook_secret", "api4com_token_policy"] as const;
+const API4COM_KEYS = [
+  "api4com_api_token",
+  "api4com_gateway",
+  "api4com_webhook_secret",
+  "api4com_token_policy",
+  "api4com_sip_domain"
+] as const;
 
 export function AdminApi4comPanel() {
   const [status, setStatus] = useState<Status | null>(null);
   const [tokenPolicy, setTokenPolicy] = useState<Api4comTokenPolicy>("global");
   const [gateway, setGateway] = useState("inlift-crm");
+  const [sipDomain, setSipDomain] = useState("");
   const [tokenInput, setTokenInput] = useState("");
   const [webhookSecretInput, setWebhookSecretInput] = useState("");
   const [hasToken, setHasToken] = useState(false);
@@ -64,6 +71,8 @@ export function AdminApi4comPanel() {
       );
       const gw = rows.find((r) => r.key === "api4com_gateway");
       if (gw?.value && gw.value !== "••••••••") setGateway(gw.value);
+      const sip = rows.find((r) => r.key === "api4com_sip_domain");
+      if (sip?.value && sip.value !== "••••••••") setSipDomain(sip.value);
       const pol = rows.find((r) => r.key === "api4com_token_policy");
       if (pol?.value && pol.value !== "••••••••") {
         setTokenPolicy(pol.value === "per_bdr" ? "per_bdr" : "global");
@@ -85,7 +94,8 @@ export function AdminApi4comPanel() {
     setMessage(null);
     const payload: Array<{ key: string; value: string | null }> = [
       { key: "api4com_gateway", value: gateway.trim() || "inlift-crm" },
-      { key: "api4com_token_policy", value: tokenPolicy }
+      { key: "api4com_token_policy", value: tokenPolicy },
+      { key: "api4com_sip_domain", value: sipDomain.trim() || null }
     ];
     if (tokenInput.trim()) payload.push({ key: "api4com_api_token", value: tokenInput.trim() });
     if (webhookSecretInput.trim()) payload.push({ key: "api4com_webhook_secret", value: webhookSecretInput.trim() });
@@ -192,6 +202,19 @@ export function AdminApi4comPanel() {
           <div className="field">
             <label className="label">Gateway (metadata)</label>
             <input className="input" value={gateway} onChange={(e) => setGateway(e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="label">Domínio SIP (discador no CRM)</label>
+            <input
+              className="input"
+              value={sipDomain}
+              onChange={(e) => setSipDomain(e.target.value)}
+              placeholder="suaempresa.api4com.com"
+              autoComplete="off"
+            />
+            <p className="muted" style={{ fontSize: "0.8125rem", marginBottom: 0, marginTop: "0.35rem" }}>
+              Realm/WSS do Webphone (porta 6443). Também pode usar <code>API4COM_SIP_DOMAIN</code> na Vercel.
+            </p>
           </div>
           <div className="field">
             <label className="label">Segredo do webhook (opcional)</label>

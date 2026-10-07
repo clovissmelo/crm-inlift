@@ -2,6 +2,7 @@ import { hashPassword, jsonUnauthorized, requireApiUser } from "@/lib/auth";
 import { get, run } from "@/lib/db";
 import { applyUserApi4comExtension } from "@/lib/api4com/user-extension";
 import { applyUserApi4comApiToken } from "@/lib/api4com/user-token";
+import { applyUserApi4comSipPassword } from "@/lib/api4com/user-sip-password";
 import { getUserById } from "@/lib/users";
 import { profileUpdateSchema } from "@/lib/validators";
 
@@ -39,7 +40,13 @@ export async function PATCH(request: Request) {
   if (data.email) await run("UPDATE users SET email = @email WHERE id = @id", { email: data.email, id: user.id });
   if (data.phone !== undefined) await run("UPDATE users SET phone = @phone WHERE id = @id", { phone: data.phone ?? null, id: user.id });
 
-  if (data.api4com_extension !== undefined || data.api4com_api_token !== undefined || data.clear_api4com_api_token) {
+  if (
+    data.api4com_extension !== undefined ||
+    data.api4com_api_token !== undefined ||
+    data.clear_api4com_api_token ||
+    data.api4com_sip_password !== undefined ||
+    data.clear_api4com_sip_password
+  ) {
     if (!user.roles.includes("bdr")) {
       return Response.json({ error: "Configuração API4COM disponível apenas para perfil BDR." }, { status: 400 });
     }
@@ -55,6 +62,11 @@ export async function PATCH(request: Request) {
     await applyUserApi4comApiToken(user.id, user.roles, null, { clear: true });
   } else if (data.api4com_api_token !== undefined && data.api4com_api_token !== null) {
     await applyUserApi4comApiToken(user.id, user.roles, data.api4com_api_token);
+  }
+  if (data.clear_api4com_sip_password) {
+    await applyUserApi4comSipPassword(user.id, user.roles, null, { clear: true });
+  } else if (data.api4com_sip_password !== undefined && data.api4com_sip_password !== null) {
+    await applyUserApi4comSipPassword(user.id, user.roles, data.api4com_sip_password);
   }
 
   const updated = await getUserById(user.id);
