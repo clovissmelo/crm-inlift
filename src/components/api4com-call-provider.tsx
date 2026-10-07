@@ -70,13 +70,18 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
       setActiveCall(null);
       return;
     }
+    if (isWarmScreenPath(pathname)) {
+      setActiveCall(null);
+      setCallScriptBody(null);
+      return;
+    }
     const res = await fetch("/api/api4com/calls/active");
     if (!res.ok) return;
     const data = (await res.json()) as { items: ActiveCallForScript[] };
     const next = data.items?.[0] ?? null;
     setActiveCall(next);
     if (!next) setCallScriptBody(null);
-  }, [canDial]);
+  }, [canDial, pathname]);
 
   useEffect(() => {
     if (!canDial) return;
@@ -155,9 +160,14 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
   }, [pending, canDial, onProspeccaoPage, activeCall, refreshPending]);
 
   useEffect(() => {
-    if (onProspeccaoPage) return;
+    if (onProspeccaoPage && !onWarmScreenPage) return;
     setResultCallId(null);
-  }, [onProspeccaoPage]);
+    if (onWarmScreenPage) {
+      setActiveCall(null);
+      setCallScriptBody(null);
+      setPanelCollapsed(true);
+    }
+  }, [onProspeccaoPage, onWarmScreenPage]);
 
   useEffect(() => {
     if (resultCallId == null) return;

@@ -1,6 +1,11 @@
 import { get, all, nowIso, run } from "@/lib/db";
 import { api4comHangupCall, api4comStartCall } from "@/lib/api4com/client";
 import { WARM_SCREEN_PURPOSE } from "@/lib/warm-screen/constants";
+import {
+  callIsWarmScreenCall,
+  mergeApi4comWebhookMetadata,
+  metadataIndicatesWarmScreen
+} from "@/lib/warm-screen/call-marker";
 import { getApi4comConfig } from "@/lib/api4com/config";
 import { resolveApi4comApiTokenForUser } from "@/lib/api4com/user-token";
 import { API4COM_NO_EXTENSION_MESSAGE } from "@/lib/api4com/dial-identity-shared";
@@ -39,6 +44,21 @@ const SQL_IS_WARM_SCREEN_CALL = `
     OR EXISTS (
       SELECT 1 FROM warm_screen_execution_items wi
       WHERE wi.api4com_call_row_id = c.id
+    )
+    OR EXISTS (
+      SELECT 1 FROM warm_screen_execution_items wi
+      INNER JOIN warm_screen_executions we ON we.id = wi.execution_id
+      WHERE we.status IN ('running', 'paused')
+        AND wi.status = 'dialing'
+        AND wi.client_id = c.client_id
+        AND (
+          wi.api4com_call_row_id = c.id
+          OR (
+            wi.api4com_call_row_id IS NULL
+            AND wi.phone_dialed IS NOT NULL
+            AND wi.phone_dialed = c.phone_dialed
+          )
+        )
     )
   )
 `;
@@ -410,7 +430,7 @@ export async function getCallDetailForUser(id: number, userId: number) {
 
 export async function listActiveCallsForUser(userId: number) {
   await expireStaleApi4comCalls({ userId });
-  return all<
+  const rows = await all<
     Api4comCallRow & {
       client_name: string | null;
       contact_name: string | null;
@@ -438,6 +458,13 @@ export async function listActiveCallsForUser(userId: number) {
     `,
     { userId, warmScreenPurpose: WARM_SCREEN_PURPOSE, ...activeCallTimeParams() }
   );
+
+  const manual: typeof rows = [];
+  for (const row of rows) {
+    if (await callIsWarmScreenCall(row.id, row.metadata_json)) continue;
+    manual.push(row);
+  }
+  return manual;
 }
 
 export async function listPendingCallsForUser(userId: number) {
@@ -760,8 +787,9 @@ export async function processApi4comWebhook(payload: Api4comWebhookPayload, webh
     }
   })();
   const isWarmScreen =
-    rowMeta.purpose === WARM_SCREEN_PURPOSE ||
-    (typeof payload.metadata?.purpose === "string" && payload.metadata.purpose === WARM_SCREEN_PURPOSE);
+    metadataIndicatesWarmScreen(callRow.metadata_json) ||
+    (typeof payload.metadata?.purpose === "string" && payload.metadata.purpose === WARM_SCREEN_PURPOSE) ||
+    (await callIsWarmScreenCall(callRow.id, callRow.metadata_json));
 
   const resultPending = isHangup && !callRow.approach_id && !isWarmScreen;
   if (resultPending) {
@@ -800,7 +828,7 @@ export async function processApi4comWebhook(payload: Api4comWebhookPayload, webh
       hangupLabel: payload.hangupCause ?? null,
       recordUrl: payload.recordUrl ?? null,
       direction: payload.direction ?? null,
-      metaJson: JSON.stringify(payload),
+      metaJson: mergeApi4comWebhookMetadata(callRow.metadata_json, payload as Record<string, unknown>),
       eventId: webhookEventId,
       resultPending,
       now: nowIso()
