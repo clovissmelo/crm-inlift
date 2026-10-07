@@ -54,7 +54,8 @@ export function WarmScreenLeadsView({
   companies,
   priorityFilters,
   defaultBdrUserId = null,
-  isAdmin = false
+  isAdmin = false,
+  operatorUserId
 }: {
   initialItems: ProspeccaoListItem[];
   initialTotal: number;
@@ -64,6 +65,7 @@ export function WarmScreenLeadsView({
   priorityFilters: Array<{ slug: string; name: string }>;
   defaultBdrUserId?: number | null;
   isAdmin?: boolean;
+  operatorUserId: number;
 }) {
   const [tab, setTab] = useState<Tab>("lista");
   const [items, setItems] = useState(initialItems);
@@ -81,6 +83,13 @@ export function WarmScreenLeadsView({
   const [deletingExecutionId, setDeletingExecutionId] = useState<number | null>(null);
 
   const bdrsWithRamal = bdrs.filter((b) => Boolean(normalizeApi4comExtension(b.api4com_extension ?? "")));
+
+  function defaultWarmDialUserId() {
+    if (bdrsWithRamal.some((b) => b.id === operatorUserId)) {
+      return String(operatorUserId);
+    }
+    return bdrsWithRamal[0] ? String(bdrsWithRamal[0].id) : "";
+  }
 
   const [filters, setFilters] = useState({
     product_id: "",
@@ -180,7 +189,7 @@ export function WarmScreenLeadsView({
         setMessage("Nenhuma BDR com ramal cadastrado. Configure em Usuários antes de aquecer.");
         return;
       }
-      setDialAsUserId((prev) => prev || String(bdrsWithRamal[0]!.id));
+      setDialAsUserId((prev) => prev || defaultWarmDialUserId());
       setRamalModalOpen(true);
       return;
     }
@@ -309,7 +318,9 @@ export function WarmScreenLeadsView({
         }}
       >
         <p className="muted" style={{ marginTop: 0 }}>
-          Escolha a BDR cujo ramal e token API4COM serão usados para discar nesta execução.
+          O aquecedor disca com o <strong>token e ramal da BDR selecionada</strong> — não necessariamente o mesmo
+          do seu login. Na prospecção manual, vale o seu Meu perfil. Se você mesmo tem ramal, escolha seu nome
+          abaixo para ficar igual à ligação manual.
         </p>
         <label className="filter-chip" style={{ display: "block", marginBottom: "1rem" }}>
           <span className="filter-chip-label">Rodar como</span>

@@ -92,7 +92,7 @@ export async function advanceWarmScreenExecution(executionId: number): Promise<{
   if (!exec) return { advanced: false, message: "Execução não encontrada." };
   if (exec.status !== "running") return { advanced: false, message: "Execução não está rodando.", execution: exec };
 
-  await expireWarmScreenStaleCalls({ runnerUserId: exec.runner_user_id, executionId: exec.id });
+  await expireWarmScreenStaleCalls({ runnerUserId: exec.dial_user_id, executionId: exec.id });
   await recoverStuckWarmScreenItems(exec.id);
   await settleDialingItemIfCallEnded(executionId);
 
@@ -101,7 +101,7 @@ export async function advanceWarmScreenExecution(executionId: number): Promise<{
     return { advanced: false, message: "Aguardando encerramento da ligação.", execution: exec };
   }
 
-  const active = await listActiveCallsForUser(exec.runner_user_id);
+  const active = await listActiveCallsForUser(exec.dial_user_id);
   if (active.length > 0) {
     return { advanced: false, message: "Ramal ocupado.", execution: exec };
   }
@@ -160,7 +160,7 @@ export async function advanceWarmScreenExecution(executionId: number): Promise<{
 
   try {
     const result = await initiateApi4comCall({
-      userId: exec.runner_user_id,
+      userId: exec.dial_user_id,
       dialIdentityUserId: exec.dial_user_id,
       clientId: item.client_id,
       contactId: phone.primary_contact_id,

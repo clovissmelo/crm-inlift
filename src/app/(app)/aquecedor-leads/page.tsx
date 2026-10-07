@@ -45,6 +45,7 @@ export default async function AquecedorLeadsPage() {
       priorityFilters={priorityFilters}
       defaultBdrUserId={defaultBdr ?? null}
       isAdmin={user.roles.includes("admin")}
+      operatorUserId={user.id}
     />
   );
 }
