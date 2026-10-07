@@ -31,6 +31,11 @@ function activeCallTimeParams() {
   };
 }
 
+/** Ligações do motor de aquecimento não usam painel de roteiro (só discagem manual). */
+const SQL_EXCLUDE_WARM_SCREEN_CALLS = `
+  AND COALESCE(c.metadata_json::jsonb ->> 'purpose', '') <> @warmScreenPurpose
+`;
+
 /** Marca ligações presas em initiating/ringing/in_progress como failed (evita bloqueio permanente). */
 export async function expireStaleApi4comCalls(scope?: {
   userId?: number;
@@ -404,10 +409,11 @@ export async function listActiveCallsForUser(userId: number) {
           (c.status = 'in_progress' AND c.updated_at >= @inProgressSince)
           OR (c.status IN ('initiating', 'ringing') AND c.updated_at >= @ringingSince)
         )
+        ${SQL_EXCLUDE_WARM_SCREEN_CALLS}
       ORDER BY c.id DESC
       LIMIT 1
     `,
-    { userId, ...activeCallTimeParams() }
+    { userId, warmScreenPurpose: WARM_SCREEN_PURPOSE, ...activeCallTimeParams() }
   );
 }
 
@@ -429,12 +435,14 @@ export async function listPendingCallsForUser(userId: number) {
         AND c.result_pending = true
         AND c.approach_id IS NULL
         AND c.status = 'completed'
+        ${SQL_EXCLUDE_WARM_SCREEN_CALLS}
         AND c.id = (
           SELECT c2.id FROM api4com_calls c2
           WHERE c2.user_id = @userId
             AND c2.result_pending = true
             AND c2.approach_id IS NULL
             AND c2.status = 'completed'
+            AND COALESCE(c2.metadata_json::jsonb ->> 'purpose', '') <> @warmScreenPurpose
             AND COALESCE(c2.dial_session_root_id, c2.id) = COALESCE(c.dial_session_root_id, c.id)
           ORDER BY c2.ended_at DESC NULLS LAST, c2.id DESC
           LIMIT 1
@@ -442,7 +450,7 @@ export async function listPendingCallsForUser(userId: number) {
       ORDER BY c.ended_at DESC NULLS LAST, c.id DESC
       LIMIT 20
     `,
-    { userId }
+    { userId, warmScreenPurpose: WARM_SCREEN_PURPOSE }
   );
 }
 
