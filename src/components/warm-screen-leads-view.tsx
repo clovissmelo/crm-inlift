@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Play, Pause, Square, Radio, List } from "lucide-react";
 import { ProspeccaoPriorityBadge } from "@/components/prospeccao-priority-badge";
+import { CadastroModal } from "@/components/cadastro-ui";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
 import { PageIntro } from "@/components/page-intro";
+import { normalizeApi4comExtension } from "@/lib/api4com/phone";
 import type { Company, Product, User } from "@/lib/types";
 import type { ProspeccaoListItem } from "@/lib/prospeccao-query";
 
@@ -60,7 +62,10 @@ export function WarmScreenLeadsView({
   const [activeExecution, setActiveExecution] = useState<Execution | null>(null);
   const [activeItems, setActiveItems] = useState<ExecutionItem[]>([]);
   const [executions, setExecutions] = useState<Execution[]>([]);
-  const [dialAsUserId, setDialAsUserId] = useState(defaultBdrUserId != null ? String(defaultBdrUserId) : "");
+  const [dialAsUserId, setDialAsUserId] = useState("");
+  const [ramalModalOpen, setRamalModalOpen] = useState(false);
+
+  const bdrsWithRamal = bdrs.filter((b) => Boolean(normalizeApi4comExtension(b.api4com_extension ?? "")));
 
   const [filters, setFilters] = useState({
     product_id: "",
@@ -143,9 +148,23 @@ export function WarmScreenLeadsView({
     return names.length ? names.join(", ") : "—";
   }
 
+  function openRamalModalOrStart() {
+    if (isAdmin) {
+      if (bdrsWithRamal.length === 0) {
+        setMessage("Nenhuma BDR com ramal cadastrado. Configure em Usuários antes de aquecer.");
+        return;
+      }
+      setDialAsUserId((prev) => prev || String(bdrsWithRamal[0]!.id));
+      setRamalModalOpen(true);
+      return;
+    }
+    void startWarm();
+  }
+
   async function startWarm() {
     setStarting(true);
     setMessage(null);
+    setRamalModalOpen(false);
     const body: Record<string, unknown> = {
       filters: {
         prioridade: filters.prioridade || undefined,
@@ -155,7 +174,13 @@ export function WarmScreenLeadsView({
         search: filters.search || undefined
       }
     };
-    if (isAdmin && dialAsUserId) {
+    if (isAdmin) {
+      if (!dialAsUserId) {
+        setStarting(false);
+        setMessage("Selecione por qual ramal deseja rodar o aquecimento.");
+        setRamalModalOpen(true);
+        return;
+      }
       body.dial_as_user_id = Number(dialAsUserId);
     }
     const res = await fetch("/api/warm-screen/executions", {
@@ -219,12 +244,53 @@ export function WarmScreenLeadsView({
             activeExecution?.status === "running" ||
             activeExecution?.status === "paused"
           }
-          onClick={() => void startWarm()}
+          onClick={() => openRamalModalOrStart()}
         >
           <Play size={16} style={{ marginRight: 6, verticalAlign: "middle" }} />
           {starting ? "Iniciando…" : "Aquecer leads"}
         </button>
       </div>
+
+      <CadastroModal
+        open={ramalModalOpen}
+        title="Ramal do aquecimento"
+        onClose={() => {
+          if (!starting) setRamalModalOpen(false);
+        }}
+      >
+        <p className="muted" style={{ marginTop: 0 }}>
+          Escolha a BDR cujo ramal e token API4COM serão usados para discar nesta execução.
+        </p>
+        <label className="filter-chip" style={{ display: "block", marginBottom: "1rem" }}>
+          <span className="filter-chip-label">Rodar como</span>
+          <select
+            className="input"
+            value={dialAsUserId}
+            onChange={(e) => setDialAsUserId(e.target.value)}
+            disabled={starting}
+          >
+            <option value="">Selecione…</option>
+            {bdrsWithRamal.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name} — ramal {normalizeApi4comExtension(b.api4com_extension ?? "")}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+          <button type="button" className="btn" disabled={starting} onClick={() => setRamalModalOpen(false)}>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={starting || !dialAsUserId}
+            onClick={() => void startWarm()}
+          >
+            {starting ? "Iniciando…" : "Iniciar aquecimento"}
+          </button>
+        </div>
+      </CadastroModal>
 
       {message ? <p className="muted">{message}</p> : null}
 
