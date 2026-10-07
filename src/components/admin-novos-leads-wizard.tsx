@@ -1135,7 +1135,7 @@ export function AdminNovosLeadsWizard() {
           </div>
           <div className="lead-gen-start-actions">
             <button
-              className="btn btn-primary lead-gen-start-btn"
+              className="btn btn-brand"
               type="button"
               disabled={starting || shownRunActive || anpPreviewLoading}
               onClick={() => void openAnpPreviewModal()}
@@ -1144,8 +1144,8 @@ export function AdminNovosLeadsWizard() {
                 "Consultando ANP…"
               ) : (
                 <>
-                  <Play size={17} strokeWidth={2.5} fill="currentColor" aria-hidden className="lead-gen-start-btn-icon" />
-                  Solicitar leads
+                  <Play size={16} style={{ marginRight: 6, verticalAlign: "middle" }} aria-hidden />
+                  {starting ? "Iniciando…" : "Criação de leads"}
                 </>
               )}
             </button>

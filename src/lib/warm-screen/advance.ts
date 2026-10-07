@@ -7,7 +7,7 @@ import {
   getExecutionById,
   type WarmScreenExecutionRow
 } from "@/lib/warm-screen/executions";
-import { expireWarmScreenStaleCalls } from "@/lib/warm-screen/stale-calls";
+import { expireWarmScreenStaleCalls, recoverStuckWarmScreenItems } from "@/lib/warm-screen/stale-calls";
 import { finalizeWarmScreenCall } from "@/lib/warm-screen/call-outcome";
 
 async function getNextPendingItem(executionId: number) {
@@ -48,13 +48,9 @@ async function settleDialingItemIfCallEnded(executionId: number) {
   if (call.status !== "completed" && call.status !== "failed") return false;
 
   if (call.status === "failed" && !call.approach_id) {
-    await completeWarmScreenItem({
-      itemId: dialing.id,
-      executionId,
-      status: "failed",
-      callRowId: call.id,
-      errorMessage: "Ligação encerrada (falha ou timeout)."
-    });
+    const { persistCallTechnicalResult } = await import("@/lib/api4com/persist-technical-result");
+    await persistCallTechnicalResult(call.id);
+    await finalizeWarmScreenCall(call.id);
     return true;
   }
 
@@ -80,7 +76,8 @@ export async function advanceWarmScreenExecution(executionId: number): Promise<{
   if (!exec) return { advanced: false, message: "Execução não encontrada." };
   if (exec.status !== "running") return { advanced: false, message: "Execução não está rodando.", execution: exec };
 
-  await expireWarmScreenStaleCalls({ userId: exec.dial_user_id });
+  await expireWarmScreenStaleCalls({ runnerUserId: exec.runner_user_id, executionId: exec.id });
+  await recoverStuckWarmScreenItems(exec.id);
   await settleDialingItemIfCallEnded(executionId);
 
   const stillDialing = await getDialingItem(executionId);
@@ -88,7 +85,7 @@ export async function advanceWarmScreenExecution(executionId: number): Promise<{
     return { advanced: false, message: "Aguardando encerramento da ligação.", execution: exec };
   }
 
-  const active = await listActiveCallsForUser(exec.dial_user_id);
+  const active = await listActiveCallsForUser(exec.runner_user_id);
   if (active.length > 0) {
     return { advanced: false, message: "Ramal ocupado.", execution: exec };
   }

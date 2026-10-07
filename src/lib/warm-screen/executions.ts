@@ -2,6 +2,7 @@ import type { ClientFilters } from "@/lib/clients-query";
 import { all, get, nowIso, run } from "@/lib/db";
 import { queryWarmScreenLeadQueue } from "@/lib/warm-screen/queue";
 import { listActiveProductIdsInQueue } from "@/lib/client-product-prospeccao";
+import { buildWarmScreenPrompt, type WarmScreenPromptPayload } from "@/lib/warm-screen/prompt-lines";
 
 export type WarmScreenExecutionStatus = "running" | "paused" | "stopped" | "completed" | "failed";
 
@@ -126,6 +127,88 @@ export async function listExecutionItems(executionId: number) {
       : typeof r.product_ids === "string"
         ? (JSON.parse(r.product_ids) as number[])
         : []
+  }));
+}
+
+function parseItemProductIds(r: { product_ids: unknown }) {
+  return Array.isArray(r.product_ids)
+    ? (r.product_ids as number[])
+    : typeof r.product_ids === "string"
+      ? (JSON.parse(r.product_ids) as number[])
+      : [];
+}
+
+export type WarmScreenExecutionItemView = {
+  id: number;
+  client_id: number;
+  sort_order: number;
+  status: string;
+  phone_dialed: string | null;
+  skip_reason: string | null;
+  error_message: string | null;
+  prompt: WarmScreenPromptPayload;
+};
+
+export async function listExecutionItemsForRealtime(
+  executionId: number,
+  execution: Pick<WarmScreenExecutionRow, "status" | "current_item_id">
+): Promise<WarmScreenExecutionItemView[]> {
+  const rows = await all<
+    WarmScreenItemRow & {
+      product_ids: unknown;
+      call_status: string | null;
+      call_error_message: string | null;
+      call_result_pending: boolean | null;
+    }
+  >(
+    `
+      SELECT
+        i.*,
+        c.status AS call_status,
+        c.error_message AS call_error_message,
+        c.result_pending AS call_result_pending
+      FROM warm_screen_execution_items i
+      LEFT JOIN api4com_calls c ON c.id = i.api4com_call_row_id
+      WHERE i.execution_id = @id
+      ORDER BY i.sort_order
+    `,
+    { id: executionId }
+  );
+
+  const normalized = rows.map((r) => ({
+    ...r,
+    product_ids: parseItemProductIds(r)
+  }));
+
+  const activeDialing = normalized.find((i) => i.status === "dialing");
+  const firstPending = normalized.find((i) => i.status === "pending");
+  const queueBlocked = Boolean(activeDialing);
+
+  return normalized.map((item) => ({
+    id: item.id,
+    client_id: item.client_id,
+    sort_order: item.sort_order,
+    status: item.status,
+    phone_dialed: item.phone_dialed,
+    skip_reason: item.skip_reason,
+    error_message: item.error_message,
+    prompt: buildWarmScreenPrompt(
+      item,
+      item.api4com_call_row_id
+        ? {
+            status: item.call_status,
+            error_message: item.call_error_message,
+            result_pending: item.call_result_pending
+          }
+        : null,
+      {
+        executionStatus: execution.status,
+        queueBlocked: queueBlocked && item.status === "pending",
+        isCurrent:
+          execution.current_item_id === item.id ||
+          (!activeDialing && firstPending?.id === item.id && item.status === "pending")
+      }
+    )
   }));
 }
 

@@ -1,6 +1,6 @@
 import { requireWarmScreenApiUser, isManagerOrAdmin } from "@/lib/warm-screen/api-auth";
 import { canViewWarmScreenExecution } from "@/lib/warm-screen/permissions";
-import { getExecutionById, listExecutionItems } from "@/lib/warm-screen/executions";
+import { getExecutionById, listExecutionItemsForRealtime } from "@/lib/warm-screen/executions";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { user, denied } = await requireWarmScreenApiUser();
@@ -24,6 +24,6 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     return Response.json({ error: "Sem permissão" }, { status: 403 });
   }
 
-  const items = await listExecutionItems(id);
+  const items = await listExecutionItemsForRealtime(id, execution);
   return Response.json({ execution, items });
 }

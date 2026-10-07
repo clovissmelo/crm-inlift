@@ -1,5 +1,5 @@
 import { requireWarmScreenApiUser } from "@/lib/warm-screen/api-auth";
-import { getRunningExecutionForRunner, listExecutionItems } from "@/lib/warm-screen/executions";
+import { getRunningExecutionForRunner, listExecutionItemsForRealtime } from "@/lib/warm-screen/executions";
 import { advanceWarmScreenExecution } from "@/lib/warm-screen/advance";
 
 export async function GET(request: Request) {
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
   const { getExecutionById } = await import("@/lib/warm-screen/executions");
   const fresh = await getExecutionById(execution.id);
-  const items = fresh ? await listExecutionItems(fresh.id) : [];
+  const items = fresh ? await listExecutionItemsForRealtime(fresh.id, fresh) : [];
 
   return Response.json({ execution: fresh, items });
 }

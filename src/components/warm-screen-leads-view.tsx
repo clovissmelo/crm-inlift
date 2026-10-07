@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Play, Pause, Square, Radio, List } from "lucide-react";
+import { Play, Pause, Square, Radio, List, Info } from "lucide-react";
 import { ProspeccaoPriorityBadge } from "@/components/prospeccao-priority-badge";
 import { CadastroModal } from "@/components/cadastro-ui";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
@@ -10,6 +10,14 @@ import { PageIntro } from "@/components/page-intro";
 import { normalizeApi4comExtension } from "@/lib/api4com/phone";
 import type { Company, Product, User } from "@/lib/types";
 import type { ProspeccaoListItem } from "@/lib/prospeccao-query";
+import { WarmScreenPromptCell } from "@/components/warm-screen-prompt-cell";
+import { WarmScreenExecutionDetailModal } from "@/components/warm-screen-execution-detail-modal";
+import {
+  formatWarmScreenResultSummary,
+  showWarmScreenResultColumn,
+  warmScreenProgressDetail,
+  warmScreenProgressPct
+} from "@/lib/warm-screen/execution-outcome";
 
 type Tab = "lista" | "tempo_real" | "execucoes";
 
@@ -32,6 +40,10 @@ type ExecutionItem = {
   status: string;
   phone_dialed: string | null;
   skip_reason: string | null;
+  prompt: {
+    lines: Array<{ text: string; variant?: "dim" | "warn" | "err" | "ok" }>;
+    live: boolean;
+  };
 };
 
 export function WarmScreenLeadsView({
@@ -64,6 +76,8 @@ export function WarmScreenLeadsView({
   const [executions, setExecutions] = useState<Execution[]>([]);
   const [dialAsUserId, setDialAsUserId] = useState("");
   const [ramalModalOpen, setRamalModalOpen] = useState(false);
+  const [detailExecutionId, setDetailExecutionId] = useState<number | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   const bdrsWithRamal = bdrs.filter((b) => Boolean(normalizeApi4comExtension(b.api4com_extension ?? "")));
 
@@ -131,9 +145,20 @@ export function WarmScreenLeadsView({
   }, [tab, loadExecutions]);
 
   useEffect(() => {
+    if (tab !== "execucoes") return;
+    const t = window.setInterval(() => void loadExecutions(), 2500);
+    return () => window.clearInterval(t);
+  }, [tab, loadExecutions]);
+
+  function openExecutionDetail(id: number) {
+    setDetailExecutionId(id);
+    setDetailModalOpen(true);
+  }
+
+  useEffect(() => {
     if (tab !== "tempo_real") return;
     void pollActive();
-    const t = window.setInterval(() => void pollActive(), 2000);
+    const t = window.setInterval(() => void pollActive(), 1500);
     return () => window.clearInterval(t);
   }, [tab, pollActive]);
 
@@ -411,12 +436,13 @@ export function WarmScreenLeadsView({
                   </button>
                 ) : null}
               </div>
-              <table className="data-table">
+              <table className="data-table warm-screen-realtime-table">
                 <thead>
                   <tr>
                     <th>Cliente</th>
                     <th>Status</th>
                     <th>Telefone</th>
+                    <th>Prompt</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -424,12 +450,25 @@ export function WarmScreenLeadsView({
                     .filter((i) => i.status === "dialing" || i.status === "pending")
                     .slice(0, 8)
                     .map((i) => (
-                      <tr key={i.id}>
+                      <tr key={i.id} className={i.status === "dialing" ? "warm-screen-row-active" : undefined}>
                         <td>
                           <Link href={`/clientes/${i.client_id}`}>#{i.client_id}</Link>
                         </td>
                         <td>{i.status}</td>
                         <td>{i.phone_dialed ?? "—"}</td>
+                        <td>
+                          <WarmScreenPromptCell
+                            prompt={
+                              i.prompt ?? {
+                                live: i.status === "dialing",
+                                lines: [
+                                  { text: `C:\\INLIFT>WARM.EXE /client=${i.client_id}`, variant: "dim" },
+                                  { text: i.status === "dialing" ? "[*] processando…" : "[queue] aguardando", variant: "ok" }
+                                ]
+                              }
+                            }
+                          />
+                        </td>
                       </tr>
                     ))}
                 </tbody>
@@ -441,25 +480,81 @@ export function WarmScreenLeadsView({
         </div>
       ) : null}
 
+      <WarmScreenExecutionDetailModal
+        executionId={detailExecutionId}
+        open={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        bdrs={bdrs}
+        companies={companies}
+        products={products}
+        priorityFilters={priorityFilters}
+      />
+
       {tab === "execucoes" ? (
         <div className="panel table-wrap">
-          <table className="data-table">
+          <table className="data-table lead-gen-history-table">
             <thead>
               <tr>
                 <th>#</th>
                 <th>Status</th>
                 <th>Início</th>
+                <th>Resultado</th>
                 <th>Progresso</th>
                 <th>Ações</th>
               </tr>
             </thead>
             <tbody>
-              {executions.map((ex) => (
-                <tr key={ex.id}>
+              {executions.map((ex) => {
+                const active = ex.status === "running" || ex.status === "paused";
+                const showResult = showWarmScreenResultColumn(ex);
+                const detailSelected = detailModalOpen && detailExecutionId === ex.id;
+                const pct = warmScreenProgressPct(ex);
+                return (
+                <tr key={ex.id} className={detailSelected ? "is-selected" : undefined}>
                   <td>{ex.id}</td>
                   <td>{statusLabel[ex.status] ?? ex.status}</td>
-                  <td>{new Date(ex.started_at).toLocaleString("pt-BR")}</td>
-                  <td>
+                  <td className="lead-gen-history-when">{new Date(ex.started_at).toLocaleString("pt-BR")}</td>
+                  <td className="lead-gen-history-result">
+                    <div className="lead-gen-history-result-row">
+                      <span>
+                        {showResult ? (
+                          active ? (
+                            <div className="lead-gen-progress lead-gen-progress--compact">
+                              <div className="lead-gen-progress-head">
+                                <span className="lead-gen-progress-pct">{pct}%</span>
+                                <span className="lead-gen-progress-detail muted">{warmScreenProgressDetail(ex)}</span>
+                              </div>
+                              <div
+                                className="lead-gen-progress-track"
+                                role="progressbar"
+                                aria-valuenow={pct}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                              >
+                                <div className="lead-gen-progress-fill" style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          ) : (
+                            formatWarmScreenResultSummary(ex)
+                          )
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </span>
+                      {showResult ? (
+                        <button
+                          type="button"
+                          className={`btn btn-icon-sm lead-gen-history-info${detailSelected ? " is-active" : ""}`}
+                          title="Detalhes da execução"
+                          aria-label="Detalhes da execução"
+                          onClick={() => openExecutionDetail(ex.id)}
+                        >
+                          <Info size={15} aria-hidden />
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="muted">
                     {ex.items_done}/{ex.items_total} · {ex.items_warmed} aquecidos
                   </td>
                   <td style={{ display: "flex", gap: 4 }}>
@@ -480,7 +575,8 @@ export function WarmScreenLeadsView({
                     ) : null}
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>
