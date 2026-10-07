@@ -25,9 +25,11 @@ export function formatWarmScreenResultSummary(
   return parts.join(" · ");
 }
 
-export function showWarmScreenResultColumn(
-  ex: Pick<WarmScreenExecutionRow, "status" | "items_done" | "items_total">
-): boolean {
+export function showWarmScreenResultColumn(ex: {
+  status: string;
+  items_done: number;
+  items_total: number;
+}): boolean {
   if (ex.items_total <= 0) return false;
   if (["running", "paused"].includes(ex.status)) return true;
   if (ex.items_done > 0) return true;

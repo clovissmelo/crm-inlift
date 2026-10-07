@@ -35,6 +35,7 @@ export async function enrichClientsWithQueuePriority(
   if (items.length === 0) return [];
 
   const ids = items.map((i) => i.id);
+  const idsPg = `{${ids.join(",")}}`;
   const todayStart = spDayStartUtcIso();
   const nowIso = new Date().toISOString();
   const priorityTypes = await listProspeccaoPriorityTypes();
@@ -78,7 +79,7 @@ export async function enrichClientsWithQueuePriority(
       WHERE c.id = ANY(@ids::int[])
       GROUP BY c.id, pending_fu.scheduled_at, c.prospeccao_completed_dial_rounds, c.warm_screen_confirmed_at
     `,
-    { ids, nowIso, todayStart }
+    { ids: idsPg, nowIso, todayStart }
   );
 
   const byId = new Map(rows.map((r) => [r.id, r]));

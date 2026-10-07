@@ -40,7 +40,7 @@ type ExecutionItem = {
   status: string;
   phone_dialed: string | null;
   skip_reason: string | null;
-  prompt: {
+  prompt?: {
     lines: Array<{ text: string; variant?: "dim" | "warn" | "err" | "ok" }>;
     live: boolean;
   };

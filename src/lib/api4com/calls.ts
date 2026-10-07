@@ -459,7 +459,7 @@ export async function listActiveCallsForUser(userId: number) {
     { userId, warmScreenPurpose: WARM_SCREEN_PURPOSE, ...activeCallTimeParams() }
   );
 
-  const manual: typeof rows = [];
+  const manual: Array<(typeof rows)[number]> = [];
   for (const row of rows) {
     if (await callIsWarmScreenCall(row.id, row.metadata_json)) continue;
     manual.push(row);
