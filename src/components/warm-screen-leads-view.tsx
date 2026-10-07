@@ -225,20 +225,20 @@ export function WarmScreenLeadsView({
       <PageIntro>Motor de aquecimento de leads — triagem automática (1 tentativa por lead).</PageIntro>
 
       <div className="filter-bar" style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
-        <button type="button" className={tab === "lista" ? "btn btn-primary" : "btn"} onClick={() => setTab("lista")}>
+        <button type="button" className={tab === "lista" ? "btn warm-screen-tab-active" : "btn"} onClick={() => setTab("lista")}>
           <List size={16} style={{ marginRight: 6, verticalAlign: "middle" }} />
           Lista
         </button>
-        <button type="button" className={tab === "tempo_real" ? "btn btn-primary" : "btn"} onClick={() => setTab("tempo_real")}>
+        <button type="button" className={tab === "tempo_real" ? "btn warm-screen-tab-active" : "btn"} onClick={() => setTab("tempo_real")}>
           <Radio size={16} style={{ marginRight: 6, verticalAlign: "middle" }} />
           Em tempo real
         </button>
-        <button type="button" className={tab === "execucoes" ? "btn btn-primary" : "btn"} onClick={() => setTab("execucoes")}>
+        <button type="button" className={tab === "execucoes" ? "btn warm-screen-tab-active" : "btn"} onClick={() => setTab("execucoes")}>
           Execuções
         </button>
         <button
           type="button"
-          className="btn btn-primary"
+          className="btn btn-brand"
           disabled={
             starting ||
             activeExecution?.status === "running" ||
@@ -283,7 +283,7 @@ export function WarmScreenLeadsView({
           </button>
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-brand"
             disabled={starting || !dialAsUserId}
             onClick={() => void startWarm()}
           >

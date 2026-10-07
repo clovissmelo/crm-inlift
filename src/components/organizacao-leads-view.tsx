@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CadastroModal } from "@/components/cadastro-ui";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
@@ -40,6 +41,7 @@ export function OrganizacaoLeadsView({
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [deletePhrase, setDeletePhrase] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [transferBusy, setTransferBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -109,9 +111,21 @@ export function OrganizacaoLeadsView({
     return productIds.map((id) => productNameById.get(id) ?? `#${id}`).join(", ");
   }
 
+  const selectedPreviewRows = useMemo(() => {
+    if (selectAllResults) return [];
+    return items
+      .filter((i) => selected.has(i.id))
+      .map((i) => ({
+        id: i.id,
+        name: i.trade_name || i.legal_name || `#${i.id}`
+      }))
+      .slice(0, 8);
+  }, [items, selectAllResults, selected]);
+
   async function executeTransfer() {
     setMessage(null);
     setError(null);
+    setTransferBusy(true);
     const res = await fetch("/api/clients/bulk-bdr", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -119,19 +133,28 @@ export function OrganizacaoLeadsView({
         to_bdr_user_id: Number(toBdr),
         select_all: selectAllResults,
         client_ids: selectAllResults ? undefined : [...selected],
-        filters: selectAllResults ? filters : undefined
+        filters: selectAllResults ? organizacaoFiltersForApi(filters) : undefined
       })
     });
     const data = (await res.json()) as { error?: string; updated?: number };
+    setTransferBusy(false);
     if (!res.ok) {
-      setError(data.error ?? "Falha na transferência");
+      setError(data.error ?? "Falha ao atribuir BDR");
       return;
     }
-    setMessage(`${data.updated ?? 0} cliente(s) transferido(s) para ${targetBdrName}.`);
+    setMessage(`${data.updated ?? 0} cliente(s) atribuído(s) a ${targetBdrName}.`);
     setConfirmOpen(false);
     setSelected(new Set());
     setSelectAllResults(false);
     void load();
+  }
+
+  function organizacaoFiltersForApi(f: typeof filters): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(f)) {
+      if (v !== "") out[k] = v;
+    }
+    return out;
   }
 
   async function executeProductLink() {
@@ -144,7 +167,7 @@ export function OrganizacaoLeadsView({
         product_id: Number(toProduct),
         select_all: selectAllResults,
         client_ids: selectAllResults ? undefined : [...selected],
-        filters: selectAllResults ? filters : undefined
+        filters: selectAllResults ? organizacaoFiltersForApi(filters) : undefined
       })
     });
     const data = (await res.json()) as { error?: string; opportunities_created?: number; product_name?: string };
@@ -178,7 +201,7 @@ export function OrganizacaoLeadsView({
       body: JSON.stringify({
         select_all: selectAllResults,
         client_ids: selectAllResults ? undefined : [...selected],
-        filters: selectAllResults ? filters : undefined,
+        filters: selectAllResults ? organizacaoFiltersForApi(filters) : undefined,
         confirm_phrase: deletePhrase.trim()
       })
     });
@@ -208,7 +231,7 @@ export function OrganizacaoLeadsView({
 
   return (
     <div>
-      <PageIntro>Vincule ou transfira BDR e/ou produto aos leads.</PageIntro>
+      <PageIntro>Vincule ou atribua BDR e/ou produto aos leads.</PageIntro>
 
       <div className="client-filters-block">
         <FilterBar>
@@ -288,9 +311,12 @@ export function OrganizacaoLeadsView({
           className="btn btn-primary organizacao-bulk-bar-btn"
           type="button"
           disabled={!toBdr || selectedCount === 0}
-          onClick={() => setConfirmOpen(true)}
+          onClick={() => {
+            setError(null);
+            setConfirmOpen(true);
+          }}
         >
-          Transferir BDR
+          Atribuir BDR
         </button>
         <div className="field organizacao-bulk-bar-field organizacao-bulk-bar-field--product">
           <label className="label" htmlFor="organizacao-new-product">
@@ -382,7 +408,9 @@ export function OrganizacaoLeadsView({
                       onChange={() => toggle(item.id)}
                     />
                   </td>
-                  <td>{item.trade_name || item.legal_name}</td>
+                  <td>
+                    <Link href={`/clientes/${item.id}`}>{item.trade_name || item.legal_name}</Link>
+                  </td>
                   <td>{formatCnpj(item.cnpj)}</td>
                   <td>{formatProducts(item.product_ids)}</td>
                   <td>{item.city ?? "—"}</td>
@@ -405,21 +433,45 @@ export function OrganizacaoLeadsView({
         </button>
       </div>
 
-      {confirmOpen ? (
-        <div className="panel" style={{ marginTop: "1rem", borderColor: "#404040" }}>
-          <p>
-            Confirmar transferência de <strong>{selectedCount}</strong> cliente(s) para <strong>{targetBdrName}</strong>?
-          </p>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button className="btn btn-primary" type="button" onClick={() => void executeTransfer()}>
-              Confirmar
-            </button>
-            <button className="btn" type="button" onClick={() => setConfirmOpen(false)}>
-              Cancelar
-            </button>
-          </div>
+      <CadastroModal
+        open={confirmOpen}
+        title="Atribuir BDR"
+        onClose={() => {
+          if (!transferBusy) setConfirmOpen(false);
+        }}
+      >
+        <p className="muted" style={{ marginTop: 0 }}>
+          Atribuir <strong>{selectedCount}</strong> lead(s) à BDR <strong>{targetBdrName}</strong>?
+        </p>
+        {selectAllResults ? (
+          <p className="muted">Inclui todos os {total} resultados do filtro atual (todas as páginas).</p>
+        ) : selectedPreviewRows.length > 0 ? (
+          <ul className="muted" style={{ margin: "0.5rem 0 0", paddingLeft: "1.25rem" }}>
+            {selectedPreviewRows.map((row) => (
+              <li key={row.id}>
+                <Link href={`/clientes/${row.id}`}>{row.name}</Link>
+              </li>
+            ))}
+            {selected.size > selectedPreviewRows.length ? (
+              <li>… e mais {selected.size - selectedPreviewRows.length}</li>
+            ) : null}
+          </ul>
+        ) : null}
+        {error && confirmOpen ? <div className="alert alert-error">{error}</div> : null}
+        <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem", flexWrap: "wrap" }}>
+          <button
+            className="btn btn-brand"
+            type="button"
+            disabled={transferBusy}
+            onClick={() => void executeTransfer()}
+          >
+            {transferBusy ? "Atribuindo…" : "Confirmar atribuição"}
+          </button>
+          <button className="btn" type="button" disabled={transferBusy} onClick={() => setConfirmOpen(false)}>
+            Cancelar
+          </button>
         </div>
-      ) : null}
+      </CadastroModal>
 
       {confirmProductOpen ? (
         <div className="panel" style={{ marginTop: "1rem", borderColor: "#404040" }}>

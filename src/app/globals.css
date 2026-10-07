@@ -618,6 +618,24 @@ a.app-text-link:hover {
   background: #d4d4d4;
 }
 
+.btn-brand {
+  background: var(--brand-blue);
+  color: #fff;
+  border-color: var(--brand-blue);
+  font-weight: 600;
+}
+
+.btn-brand:hover:not(:disabled) {
+  background: #0099d6;
+  border-color: #0099d6;
+}
+
+.warm-screen-tab-active {
+  border-color: color-mix(in srgb, var(--brand-blue) 50%, var(--border));
+  background: var(--nav-active-bg);
+  color: var(--text);
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
