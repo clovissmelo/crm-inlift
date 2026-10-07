@@ -8,7 +8,7 @@ export async function GET() {
   const denied = await requireAdminApi(user);
   if (denied) return denied;
 
-  const result = await fetchApi4comExtensionDetails();
+  const result = await fetchApi4comExtensionDetails(user.id);
   if (!result.ok) {
     return Response.json(result, { status: result.http_status || 502 });
   }

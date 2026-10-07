@@ -268,9 +268,15 @@ export function AdminApi4comPanel() {
         <div style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px solid var(--border, #e2e8f0)" }}>
           <h3 style={{ marginTop: 0, fontSize: "1rem" }}>Ramais e senha SIP (API4COM)</h3>
           <p className="muted" style={{ fontSize: "0.8125rem" }}>
-            Consulta <code>GET /extensions</code> com o token configurado no CRM. Se a API devolver o campo{" "}
-            <code>senha</code>, aparece abaixo — use no Meu perfil → Senha SIP (discador).
+            Consulta <code>GET /extensions</code> usando o token de integração, o seu (se for BDR) ou o de alguma BDR
+            cadastrada. Se a API devolver <code>senha</code>, copie para Meu perfil → Senha SIP (discador).
           </p>
+          {sipDomain.trim().toLowerCase().includes("suaempresa") ? (
+            <p className="alert alert-error" style={{ fontSize: "0.8125rem" }}>
+              Troque o domínio SIP acima pelo domínio real da sua conta (ex.: <code>inlift.api4com.com</code>) — o
+              placeholder não funciona no discador.
+            </p>
+          ) : null}
           <button type="button" className="btn" disabled={extensionsLoading} onClick={() => void loadExtensionsFromApi()}>
             {extensionsLoading ? "Consultando…" : "Consultar ramais na API4COM"}
           </button>

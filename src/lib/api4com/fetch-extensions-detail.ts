@@ -1,5 +1,7 @@
 import { getApi4comConfig } from "@/lib/api4com/config";
 import { getApi4comSipDomain } from "@/lib/api4com/sip-domain";
+import { getApi4comTokenPolicy } from "@/lib/api4com/token-policy";
+import { resolveApi4comTokenForAdminApiOperations } from "@/lib/api4com/user-token";
 
 export type Api4comExtensionDetail = {
   id: number | null;
@@ -43,8 +45,11 @@ function parseExtensionList(payload: unknown): Api4comExtensionDetail[] {
   return out;
 }
 
+const TOKEN_MISSING_MSG =
+  "Token API4COM não configurado. No modo «Cada BDR no perfil»: cadastre o token master em Webhook e telefonia, ou o token de alguma BDR em Meu perfil, e tente de novo.";
+
 /** Lista ramais na conta (inclui senha SIP se a API4COM devolver). */
-export async function fetchApi4comExtensionDetails(): Promise<{
+export async function fetchApi4comExtensionDetails(adminUserId: number): Promise<{
   ok: boolean;
   http_status: number;
   sip_domain: string | null;
@@ -53,12 +58,23 @@ export async function fetchApi4comExtensionDetails(): Promise<{
 }> {
   const cfg = await getApi4comConfig();
   const sip_domain = await getApi4comSipDomain();
-  if (!cfg.apiToken) {
-    return { ok: false, http_status: 0, sip_domain, extensions: [], error: "Token API4COM não configurado." };
+  const token = await resolveApi4comTokenForAdminApiOperations(adminUserId);
+  if (!token) {
+    const policy = await getApi4comTokenPolicy();
+    return {
+      ok: false,
+      http_status: 0,
+      sip_domain,
+      extensions: [],
+      error:
+        policy === "per_bdr"
+          ? TOKEN_MISSING_MSG
+          : "Token API4COM não configurado. Cadastre o token global em Credenciais e salve."
+    };
   }
 
   const res = await fetch(`${cfg.baseUrl}/api/v1/extensions`, {
-    headers: { Authorization: cfg.apiToken, Accept: "application/json" },
+    headers: { Authorization: token, Accept: "application/json" },
     signal: AbortSignal.timeout(25_000)
   });
 

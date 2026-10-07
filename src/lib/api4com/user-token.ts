@@ -43,3 +43,29 @@ export async function resolveApi4comApiTokenForUser(userId: number): Promise<str
   const raw = row?.api4com_api_token?.trim();
   return raw ? normalizeApi4comApiToken(raw) : null;
 }
+
+/**
+ * Token para operações de admin na API4COM (ex.: listar ramais).
+ * Ordem: token global/integração → token do admin → qualquer BDR ativa (modo per_bdr).
+ */
+export async function resolveApi4comTokenForAdminApiOperations(adminUserId: number): Promise<string | null> {
+  const cfg = await getApi4comConfig();
+  if (cfg.apiToken?.trim()) return cfg.apiToken;
+
+  const own = await resolveApi4comApiTokenForUser(adminUserId);
+  if (own) return own;
+
+  const policy = await getApi4comTokenPolicy();
+  if (policy !== "per_bdr") return null;
+
+  const row = await get<{ api4com_api_token: string | null }>(
+    `SELECT api4com_api_token FROM users
+     WHERE status = 'active'
+       AND api4com_api_token IS NOT NULL
+       AND trim(api4com_api_token) <> ''
+     ORDER BY id
+     LIMIT 1`
+  );
+  const raw = row?.api4com_api_token?.trim();
+  return raw ? normalizeApi4comApiToken(raw) : null;
+}
