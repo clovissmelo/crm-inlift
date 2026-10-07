@@ -1,4 +1,6 @@
+import { API4COM_STALE_FAIL_MESSAGE } from "@/lib/api4com/calls";
 import { get, nowIso, run } from "@/lib/db";
+import { WARM_SCREEN_STALE_MESSAGE } from "@/lib/warm-screen/constants";
 import { isWarmScreenCallRow } from "@/lib/warm-screen/call-outcome";
 
 type CallSlice = {
@@ -6,14 +8,66 @@ type CallSlice = {
   status: string;
   api4com_call_id: string | null;
   approach_id: number | null;
+  error_message?: string | null;
+  answered_at?: string | null;
+  duration_seconds?: number | null;
+  hangup_cause_code?: string | null;
+  technical_result_type_id?: number | null;
   metadata_json: string | null;
 };
+
+const WARM_SCREEN_AUTO_REVERT_MESSAGES = new Set([API4COM_STALE_FAIL_MESSAGE, WARM_SCREEN_STALE_MESSAGE]);
 
 /** Falha antes de a telefonia aceitar a discagem (token, ramal, API indisponível). */
 export function isWarmScreenConnectionFailure(call: Pick<CallSlice, "status" | "api4com_call_id" | "approach_id">): boolean {
   if (call.approach_id) return false;
   if (call.api4com_call_id) return false;
   return call.status === "failed" || call.status === "initiating";
+}
+
+/** Provedor aceitou a chamada mas não há sinal de tentativa real (não tocou / caiu antes do SIP). */
+export function isWarmScreenUndeliveredDialFailure(
+  call: Pick<
+    CallSlice,
+    | "status"
+    | "api4com_call_id"
+    | "approach_id"
+    | "answered_at"
+    | "duration_seconds"
+    | "hangup_cause_code"
+    | "technical_result_type_id"
+  >
+): boolean {
+  if (call.approach_id) return false;
+  if (!call.api4com_call_id) return false;
+  if (call.status !== "failed") return false;
+  if (call.answered_at) return false;
+  if ((call.duration_seconds ?? 0) > 0) return false;
+  if (call.hangup_cause_code || call.technical_result_type_id) return false;
+  return true;
+}
+
+/** Falhas que não devem virar abordagem / histórico (conexão ou encerramento automático por timeout). */
+export function isWarmScreenAutoRevertFailure(
+  call: Pick<
+    CallSlice,
+    | "status"
+    | "api4com_call_id"
+    | "approach_id"
+    | "error_message"
+    | "answered_at"
+    | "duration_seconds"
+    | "hangup_cause_code"
+    | "technical_result_type_id"
+  >
+): boolean {
+  if (call.approach_id) return false;
+  if (isWarmScreenConnectionFailure(call)) return true;
+  if (isWarmScreenUndeliveredDialFailure(call)) return true;
+  return (
+    call.status === "failed" &&
+    Boolean(call.error_message && WARM_SCREEN_AUTO_REVERT_MESSAGES.has(call.error_message))
+  );
 }
 
 function parseItemAndExecution(meta: string | null): { itemId: number | null; executionId: number | null } {
@@ -37,12 +91,13 @@ function parseItemAndExecution(meta: string | null): { itemId: number | null; ex
 export async function dismissWarmScreenConnectionFailureCall(callId: number): Promise<boolean> {
   const call = await get<CallSlice>(
     `
-      SELECT id, status, api4com_call_id, approach_id, metadata_json
+      SELECT id, status, api4com_call_id, approach_id, error_message, answered_at, duration_seconds,
+        hangup_cause_code, technical_result_type_id, metadata_json
       FROM api4com_calls WHERE id = @id
     `,
     { id: callId }
   );
-  if (!call || !isWarmScreenCallRow(call) || !isWarmScreenConnectionFailure(call)) {
+  if (!call || !isWarmScreenCallRow(call) || !isWarmScreenAutoRevertFailure(call)) {
     return false;
   }
 
@@ -83,16 +138,21 @@ export async function dismissWarmScreenConnectionFailureCall(callId: number): Pr
       { id: itemId, execId: executionId, now }
     );
 
+    const pauseMsg = isWarmScreenUndeliveredDialFailure(call)
+      ? "A telefonia encerrou a ligação antes de completar a discagem. Confira ramal/softphone da BDR e tente de novo."
+      : null;
+
     await run(
       `
         UPDATE warm_screen_executions SET
           status = 'paused',
           paused_at = COALESCE(paused_at, @now),
           current_item_id = NULL,
+          last_error = COALESCE(@pauseMsg, last_error),
           updated_at = @now
         WHERE id = @id AND status = 'running'
       `,
-      { id: executionId, now }
+      { id: executionId, now, pauseMsg }
     );
   }
 

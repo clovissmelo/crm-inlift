@@ -21,6 +21,7 @@ export type WarmScreenExecutionRow = {
   items_done: number;
   items_warmed: number;
   items_skipped: number;
+  items_not_warmed: number;
   items_error: number;
   current_item_id: number | null;
   last_error: string | null;
@@ -288,7 +289,8 @@ export async function completeWarmScreenItem(input: {
 
   const warmed = input.status === "completed_warmed" ? 1 : 0;
   const skipped = input.status === "skipped" ? 1 : 0;
-  const err = input.status === "completed_error" || input.status === "failed" ? 1 : 0;
+  const notWarmed = input.status === "completed_error" ? 1 : 0;
+  const err = input.status === "failed" ? 1 : 0;
 
   await run(
     `
@@ -296,13 +298,14 @@ export async function completeWarmScreenItem(input: {
         items_done = items_done + 1,
         items_warmed = items_warmed + @warmed,
         items_skipped = items_skipped + @skipped,
+        items_not_warmed = items_not_warmed + @notWarmed,
         items_error = items_error + @err,
         last_call_ended_at = @now,
         current_item_id = NULL,
         updated_at = @now
       WHERE id = @execId
     `,
-    { execId: input.executionId, warmed, skipped, err, now }
+    { execId: input.executionId, warmed, skipped, notWarmed, err, now }
   );
 
   await maybeFinishExecution(input.executionId);

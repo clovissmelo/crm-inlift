@@ -6,10 +6,10 @@ import { getTechnicalResultTypeById } from "@/lib/classifications/technical-resu
 import { listActiveProductIdsInQueue } from "@/lib/client-product-prospeccao";
 import { get, nowIso, run } from "@/lib/db";
 import { WARM_SCREEN_MOTOR_LABEL } from "@/lib/warm-screen/constants";
-import { completeWarmScreenItem } from "@/lib/warm-screen/executions";
+import { finishWarmScreenItemAfterPhoneAttempt } from "@/lib/warm-screen/item-after-call";
 import {
   dismissWarmScreenConnectionFailureCall,
-  isWarmScreenConnectionFailure
+  isWarmScreenAutoRevertFailure
 } from "@/lib/warm-screen/connection-failure";
 
 type CallRow = {
@@ -22,6 +22,10 @@ type CallRow = {
   ended_at: string | null;
   started_at: string | null;
   api4com_call_id: string | null;
+  error_message: string | null;
+  answered_at: string | null;
+  duration_seconds: number | null;
+  hangup_cause_code: string | null;
   technical_result_type_id: number | null;
   metadata_json: string | null;
 };
@@ -67,13 +71,14 @@ export async function finalizeWarmScreenCall(callId: number): Promise<boolean> {
   const call = await get<CallRow>(
     `
       SELECT id, user_id, client_id, contact_id, approach_id, status, ended_at, started_at,
-        api4com_call_id, technical_result_type_id, metadata_json
+        api4com_call_id, error_message, answered_at, duration_seconds, hangup_cause_code,
+        technical_result_type_id, metadata_json
       FROM api4com_calls WHERE id = @id
     `,
     { id: callId }
   );
   if (!call?.client_id || !isWarmScreenCallRow(call)) return false;
-  if (isWarmScreenConnectionFailure(call)) {
+  if (isWarmScreenAutoRevertFailure(call)) {
     await dismissWarmScreenConnectionFailureCall(call.id);
     return true;
   }
@@ -156,10 +161,11 @@ export async function finalizeWarmScreenCall(callId: number): Promise<boolean> {
   );
 
   if (itemId && executionId) {
-    await completeWarmScreenItem({
+    await finishWarmScreenItemAfterPhoneAttempt({
       itemId,
       executionId,
-      status: answered ? "completed_warmed" : "completed_error",
+      clientId: call.client_id,
+      answered,
       callRowId: call.id
     });
   }
@@ -177,10 +183,11 @@ async function syncExecutionFromCall(call: CallRow) {
     "SELECT warm_screen_confirmed_at FROM clients WHERE id = @id",
     { id: call.client_id! }
   );
-  await completeWarmScreenItem({
+  await finishWarmScreenItemAfterPhoneAttempt({
     itemId,
     executionId,
-    status: warmed?.warm_screen_confirmed_at ? "completed_warmed" : "completed_error",
+    clientId: call.client_id!,
+    answered: Boolean(warmed?.warm_screen_confirmed_at),
     callRowId: call.id
   });
 }

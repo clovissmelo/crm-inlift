@@ -21,6 +21,7 @@ type ExecutionDetail = {
   items_done: number;
   items_warmed: number;
   items_skipped: number;
+  items_not_warmed: number;
   items_error: number;
   last_error: string | null;
   filters_json: unknown;

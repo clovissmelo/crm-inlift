@@ -10,16 +10,28 @@ export function warmScreenProgressDetail(ex: Pick<WarmScreenExecutionRow, "items
 }
 
 export function formatWarmScreenResultSummary(
-  ex: Pick<WarmScreenExecutionRow, "items_warmed" | "items_skipped" | "items_error" | "items_done">
+  ex: Pick<WarmScreenExecutionRow, "items_warmed" | "items_skipped" | "items_error" | "items_done"> & {
+    items_not_warmed?: number;
+  }
 ): string {
+  const notWarmed = ex.items_not_warmed ?? 0;
   const parts: string[] = [`${ex.items_warmed} aquecido${ex.items_warmed === 1 ? "" : "s"}`];
+  if (notWarmed > 0) {
+    parts.push(`${notWarmed} sem aquecimento`);
+  }
   if (ex.items_skipped > 0) {
     parts.push(`${ex.items_skipped} pulado${ex.items_skipped === 1 ? "" : "s"}`);
   }
   if (ex.items_error > 0) {
-    parts.push(`${ex.items_error} erro${ex.items_error === 1 ? "" : "s"}`);
+    parts.push(`${ex.items_error} falha${ex.items_error === 1 ? "" : "s"}`);
   }
-  if (ex.items_done === 0 && ex.items_warmed === 0 && ex.items_skipped === 0 && ex.items_error === 0) {
+  if (
+    ex.items_done === 0 &&
+    ex.items_warmed === 0 &&
+    ex.items_skipped === 0 &&
+    notWarmed === 0 &&
+    ex.items_error === 0
+  ) {
     return "Nenhum lead processado ainda";
   }
   return parts.join(" · ");

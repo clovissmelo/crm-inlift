@@ -12,12 +12,7 @@ import type { Company, Product, User } from "@/lib/types";
 import type { ProspeccaoListItem } from "@/lib/prospeccao-query";
 import { WarmScreenPromptCell } from "@/components/warm-screen-prompt-cell";
 import { WarmScreenExecutionDetailModal } from "@/components/warm-screen-execution-detail-modal";
-import {
-  formatWarmScreenResultSummary,
-  showWarmScreenResultColumn,
-  warmScreenProgressDetail,
-  warmScreenProgressPct
-} from "@/lib/warm-screen/execution-outcome";
+import { formatWarmScreenResultSummary, showWarmScreenResultColumn } from "@/lib/warm-screen/execution-outcome";
 
 type Tab = "lista" | "tempo_real" | "execucoes";
 
@@ -28,6 +23,7 @@ type Execution = {
   items_done: number;
   items_warmed: number;
   items_skipped: number;
+  items_not_warmed: number;
   items_error: number;
   started_at: string;
   finished_at: string | null;
@@ -281,33 +277,35 @@ export function WarmScreenLeadsView({
 
   return (
     <div>
-      <PageIntro>Motor de aquecimento de leads — triagem automática (1 tentativa por lead).</PageIntro>
-
-      <div className="filter-bar" style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
-        <button type="button" className={tab === "lista" ? "btn warm-screen-tab-active" : "btn"} onClick={() => setTab("lista")}>
-          <List size={16} style={{ marginRight: 6, verticalAlign: "middle" }} />
-          Lista
-        </button>
-        <button type="button" className={tab === "tempo_real" ? "btn warm-screen-tab-active" : "btn"} onClick={() => setTab("tempo_real")}>
-          <Radio size={16} style={{ marginRight: 6, verticalAlign: "middle" }} />
-          Em tempo real
-        </button>
-        <button type="button" className={tab === "execucoes" ? "btn warm-screen-tab-active" : "btn"} onClick={() => setTab("execucoes")}>
-          Execuções
-        </button>
-        <button
-          type="button"
-          className="btn btn-brand"
-          disabled={
-            starting ||
-            activeExecution?.status === "running" ||
-            activeExecution?.status === "paused"
-          }
-          onClick={() => openRamalModalOrStart()}
-        >
-          <Play size={16} style={{ marginRight: 6, verticalAlign: "middle" }} />
-          {starting ? "Iniciando…" : "Aquecer leads"}
-        </button>
+      <div className="motor-screen-toolbar">
+        <div className="motor-screen-toolbar__tabs">
+          <button type="button" className={tab === "lista" ? "btn motor-screen-tab-active" : "btn"} onClick={() => setTab("lista")}>
+            <List size={16} aria-hidden />
+            Lista
+          </button>
+          <button type="button" className={tab === "tempo_real" ? "btn motor-screen-tab-active" : "btn"} onClick={() => setTab("tempo_real")}>
+            <Radio size={16} aria-hidden />
+            Em tempo real
+          </button>
+          <button type="button" className={tab === "execucoes" ? "btn motor-screen-tab-active" : "btn"} onClick={() => setTab("execucoes")}>
+            Execuções
+          </button>
+        </div>
+        <div className="motor-screen-toolbar__actions">
+          <button
+            type="button"
+            className="btn btn-brand motor-screen-primary-btn"
+            disabled={
+              starting ||
+              activeExecution?.status === "running" ||
+              activeExecution?.status === "paused"
+            }
+            onClick={() => openRamalModalOrStart()}
+          >
+            <Play size={18} aria-hidden />
+            {starting ? "Iniciando…" : "Aquecer leads"}
+          </button>
+        </div>
       </div>
 
       <CadastroModal
@@ -451,8 +449,8 @@ export function WarmScreenLeadsView({
                 Execução #{activeExecution.id} · {statusLabel[activeExecution.status] ?? activeExecution.status}
               </p>
               <p className="muted">
-                {activeExecution.items_done}/{activeExecution.items_total} processados · {activeExecution.items_warmed} aquecidos ·{" "}
-                {activeExecution.items_error} erro · {activeExecution.items_skipped} pulados
+                {activeExecution.items_done}/{activeExecution.items_total} processados ·{" "}
+                {formatWarmScreenResultSummary(activeExecution)}
               </p>
               {activeExecution.last_error ? <p className="alert alert-warning">{activeExecution.last_error}</p> : null}
               <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
@@ -531,11 +529,12 @@ export function WarmScreenLeadsView({
           <table className="data-table lead-gen-history-table">
             <thead>
               <tr>
-                <th>#</th>
-                <th>Status</th>
                 <th>Início</th>
+                <th>Status</th>
                 <th>Resultado</th>
-                <th>Progresso</th>
+                <th className="warm-screen-exec-progress-num" title="Leads aquecidos com sucesso">
+                  Progresso
+                </th>
                 <th className="warm-screen-exec-actions-head">Ações</th>
               </tr>
             </thead>
@@ -544,38 +543,14 @@ export function WarmScreenLeadsView({
                 const active = ex.status === "running" || ex.status === "paused";
                 const showResult = showWarmScreenResultColumn(ex);
                 const detailSelected = detailModalOpen && detailExecutionId === ex.id;
-                const pct = warmScreenProgressPct(ex);
                 return (
                 <tr key={ex.id} className={detailSelected ? "is-selected" : undefined}>
-                  <td>{ex.id}</td>
-                  <td>{statusLabel[ex.status] ?? ex.status}</td>
                   <td className="lead-gen-history-when">{new Date(ex.started_at).toLocaleString("pt-BR")}</td>
+                  <td>{statusLabel[ex.status] ?? ex.status}</td>
                   <td className="lead-gen-history-result">
                     <div className="lead-gen-history-result-row">
                       <span>
-                        {showResult ? (
-                          active ? (
-                            <div className="lead-gen-progress lead-gen-progress--compact">
-                              <div className="lead-gen-progress-head">
-                                <span className="lead-gen-progress-pct">{pct}%</span>
-                                <span className="lead-gen-progress-detail muted">{warmScreenProgressDetail(ex)}</span>
-                              </div>
-                              <div
-                                className="lead-gen-progress-track"
-                                role="progressbar"
-                                aria-valuenow={pct}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                              >
-                                <div className="lead-gen-progress-fill" style={{ width: `${pct}%` }} />
-                              </div>
-                            </div>
-                          ) : (
-                            formatWarmScreenResultSummary(ex)
-                          )
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
+                        {showResult ? formatWarmScreenResultSummary(ex) : <span className="muted">—</span>}
                       </span>
                       {showResult ? (
                         <button
@@ -590,8 +565,8 @@ export function WarmScreenLeadsView({
                       ) : null}
                     </div>
                   </td>
-                  <td className="muted">
-                    {ex.items_done}/{ex.items_total} · {ex.items_warmed} aquecidos
+                  <td className="warm-screen-exec-progress-num muted">
+                    {showResult ? ex.items_warmed : "—"}
                   </td>
                   <td className="warm-screen-exec-actions">
                     <div className={`warm-screen-exec-actions-inner${active ? " is-active" : ""}`}>

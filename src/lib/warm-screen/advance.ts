@@ -1,5 +1,6 @@
 import { initiateApi4comCall, listActiveCallsForUser } from "@/lib/api4com/calls";
-import { buildClientDialStrategySummary } from "@/lib/call-strategy/eligible-phones";
+import { listClientPhonesWithState } from "@/lib/call-strategy/client-phones";
+import { getNextRegisteredPhoneForWarmItem } from "@/lib/warm-screen/phone-round";
 import { get, nowIso, run } from "@/lib/db";
 import { WARM_SCREEN_INTERVAL_MS } from "@/lib/warm-screen/constants";
 import {
@@ -9,10 +10,11 @@ import {
 } from "@/lib/warm-screen/executions";
 import { expireWarmScreenStaleCalls, recoverStuckWarmScreenItems } from "@/lib/warm-screen/stale-calls";
 import { finalizeWarmScreenCall } from "@/lib/warm-screen/call-outcome";
+import { finishWarmScreenItemAfterPhoneAttempt } from "@/lib/warm-screen/item-after-call";
 import {
   dismissWarmScreenConnectionFailureCall,
   handleWarmScreenDialSetupFailure,
-  isWarmScreenConnectionFailure
+  isWarmScreenAutoRevertFailure
 } from "@/lib/warm-screen/connection-failure";
 
 async function getNextPendingItem(executionId: number) {
@@ -31,9 +33,9 @@ async function getNextPendingItem(executionId: number) {
 }
 
 async function getDialingItem(executionId: number) {
-  return get<{ id: number; api4com_call_row_id: number | null }>(
+  return get<{ id: number; client_id: number; api4com_call_row_id: number | null }>(
     `
-      SELECT id, api4com_call_row_id FROM warm_screen_execution_items
+      SELECT id, client_id, api4com_call_row_id FROM warm_screen_execution_items
       WHERE execution_id = @execId AND status = 'dialing'
       ORDER BY id DESC LIMIT 1
     `,
@@ -51,14 +53,23 @@ async function settleDialingItemIfCallEnded(executionId: number) {
     ended_at: string | null;
     approach_id: number | null;
     api4com_call_id: string | null;
+    error_message: string | null;
+    answered_at: string | null;
+    duration_seconds: number | null;
+    hangup_cause_code: string | null;
+    technical_result_type_id: number | null;
   }>(
-    "SELECT id, status, ended_at, approach_id, api4com_call_id FROM api4com_calls WHERE id = @id",
+    `
+      SELECT id, status, ended_at, approach_id, api4com_call_id, error_message, answered_at,
+        duration_seconds, hangup_cause_code, technical_result_type_id
+      FROM api4com_calls WHERE id = @id
+    `,
     { id: dialing.api4com_call_row_id }
   );
   if (!call) return false;
   if (call.status !== "completed" && call.status !== "failed") return false;
 
-  if (call.status === "failed" && isWarmScreenConnectionFailure(call)) {
+  if (call.status === "failed" && isWarmScreenAutoRevertFailure(call)) {
     await dismissWarmScreenConnectionFailureCall(call.id);
     return true;
   }
@@ -73,10 +84,15 @@ async function settleDialingItemIfCallEnded(executionId: number) {
   if (!call.approach_id) {
     await finalizeWarmScreenCall(call.id);
   } else {
-    await completeWarmScreenItem({
+    const warmed = await get<{ warm_screen_confirmed_at: string | null }>(
+      "SELECT warm_screen_confirmed_at FROM clients WHERE id = @id",
+      { id: dialing.client_id }
+    );
+    await finishWarmScreenItemAfterPhoneAttempt({
       itemId: dialing.id,
       executionId,
-      status: "completed_error",
+      clientId: dialing.client_id,
+      answered: Boolean(warmed?.warm_screen_confirmed_at),
       callRowId: call.id
     });
   }
@@ -125,15 +141,23 @@ export async function advanceWarmScreenExecution(executionId: number): Promise<{
     return { advanced: false, message: "Execução concluída.", execution: await getExecutionById(executionId) };
   }
 
-  const strategy = await buildClientDialStrategySummary({ clientId: item.client_id });
-  const phone = strategy.suggested;
+  const phone = await getNextRegisteredPhoneForWarmItem(item.client_id, executionId, item.id);
   if (!phone) {
-    await completeWarmScreenItem({
-      itemId: item.id,
-      executionId,
-      status: "skipped",
-      skipReason: strategy.lead_status === "sem_telefone" ? "sem_telefone" : "sem_numero_elegivel"
-    });
+    const registered = await listClientPhonesWithState(item.client_id);
+    if (registered.length === 0) {
+      await completeWarmScreenItem({
+        itemId: item.id,
+        executionId,
+        status: "skipped",
+        skipReason: "sem_telefone"
+      });
+    } else {
+      await completeWarmScreenItem({
+        itemId: item.id,
+        executionId,
+        status: "completed_error"
+      });
+    }
     return advanceWarmScreenExecution(executionId);
   }
 
@@ -147,7 +171,7 @@ export async function advanceWarmScreenExecution(executionId: number): Promise<{
     {
       id: item.id,
       phone: phone.phone,
-      contactId: phone.primary_contact_id,
+      contactId: phone.primary_contact_id ?? null,
       now
     }
   );
@@ -163,7 +187,7 @@ export async function advanceWarmScreenExecution(executionId: number): Promise<{
       userId: exec.dial_user_id,
       dialIdentityUserId: exec.dial_user_id,
       clientId: item.client_id,
-      contactId: phone.primary_contact_id,
+      contactId: phone.primary_contact_id ?? undefined,
       productId: null,
       phone: phone.phone,
       warmScreen: {
