@@ -1,4 +1,5 @@
 import { jsonUnauthorized, requireApiUser } from "@/lib/auth";
+import { enrichClientsWithQueuePriority } from "@/lib/client-queue-priority";
 import { queryClients } from "@/lib/clients-query";
 import { createClient } from "@/lib/clients";
 import { clientSchema } from "@/lib/validators";
@@ -31,6 +32,10 @@ export async function GET(request: Request) {
   };
 
   const result = await queryClients(filters);
+  if (url.searchParams.get("include_queue_priority") === "1") {
+    const items = await enrichClientsWithQueuePriority(result.items);
+    return Response.json({ ...result, items });
+  }
   return Response.json(result);
 }
 

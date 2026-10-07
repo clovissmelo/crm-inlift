@@ -5,8 +5,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CadastroModal } from "@/components/cadastro-ui";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
 import { PageIntro } from "@/components/page-intro";
+import { ProspeccaoPriorityBadge } from "@/components/prospeccao-priority-badge";
 import { formatCnpj } from "@/lib/format";
-import type { ClientListItem, User } from "@/lib/types";
+import type { ClientListItemWithQueue } from "@/lib/client-queue-priority";
+import type { User } from "@/lib/types";
 
 const defaultFilters = {
   city: "",
@@ -30,7 +32,7 @@ export function OrganizacaoLeadsView({
   products: Array<{ id: number; name: string }>;
   isAdmin?: boolean;
 }) {
-  const [items, setItems] = useState<ClientListItem[]>([]);
+  const [items, setItems] = useState<ClientListItemWithQueue[]>([]);
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [selectAllResults, setSelectAllResults] = useState(false);
@@ -58,8 +60,9 @@ export function OrganizacaoLeadsView({
     });
     params.set("limit", String(limit));
     params.set("offset", String(offset));
+    params.set("include_queue_priority", "1");
     const res = await fetch(`/api/clients?${params.toString()}`);
-    const data = (await res.json()) as { items: ClientListItem[]; total: number };
+    const data = (await res.json()) as { items: ClientListItemWithQueue[]; total: number };
     setItems(data.items);
     setTotal(data.total);
     setLoading(false);
@@ -391,6 +394,7 @@ export function OrganizacaoLeadsView({
                 <th>Empresa</th>
                 <th>CNPJ</th>
                 <th>Produto</th>
+                <th>Prioridade</th>
                 <th>Cidade</th>
                 <th>UF</th>
                 <th>Segmento</th>
@@ -413,6 +417,13 @@ export function OrganizacaoLeadsView({
                   </td>
                   <td>{formatCnpj(item.cnpj)}</td>
                   <td>{formatProducts(item.product_ids)}</td>
+                  <td>
+                    <ProspeccaoPriorityBadge
+                      label={item.queue_label}
+                      color={item.queue_color}
+                      overdueAlert={item.queue_overdue_alert}
+                    />
+                  </td>
                   <td>{item.city ?? "—"}</td>
                   <td>{item.uf ?? "—"}</td>
                   <td>{item.segment ?? "—"}</td>
