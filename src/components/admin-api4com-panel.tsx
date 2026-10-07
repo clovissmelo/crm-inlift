@@ -48,6 +48,20 @@ export function AdminApi4comPanel() {
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [extensionsLoading, setExtensionsLoading] = useState(false);
+  const [extensionsResult, setExtensionsResult] = useState<{
+    sip_domain: string | null;
+    extensions: Array<{
+      id: number | null;
+      ramal: string | null;
+      senha: string | null;
+      email: string | null;
+      domain: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    }>;
+    error?: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -135,6 +149,26 @@ export function AdminApi4comPanel() {
     if (!status?.webhook_url) return;
     void navigator.clipboard.writeText(status.webhook_url);
     setMessage("URL copiada.");
+  }
+
+  async function loadExtensionsFromApi() {
+    setExtensionsLoading(true);
+    setExtensionsResult(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/api4com/extensions");
+      const data = (await res.json()) as typeof extensionsResult & { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Não foi possível consultar ramais na API4COM.");
+        return;
+      }
+      setExtensionsResult(data);
+      setMessage(`Consulta API4COM: ${data.extensions?.length ?? 0} ramal(is).`);
+    } catch {
+      setError("Falha ao consultar ramais na API4COM.");
+    } finally {
+      setExtensionsLoading(false);
+    }
   }
 
   const globalDialMode = tokenPolicy === "global";
@@ -231,6 +265,50 @@ export function AdminApi4comPanel() {
             {saving ? "Salvando…" : "Salvar configuração"}
           </button>
         </form>
+        <div style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px solid var(--border, #e2e8f0)" }}>
+          <h3 style={{ marginTop: 0, fontSize: "1rem" }}>Ramais e senha SIP (API4COM)</h3>
+          <p className="muted" style={{ fontSize: "0.8125rem" }}>
+            Consulta <code>GET /extensions</code> com o token configurado no CRM. Se a API devolver o campo{" "}
+            <code>senha</code>, aparece abaixo — use no Meu perfil → Senha SIP (discador).
+          </p>
+          <button type="button" className="btn" disabled={extensionsLoading} onClick={() => void loadExtensionsFromApi()}>
+            {extensionsLoading ? "Consultando…" : "Consultar ramais na API4COM"}
+          </button>
+          {extensionsResult?.extensions?.length ? (
+            <div style={{ overflowX: "auto", marginTop: "0.75rem" }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Ramal</th>
+                    <th>Senha SIP</th>
+                    <th>E-mail</th>
+                    <th>Domínio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {extensionsResult.extensions.map((ex) => (
+                    <tr key={`${ex.id ?? ""}-${ex.ramal ?? ""}-${ex.email ?? ""}`}>
+                      <td>{ex.ramal ?? "—"}</td>
+                      <td>
+                        {ex.senha ? (
+                          <code>{ex.senha}</code>
+                        ) : (
+                          <span className="muted">não retornada pela API</span>
+                        )}
+                      </td>
+                      <td>{ex.email ?? "—"}</td>
+                      <td>{ex.domain ?? extensionsResult.sip_domain ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : extensionsResult && !extensionsResult.extensions?.length ? (
+            <p className="muted" style={{ marginTop: "0.5rem" }}>
+              Nenhum ramal na resposta.
+            </p>
+          ) : null}
+        </div>
       </section>
 
       <section className="panel">
