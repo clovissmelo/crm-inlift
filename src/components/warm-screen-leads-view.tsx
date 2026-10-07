@@ -160,12 +160,15 @@ export function WarmScreenLeadsView({
     setDetailModalOpen(true);
   }
 
+  const motorNeedsSync =
+    activeExecution?.status === "running" || activeExecution?.status === "paused";
+
   useEffect(() => {
-    if (tab !== "tempo_real") return;
+    if (!motorNeedsSync && tab !== "tempo_real") return;
     void pollActive();
     const t = window.setInterval(() => void pollActive(), 1500);
     return () => window.clearInterval(t);
-  }, [tab, pollActive]);
+  }, [motorNeedsSync, tab, pollActive]);
 
   function updateFilter(patch: Partial<typeof filters>) {
     setFilters((f) => ({ ...f, ...patch }));
@@ -307,6 +310,18 @@ export function WarmScreenLeadsView({
         </div>
       </div>
 
+      {motorNeedsSync && tab !== "tempo_real" ? (
+        <div className="lead-gen-bg-banner" role="status" style={{ marginBottom: "1rem" }}>
+          <div>
+            Execução #{activeExecution!.id} · {statusLabel[activeExecution!.status] ?? activeExecution!.status}
+            {activeExecution!.status === "paused" ? " — aguardando telefonia (ramal online no API4COM)" : " — motor ativo"}
+          </div>
+          <button type="button" className="btn btn-sm btn-primary" onClick={() => setTab("tempo_real")}>
+            Ver em tempo real
+          </button>
+        </div>
+      ) : null}
+
       <CadastroModal
         open={ramalModalOpen}
         title="Ramal do aquecimento"
@@ -318,6 +333,11 @@ export function WarmScreenLeadsView({
           O aquecedor disca com o <strong>token e ramal da BDR selecionada</strong> — não necessariamente o mesmo
           do seu login. Na prospecção manual, vale o seu Meu perfil. Se você mesmo tem ramal, escolha seu nome
           abaixo para ficar igual à ligação manual.
+        </p>
+        <p className="muted">
+          A API4COM precisa do <strong>Webphone ou softphone aberto e conectado</strong> com esse ramal antes de
+          iniciar; senão a execução pausa com erro de telefonia. Com execução ativa, o motor segue nas abas Lista e
+          Execuções (não precisa ficar só em Em tempo real).
         </p>
         <label className="filter-chip" style={{ display: "block", marginBottom: "1rem" }}>
           <span className="filter-chip-label">Rodar como</span>
@@ -492,13 +512,21 @@ export function WarmScreenLeadsView({
                         <td>
                           <WarmScreenPromptCell
                             prompt={
-                              i.prompt ?? {
-                                live: i.status === "dialing",
-                                lines: [
-                                  { text: `C:\\INLIFT>WARM.EXE /client=${i.client_id}`, variant: "dim" },
-                                  { text: i.status === "dialing" ? "[*] processando…" : "[queue] aguardando", variant: "ok" }
-                                ]
-                              }
+                              i.prompt
+                                ? {
+                                    ...i.prompt,
+                                    live: i.prompt.live && activeExecution?.status === "running"
+                                  }
+                                : {
+                                    live: activeExecution?.status === "running" && i.status === "dialing",
+                                    lines: [
+                                      { text: `C:\\INLIFT>WARM.EXE /client=${i.client_id}`, variant: "dim" },
+                                      {
+                                        text: i.status === "dialing" ? "[*] processando…" : "[queue] aguardando",
+                                        variant: "ok"
+                                      }
+                                    ]
+                                  }
                             }
                           />
                         </td>

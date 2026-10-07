@@ -1,4 +1,5 @@
 import { API4COM_STALE_FAIL_MESSAGE } from "@/lib/api4com/calls";
+import { humanizeApi4comDialError } from "@/lib/api-error-text";
 import { get, nowIso, run } from "@/lib/db";
 import { WARM_SCREEN_STALE_MESSAGE } from "@/lib/warm-screen/constants";
 import { isWarmScreenCallRow } from "@/lib/warm-screen/call-outcome";
@@ -138,9 +139,11 @@ export async function dismissWarmScreenConnectionFailureCall(callId: number): Pr
       { id: itemId, execId: executionId, now }
     );
 
-    const pauseMsg = isWarmScreenUndeliveredDialFailure(call)
-      ? "A telefonia encerrou a ligação antes de completar a discagem. Confira ramal/softphone da BDR e tente de novo."
-      : null;
+    const pauseMsg = call.error_message?.trim()
+      ? humanizeApi4comDialError(call.error_message.trim())
+      : isWarmScreenUndeliveredDialFailure(call)
+        ? "A telefonia encerrou a ligação antes de completar a discagem. Confira ramal/softphone da BDR e tente de novo."
+        : null;
 
     await run(
       `

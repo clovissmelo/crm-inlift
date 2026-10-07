@@ -33,11 +33,15 @@ export function buildWarmScreenPrompt(
   call: CallSlice | null,
   ctx: { executionStatus: string; queueBlocked: boolean; isCurrent: boolean }
 ): WarmScreenPromptPayload {
+  /** Animação (⋯ / cursor) só enquanto a execução está em andamento. */
+  const executionRunning = ctx.executionStatus === "running";
+  const live = (animating: boolean) => executionRunning && animating;
+
   const lines: PromptLine[] = [header(item.client_id)];
 
   if (ctx.executionStatus === "paused") {
     lines.push({ text: "[||] PAUSE — motor aguardando operador", variant: "warn" });
-    return { lines, live: true };
+    return { lines, live: live(true) };
   }
 
   if (item.status === "pending") {
@@ -48,7 +52,7 @@ export function buildWarmScreenPrompt(
     } else {
       lines.push({ text: "[queue] na fila — standby", variant: "dim" });
     }
-    return { lines, live: !ctx.queueBlocked || ctx.isCurrent };
+    return { lines, live: live(!ctx.queueBlocked || ctx.isCurrent) };
   }
 
   if (item.status === "dialing") {
@@ -56,7 +60,7 @@ export function buildWarmScreenPrompt(
     if (!call?.status) {
       lines.push({ text: `[*] discando ${phone}`, variant: "ok" });
       lines.push({ text: "[.] conectando API4COM", variant: "dim" });
-      return { lines, live: true };
+      return { lines, live: live(true) };
     }
 
     switch (call.status) {
@@ -90,7 +94,7 @@ export function buildWarmScreenPrompt(
       default:
         lines.push({ text: `[?] telefonia: ${call.status}`, variant: "warn" });
     }
-    return { lines, live: call.status !== "completed" || Boolean(call.result_pending) };
+    return { lines, live: live(call.status !== "completed" || Boolean(call.result_pending)) };
   }
 
   if (item.status === "completed_warmed") {

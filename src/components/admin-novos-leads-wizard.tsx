@@ -1,7 +1,6 @@
 "use client";
 
 import "./lead-gen-execution.css";
-import Link from "next/link";
 import { Info, Play, Radio, Trash2 } from "lucide-react";
 import {
   AdminNovosLeadsCityPicker,
@@ -248,10 +247,6 @@ export function AdminNovosLeadsWizard() {
   }, [activeRunId, runs, activeRun, listActiveRun, starting]);
 
   const shownRunActive = shownRun != null && ["queued", "running", "paused"].includes(shownRun.status);
-
-  useEffect(() => {
-    if (shownRunActive) setMotorTab("tempo_real");
-  }, [shownRunActive]);
 
   function clampLeadsRequested(value: number) {
     const max = maxLeadsRequested;
@@ -715,6 +710,7 @@ export function AdminNovosLeadsWizard() {
       }
     }
     setError(null);
+    setMotorTab("tempo_real");
     setExecOverlayOpen(true);
     setBackgroundRunNotice(false);
     setActivityFeed([]);

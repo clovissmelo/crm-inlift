@@ -226,7 +226,12 @@ export function WarmScreenExecutionDetailModal({
                     <td>{item.phone_dialed ?? "—"}</td>
                     <td>
                       {item.prompt ? (
-                        <WarmScreenPromptCell prompt={item.prompt} />
+                        <WarmScreenPromptCell
+                          prompt={{
+                            ...item.prompt,
+                            live: item.prompt.live && execution.status === "running"
+                          }}
+                        />
                       ) : (
                         <span className="muted">—</span>
                       )}
