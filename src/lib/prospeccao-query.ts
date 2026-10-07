@@ -253,7 +253,7 @@ async function loadEnrichedProspeccaoRows(filters: ClientFilters): Promise<Enric
       LEFT JOIN pending_fu ON pending_fu.client_id = clients.id
       WHERE ${where}
       GROUP BY clients.id, bdr.name, pending_fu.scheduled_at, clients.prospeccao_phone_summary,
-        clients.prospeccao_completed_dial_rounds
+        clients.prospeccao_completed_dial_rounds, clients.warm_screen_confirmed_at
     `,
     params
   );

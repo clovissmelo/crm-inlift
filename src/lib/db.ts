@@ -106,6 +106,27 @@ async function runMigrations(sql: Sql) {
   }
 
   await ensureLeadGenerationIbgeCacheTable(sql);
+  await ensureWarmScreenSchemaColumns(sql);
+}
+
+/** Repara colunas do aquecedor quando migração manual ficou pendente em produção. */
+async function ensureWarmScreenSchemaColumns(sql: Sql) {
+  await sql.unsafe(`
+    ALTER TABLE clients
+      ADD COLUMN IF NOT EXISTS warm_screen_confirmed_at TIMESTAMPTZ NULL
+  `);
+  await sql.unsafe(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'warm_screen_executions'
+      ) THEN
+        ALTER TABLE warm_screen_executions
+          ADD COLUMN IF NOT EXISTS items_not_warmed INTEGER NOT NULL DEFAULT 0;
+      END IF;
+    END $$
+  `);
 }
 
 /** Repara produção onde 026 consta aplicada mas a tabela de cache IBGE não existe. */
