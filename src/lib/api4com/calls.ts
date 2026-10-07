@@ -32,8 +32,19 @@ function activeCallTimeParams() {
 }
 
 /** Ligações do motor de aquecimento não usam painel de roteiro (só discagem manual). */
+const SQL_IS_WARM_SCREEN_CALL = `
+  (
+    COALESCE(c.metadata_json::jsonb ->> 'purpose', '') = @warmScreenPurpose
+    OR COALESCE(c.metadata_json::jsonb -> 'metadata' ->> 'purpose', '') = @warmScreenPurpose
+    OR EXISTS (
+      SELECT 1 FROM warm_screen_execution_items wi
+      WHERE wi.api4com_call_row_id = c.id
+    )
+  )
+`;
+
 const SQL_EXCLUDE_WARM_SCREEN_CALLS = `
-  AND COALESCE(c.metadata_json::jsonb ->> 'purpose', '') <> @warmScreenPurpose
+  AND NOT ${SQL_IS_WARM_SCREEN_CALL}
 `;
 
 /** Marca ligações presas em initiating/ringing/in_progress como failed (evita bloqueio permanente). */
@@ -260,14 +271,25 @@ export async function initiateApi4comCall(input: {
   const cfg = await getApi4comConfig();
   const now = nowIso();
 
+  const insertMeta: Record<string, string> | null = input.warmScreen
+    ? {
+        purpose: WARM_SCREEN_PURPOSE,
+        warm_screen_execution_id: String(input.warmScreen.executionId),
+        warm_screen_item_id: String(input.warmScreen.itemId),
+        gateway: cfg.gateway,
+        crm: "inlift",
+        user_id: String(input.userId)
+      }
+    : null;
+
   const insert = await run(
     `
       INSERT INTO api4com_calls (
         user_id, client_id, contact_id, product_id, phone_dialed, extension,
-        dial_session_root_id, status, created_at, updated_at
+        dial_session_root_id, status, metadata_json, created_at, updated_at
       ) VALUES (
         @userId, @clientId, @contactId, @productId, @phone, @extension,
-        @dialSessionRootId, 'initiating', @now, @now
+        @dialSessionRootId, 'initiating', @insertMeta::jsonb, @now, @now
       )
     `,
     {
@@ -278,6 +300,7 @@ export async function initiateApi4comCall(input: {
       phone: called,
       extension,
       dialSessionRootId: input.dialSessionRootId ?? null,
+      insertMeta: insertMeta ? JSON.stringify(insertMeta) : null,
       now
     }
   );
@@ -442,7 +465,14 @@ export async function listPendingCallsForUser(userId: number) {
             AND c2.result_pending = true
             AND c2.approach_id IS NULL
             AND c2.status = 'completed'
-            AND COALESCE(c2.metadata_json::jsonb ->> 'purpose', '') <> @warmScreenPurpose
+            AND NOT (
+              COALESCE(c2.metadata_json::jsonb ->> 'purpose', '') = @warmScreenPurpose
+              OR COALESCE(c2.metadata_json::jsonb -> 'metadata' ->> 'purpose', '') = @warmScreenPurpose
+              OR EXISTS (
+                SELECT 1 FROM warm_screen_execution_items wi
+                WHERE wi.api4com_call_row_id = c2.id
+              )
+            )
             AND COALESCE(c2.dial_session_root_id, c2.id) = COALESCE(c.dial_session_root_id, c.id)
           ORDER BY c2.ended_at DESC NULLS LAST, c2.id DESC
           LIMIT 1

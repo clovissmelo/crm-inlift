@@ -13,6 +13,10 @@ function isProspeccaoPath(pathname: string | null) {
   return pathname?.startsWith("/prospeccao") ?? false;
 }
 
+function isWarmScreenPath(pathname: string | null) {
+  return pathname?.startsWith("/aquecedor-leads") ?? false;
+}
+
 type PendingCall = {
   id: number;
   client_id: number | null;
@@ -39,6 +43,7 @@ export function useApi4comSession() {
 export function Api4comCallProvider({ user, children }: { user: User; children: React.ReactNode }) {
   const pathname = usePathname();
   const onProspeccaoPage = isProspeccaoPath(pathname);
+  const onWarmScreenPage = isWarmScreenPath(pathname);
   const isAdmin = user.roles.includes("admin");
   const canDial = user.roles.includes("bdr") || isAdmin;
   const hasOwnExtension = Boolean(normalizeApi4comExtension(user.api4com_extension ?? ""));
@@ -193,7 +198,11 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
       }
     })();
   }, [activeCall, refreshPending]);
-  const showSidePanel = canDial && panelMode != null && (panelMode === "script" || onProspeccaoPage);
+  const showSidePanel =
+    canDial &&
+    panelMode != null &&
+    !onWarmScreenPage &&
+    (panelMode === "script" || onProspeccaoPage);
 
   function closeResultPanel() {
     if (resultCallId != null) autoOpenedRef.current.add(resultCallId);
