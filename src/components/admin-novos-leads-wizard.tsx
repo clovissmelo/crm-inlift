@@ -2,7 +2,7 @@
 
 import "./lead-gen-execution.css";
 import Link from "next/link";
-import { Info, Play, Trash2 } from "lucide-react";
+import { Info, Play, Radio, Trash2 } from "lucide-react";
 import {
   AdminNovosLeadsCityPicker,
   type CitySelectionPayload,
@@ -192,6 +192,7 @@ export function AdminNovosLeadsWizard() {
   const [lastRefreshedLabel, setLastRefreshedLabel] = useState<string | null>(null);
   const [lastPageSyncLabel, setLastPageSyncLabel] = useState<string | null>(null);
   const [pageSyncBusy, setPageSyncBusy] = useState(false);
+  const [motorTab, setMotorTab] = useState<"tempo_real" | "execucoes">("execucoes");
   const [historyVisibleCount, setHistoryVisibleCount] = useState(HISTORY_PAGE_SIZE);
   const [anpPreviewOpen, setAnpPreviewOpen] = useState(false);
   const [anpPreviewLoading, setAnpPreviewLoading] = useState(false);
@@ -247,6 +248,10 @@ export function AdminNovosLeadsWizard() {
   }, [activeRunId, runs, activeRun, listActiveRun, starting]);
 
   const shownRunActive = shownRun != null && ["queued", "running", "paused"].includes(shownRun.status);
+
+  useEffect(() => {
+    if (shownRunActive) setMotorTab("tempo_real");
+  }, [shownRunActive]);
 
   function clampLeadsRequested(value: number) {
     const max = maxLeadsRequested;
@@ -1030,7 +1035,7 @@ export function AdminNovosLeadsWizard() {
           </p>
         ) : null}
 
-        <div className="lead-gen-form-row lead-gen-form-row--meta">
+        <div className="lead-gen-params-grid">
           <div className="field">
             <label className="label" htmlFor="lead-segment">
               Segmento
@@ -1050,9 +1055,8 @@ export function AdminNovosLeadsWizard() {
               ))}
             </select>
           </div>
-          <div className="lead-gen-meta-product-flow">
-            <div className="field">
-              <label className="label">Produto (opcional)</label>
+          <div className="field">
+            <label className="label">Produto (opcional)</label>
               <select
                 className="input"
                 value={productId}
@@ -1068,9 +1072,12 @@ export function AdminNovosLeadsWizard() {
                   </option>
                 ))}
               </select>
-            </div>
-            {productId !== "" && flowPreview ? <LeadGenFlowField preview={flowPreview} /> : null}
           </div>
+          {productId !== "" && flowPreview ? (
+            <div className="lead-gen-params-flow">
+              <LeadGenFlowField preview={flowPreview} />
+            </div>
+          ) : null}
           <div className="field">
             <label className="label">BDR responsável</label>
             <select className="input" value={bdrUserId} onChange={(e) => setBdrUserId(e.target.value ? Number(e.target.value) : "")}>
@@ -1084,7 +1091,7 @@ export function AdminNovosLeadsWizard() {
           </div>
         </div>
 
-        <div className="lead-gen-form-section">
+        <div className="lead-gen-form-section lead-gen-params-region">
           <span className="label">Região</span>
           <AdminNovosLeadsCityPicker
             uf={uf}
@@ -1097,7 +1104,7 @@ export function AdminNovosLeadsWizard() {
           />
         </div>
 
-        <div className="lead-gen-form-row lead-gen-form-row--start">
+        <div className="lead-gen-form-row lead-gen-form-row--start lead-gen-form-row--qty-only">
           <div className="field lead-gen-qty-field">
             <span className="label" id="lead-gen-qty-label">
               Novos leads a solicitar
@@ -1133,42 +1140,103 @@ export function AdminNovosLeadsWizard() {
             </div>
             <span className="muted lead-gen-qty-hint">Máx. {maxLeadsRequested} por execução</span>
           </div>
-          <div className="lead-gen-start-actions">
-            <button
-              className="btn btn-brand"
-              type="button"
-              disabled={starting || shownRunActive || anpPreviewLoading}
-              onClick={() => void openAnpPreviewModal()}
-            >
-              {anpPreviewLoading ? (
-                "Consultando ANP…"
-              ) : (
-                <>
-                  <Play size={16} style={{ marginRight: 6, verticalAlign: "middle" }} aria-hidden />
-                  {starting ? "Iniciando…" : "Criação de leads"}
-                </>
-              )}
-            </button>
-            {shownRunActive && shownRun ? (
-              <button
-                className="btn lead-gen-cancel-exec-btn"
-                type="button"
-                disabled={cancelling}
-                onClick={() => void cancelRun(shownRun.id)}
-              >
-                {cancelling ? "Cancelando…" : "Cancelar execução"}
-              </button>
-            ) : null}
-          </div>
           <p className="lead-gen-run-note muted" role="note">
             CNPJs já no CRM ou cadastros inválidos são ignorados na geração.
           </p>
         </div>
       </div>
 
-      <div className="panel" style={{ marginTop: "1rem" }}>
+      <div className="motor-screen-toolbar">
+        <div className="motor-screen-toolbar__tabs">
+          <button
+            type="button"
+            className={motorTab === "tempo_real" ? "btn motor-screen-tab-active" : "btn"}
+            onClick={() => setMotorTab("tempo_real")}
+          >
+            <Radio size={16} aria-hidden />
+            Em tempo real
+          </button>
+          <button
+            type="button"
+            className={motorTab === "execucoes" ? "btn motor-screen-tab-active" : "btn"}
+            onClick={() => setMotorTab("execucoes")}
+          >
+            Execuções
+          </button>
+        </div>
+        <div className="motor-screen-toolbar__actions">
+          {shownRunActive && shownRun ? (
+            <button
+              className="btn lead-gen-cancel-exec-btn"
+              type="button"
+              disabled={cancelling}
+              onClick={() => void cancelRun(shownRun.id)}
+            >
+              {cancelling ? "Cancelando…" : "Cancelar execução"}
+            </button>
+          ) : null}
+          <button
+            className="btn btn-brand motor-screen-primary-btn"
+            type="button"
+            disabled={starting || shownRunActive || anpPreviewLoading}
+            onClick={() => void openAnpPreviewModal()}
+          >
+            {anpPreviewLoading ? (
+              "Consultando ANP…"
+            ) : (
+              <>
+                <Play size={18} aria-hidden />
+                {starting ? "Iniciando…" : "Criação de leads"}
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {motorTab === "tempo_real" ? (
+        <div className="panel">
+          {shownRun ? (
+            <>
+              <p style={{ marginTop: 0 }}>
+                Execução #{shownRun.id} ·{" "}
+                <span className={`lead-gen-status lead-gen-status--${shownRun.status}`}>
+                  {RUN_STATUS_LABEL[shownRun.status] ?? shownRun.status}
+                </span>
+                {shownRunActive ? (
+                  <span className="muted"> · {PHASE_LABEL[shownRun.phase] ?? shownRun.phase}</span>
+                ) : null}
+              </p>
+              {shownRunActive || showRunResultColumn(shownRun) ? (
+                <LeadGenRunProgressBar run={shownRun} compact={false} />
+              ) : null}
+              <p className="muted" style={{ marginBottom: "0.75rem" }}>
+                {shownRunActive
+                  ? formatRunResults(counts)
+                  : formatRunResults(shownRun.counts_json ?? {})}
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                <button type="button" className="btn btn-primary" onClick={openExecOverlay}>
+                  {shownRunActive ? "Ver progresso ao vivo" : "Ver detalhes da execução"}
+                </button>
+                {shownRunActive && shownRun.status === "paused" ? (
+                  <button type="button" className="btn" onClick={() => void resumeRun(shownRun.id)}>
+                    Retomar
+                  </button>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <p className="muted" style={{ margin: 0 }}>
+              Nenhuma geração em andamento. Ajuste os parâmetros acima e use <strong>Criação de leads</strong>.
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {motorTab === "execucoes" ? (
+      <div className="panel">
         <div className="lead-gen-history-head">
-          <h3 className="panel-title">Histórico</h3>
+          <h3 className="panel-title">Execuções</h3>
           <div className="lead-gen-history-sync">
             {lastPageSyncLabel ? (
               <span className="muted lead-gen-history-sync-time">Atualizado às {lastPageSyncLabel}</span>
@@ -1358,6 +1426,7 @@ export function AdminNovosLeadsWizard() {
           </div>
         ) : null}
       </div>
+      ) : null}
     </div>
   );
 }

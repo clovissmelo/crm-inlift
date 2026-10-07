@@ -6,7 +6,6 @@ import { Play, Pause, Square, Radio, List, Info, Trash2 } from "lucide-react";
 import { ProspeccaoPriorityBadge } from "@/components/prospeccao-priority-badge";
 import { CadastroModal } from "@/components/cadastro-ui";
 import { FilterBar, FilterInput, FilterSelect } from "@/components/filter-bar";
-import { PageIntro } from "@/components/page-intro";
 import { normalizeApi4comExtension } from "@/lib/api4com/phone";
 import type { Company, Product, User } from "@/lib/types";
 import type { ProspeccaoListItem } from "@/lib/prospeccao-query";
