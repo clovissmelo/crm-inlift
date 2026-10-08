@@ -111,16 +111,25 @@
 }
 
 .simulador-script-page {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
+  position: relative;
   min-height: calc(100dvh - 7rem);
   margin: -0.25rem 0 0;
 }
 
-.simulador-script-page .resultado-simulator-embedded-root {
-  flex: 1;
-  min-height: 0;
+.simulador-script-page-main {
+  padding: 0.5rem 1.25rem 2rem;
+  max-width: min(42rem, calc(50vw - 2rem));
+}
+
+.simulador-script-page-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.simulador-script-page-lead {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
 }
 
 .resultado-simulator-embedded-root {
