@@ -14,6 +14,40 @@ export type Api4comStartCallResponse = {
   id?: string;
 };
 
+function api4comImmediateDialFailure(raw: string): boolean {
+  const m = raw.toLowerCase();
+  return m.includes("has been failed") || (m.includes("call from") && m.includes("failed"));
+}
+
+function throwApi4comStartCallError(raw: string): never {
+  const friendly = humanizeApi4comDialError(raw);
+  throw new Error(friendly !== raw ? `${friendly} Detalhe API4COM: ${raw}` : raw);
+}
+
+async function postApi4comStartCall(
+  baseUrl: string,
+  payload: Api4comStartCallPayload,
+  apiToken: string
+): Promise<Api4comStartCallResponse> {
+  const res = await fetch(`${baseUrl}/api/v1/calls`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: apiToken
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = (await res.json().catch(() => ({}))) as Api4comStartCallResponse & Record<string, unknown>;
+  if (!res.ok) {
+    throwApi4comStartCallError(apiErrorText(data, `API4COM respondeu ${res.status}`));
+  }
+  if (!data.id) {
+    throw new Error(data.message || "API4COM não retornou o ID da chamada.");
+  }
+  return data;
+}
+
 export async function api4comStartCall(
   payload: Api4comStartCallPayload,
   apiToken: string
@@ -25,25 +59,16 @@ export async function api4comStartCall(
     );
   }
 
-  const res = await fetch(`${cfg.baseUrl}/api/v1/calls`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: apiToken
-    },
-    body: JSON.stringify(payload)
-  });
-
-  const data = (await res.json().catch(() => ({}))) as Api4comStartCallResponse & Record<string, unknown>;
-  if (!res.ok) {
-    const raw = apiErrorText(data, `API4COM respondeu ${res.status}`);
-    const friendly = humanizeApi4comDialError(raw);
-    throw new Error(friendly === raw ? friendly : `${friendly} Detalhe API4COM: ${raw}`);
+  try {
+    return await postApi4comStartCall(cfg.baseUrl, payload, apiToken);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const detailMatch = msg.match(/Detalhe API4COM: (.+)$/s);
+    const apiRaw = detailMatch?.[1]?.trim() ?? msg;
+    if (!api4comImmediateDialFailure(apiRaw)) throw err;
+    await new Promise((r) => setTimeout(r, 2000));
+    return await postApi4comStartCall(cfg.baseUrl, payload, apiToken);
   }
-  if (!data.id) {
-    throw new Error(data.message || "API4COM não retornou o ID da chamada.");
-  }
-  return data;
 }
 
 export async function api4comHangupCall(apiCallId: string, apiToken: string): Promise<void> {

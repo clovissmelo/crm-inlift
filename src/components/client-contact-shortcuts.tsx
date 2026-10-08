@@ -206,7 +206,7 @@ export function ClientContactShortcuts({
     const dialAs = asUserId ?? resolvedDialAsUserId();
     if (!dialAs) return;
     if (webphone) {
-      const online = await webphone.ensureRegistered({ userId: dialAs });
+      const online = await webphone.prepareForApiDial({ userId: dialAs, openPanel: true });
       if (!online) {
         setDialError("Conecte o ramal no painel de telefonia do CRM antes de ligar.");
         if (!fromPicker) setDialFeedbackOpen(true);

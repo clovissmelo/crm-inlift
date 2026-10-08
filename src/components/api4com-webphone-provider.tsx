@@ -47,6 +47,8 @@ type WebphoneContextValue = {
   openPanel: () => void;
   closePanel: () => void;
   ensureRegistered: (opts?: EnsureOptions) => Promise<boolean>;
+  /** Registro SIP + refresh antes de POST /calls (API4COM exige ramal “online” no servidor). */
+  prepareForApiDial: (opts?: EnsureOptions) => Promise<boolean>;
 };
 
 const WebphoneContext = createContext<WebphoneContextValue | null>(null);
@@ -305,6 +307,22 @@ export function Api4comWebphoneProvider({
     [connectForUser, registeredUserId, user.id]
   );
 
+  const prepareForApiDial = useCallback(
+    async (opts?: EnsureOptions) => {
+      const ok = await ensureRegistered({ ...opts, openPanel: opts?.openPanel ?? false });
+      if (!ok) return false;
+      const wp = webphoneRef.current;
+      try {
+        wp?.getUserAgent?.()?.register?.();
+      } catch {
+        /* ignore */
+      }
+      await new Promise((r) => setTimeout(r, 1200));
+      return registeredRef.current;
+    },
+    [ensureRegistered]
+  );
+
   const openPanel = useCallback(() => setPanelOpen(true), []);
   const closePanel = useCallback(() => setPanelOpen(false), []);
 
@@ -322,7 +340,8 @@ export function Api4comWebphoneProvider({
     panelOpen,
     openPanel,
     closePanel,
-    ensureRegistered
+    ensureRegistered,
+    prepareForApiDial
   };
 
   if (!canDial) {
