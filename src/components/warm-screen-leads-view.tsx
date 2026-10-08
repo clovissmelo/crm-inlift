@@ -203,10 +203,11 @@ export function WarmScreenLeadsView({
     }
     setStarting(true);
     setMessage(null);
-    const online = await webphone.prepareForApiDial({ userId: dialUserId, openPanel: true });
+    const online = await webphone.prepareForApiDial({ userId: dialUserId, openPanel: false });
     if (!online) {
+      webphone.openPanel();
       setStarting(false);
-      setMessage("Conecte o ramal no painel de telefonia antes de iniciar o aquecimento.");
+      setMessage("Conecte o ramal no ícone de telefone ao lado do seu nome antes de iniciar o aquecimento.");
       return;
     }
     await startWarm();

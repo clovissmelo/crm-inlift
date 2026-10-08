@@ -40,6 +40,10 @@ export function pageCrumbSegments(pathname: string): string[] {
     segments.push("aquecedor leads");
     return segments;
   }
+  if (pathname.startsWith("/simulador-script")) {
+    segments.push("simulador de script");
+    return segments;
+  }
   if (pathname.startsWith("/retornos")) {
     segments.push("retornos");
     return segments;
@@ -107,6 +111,10 @@ export function pageCrumbSegments(pathname: string): string[] {
 
   if (pathname.startsWith("/perfil")) {
     segments.push("meu perfil");
+    return segments;
+  }
+  if (pathname.startsWith("/meu-telefone")) {
+    segments.push("meu telefone");
     return segments;
   }
 

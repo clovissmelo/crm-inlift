@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import type { Route } from "next";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Check, Phone, Mail, MessageCircle, Smartphone } from "lucide-react";
@@ -206,9 +207,10 @@ export function ClientContactShortcuts({
     const dialAs = asUserId ?? resolvedDialAsUserId();
     if (!dialAs) return;
     if (webphone) {
-      const online = await webphone.prepareForApiDial({ userId: dialAs, openPanel: true });
+      const online = await webphone.prepareForApiDial({ userId: dialAs, openPanel: false });
       if (!online) {
-        setDialError("Conecte o ramal no painel de telefonia do CRM antes de ligar.");
+        webphone.openPanel();
+        setDialError("Conecte o ramal no ícone de telefone ao lado do seu nome antes de ligar.");
         if (!fromPicker) setDialFeedbackOpen(true);
         return;
       }
@@ -460,8 +462,8 @@ export function ClientContactShortcuts({
       <CadastroModal open={noExtensionOpen} title="Ramal não configurado" onClose={closeNoExtension}>
         <p style={{ whiteSpace: "pre-line", margin: 0 }}>{API4COM_NO_EXTENSION_MESSAGE}</p>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: "0.75rem", flexWrap: "wrap" }}>
-          <Link href="/perfil" className="btn btn-primary" onClick={closeNoExtension}>
-            Ir para Meu perfil
+          <Link href={"/meu-telefone" as Route} className="btn btn-primary" onClick={closeNoExtension}>
+            Ir para Meu telefone
           </Link>
           <button type="button" className="btn" onClick={closeNoExtension}>
             Fechar

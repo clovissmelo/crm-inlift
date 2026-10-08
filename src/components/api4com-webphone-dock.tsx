@@ -2,7 +2,9 @@
 
 import clsx from "clsx";
 import { Phone, PhoneOff, X } from "lucide-react";
+import { useState } from "react";
 import type { WebphoneRegistrationState } from "@/components/api4com-webphone-provider";
+import { apiErrorText } from "@/lib/api-error-text";
 
 const STATUS_LABEL: Record<WebphoneRegistrationState, string> = {
   idle: "Desconectado",
@@ -21,7 +23,9 @@ export function Api4comWebphoneDock({
   extension,
   targetUserName,
   onConnect,
-  connecting
+  connecting,
+  dialUserId,
+  onPrepareForDial
 }: {
   open: boolean;
   onClose: () => void;
@@ -31,75 +35,145 @@ export function Api4comWebphoneDock({
   targetUserName: string | null;
   onConnect: () => void;
   connecting: boolean;
+  dialUserId: number;
+  onPrepareForDial: (userId: number) => Promise<boolean>;
 }) {
+  const [testNumber, setTestNumber] = useState("");
+  const [testDialing, setTestDialing] = useState(false);
+  const [testError, setTestError] = useState<string | null>(null);
+  const [testOk, setTestOk] = useState<string | null>(null);
+
   if (!open) return null;
 
   const online = status === "registered";
 
+  async function startTestCall() {
+    const phone = testNumber.trim();
+    if (!phone) {
+      setTestError("Informe o número para teste.");
+      return;
+    }
+    setTestDialing(true);
+    setTestError(null);
+    setTestOk(null);
+    const ready = await onPrepareForDial(dialUserId);
+    if (!ready) {
+      setTestDialing(false);
+      setTestError("Conecte o ramal antes de ligar.");
+      return;
+    }
+    const res = await fetch("/api/api4com/calls", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone })
+    });
+    let data: unknown = null;
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+    setTestDialing(false);
+    if (!res.ok) {
+      setTestError(apiErrorText(data, "Não foi possível iniciar a ligação de teste."));
+      return;
+    }
+    setTestOk("Ligação iniciada — atenda a perna SIP neste painel.");
+  }
+
   return (
-    <div className="api4com-webphone-dock" role="region" aria-label="Discador API4COM">
-      <div className="api4com-webphone-dock-inner panel">
-        <div className="api4com-webphone-dock-head">
-          <div className="api4com-webphone-dock-title">
-            <Phone size={18} aria-hidden />
-            <span>Telefonia no CRM</span>
-            <span
-              className={clsx(
-                "api4com-webphone-dot",
-                online && "api4com-webphone-dot--online",
-                status === "connecting" || status === "loading" ? "api4com-webphone-dot--busy" : null,
-                status === "error" ? "api4com-webphone-dot--error" : null
-              )}
-              aria-hidden
-            />
+    <>
+      <button type="button" className="api4com-webphone-backdrop" aria-label="Fechar discador" onClick={onClose} />
+      <div className="api4com-webphone-dock api4com-webphone-dock--center" role="dialog" aria-label="Discador API4COM">
+        <div className="api4com-webphone-dock-inner panel">
+          <div className="api4com-webphone-dock-head">
+            <div className="api4com-webphone-dock-title">
+              <Phone size={18} aria-hidden />
+              <span>Telefone CRM</span>
+              <span
+                className={clsx(
+                  "api4com-webphone-dot",
+                  online && "api4com-webphone-dot--online",
+                  status === "connecting" || status === "loading" ? "api4com-webphone-dot--busy" : null,
+                  status === "error" ? "api4com-webphone-dot--error" : null
+                )}
+                aria-hidden
+              />
+            </div>
+            <button type="button" className="btn btn-icon-sm" onClick={onClose} aria-label="Fechar painel">
+              <X size={18} />
+            </button>
           </div>
-          <button type="button" className="btn btn-icon-sm" onClick={onClose} aria-label="Fechar painel">
-            <X size={18} />
-          </button>
-        </div>
-        <p className="api4com-webphone-dock-status">
-          <strong>{STATUS_LABEL[status]}</strong>
-          {extension ? (
-            <>
-              {" "}
-              · ramal <code>{extension}</code>
-            </>
+          <p className="api4com-webphone-dock-status">
+            <strong>{STATUS_LABEL[status]}</strong>
+            {extension ? (
+              <>
+                {" "}
+                · ramal <code>{extension}</code>
+              </>
+            ) : null}
+            {targetUserName ? <> ({targetUserName})</> : null}
+          </p>
+          {statusDetail ? <p className="muted api4com-webphone-dock-detail">{statusDetail}</p> : null}
+          {!online && status !== "needs_config" ? (
+            <p className="muted api4com-webphone-dock-detail">
+              Feche a extensão Webphone da API4COM no Chrome — só uma conexão SIP por ramal.
+            </p>
           ) : null}
-          {targetUserName ? <> ({targetUserName})</> : null}
-        </p>
-        {statusDetail ? <p className="muted api4com-webphone-dock-detail">{statusDetail}</p> : null}
-        {!online && status !== "needs_config" ? (
-          <p className="muted api4com-webphone-dock-detail">
-            Se você usa a extensão Webphone da API4COM, feche-a — só uma conexão SIP por ramal.
-          </p>
-        ) : null}
-        {status === "needs_config" ? (
-          <p className="muted api4com-webphone-dock-detail">
-            Admin: domínio SIP em Integrações → API4COM. BDR: senha SIP do painel API4COM (instalação do Webphone) em
-            Meu perfil ou Usuários.
-          </p>
-        ) : null}
-        <div className="api4com-webphone-dock-actions">
-          {!online ? (
-            <button type="button" className="btn btn-primary" disabled={connecting} onClick={onConnect}>
-              {connecting ? "Conectando…" : "Conectar ramal"}
-            </button>
-          ) : (
-            <span className="api4com-webphone-dock-ok">
-              <Phone size={16} aria-hidden />
-              Pronto — ligações da API são atendidas automaticamente aqui
-            </span>
-          )}
+          {status === "needs_config" ? (
+            <p className="muted api4com-webphone-dock-detail">
+              Admin: domínio SIP em Integrações → API4COM. BDR: senha SIP em Meu perfil ou Usuários.
+            </p>
+          ) : null}
+
+          <div className="api4com-webphone-dock-actions">
+            {!online ? (
+              <button type="button" className="btn btn-primary btn-block" disabled={connecting} onClick={onConnect}>
+                {connecting ? "Conectando…" : "Conectar ramal"}
+              </button>
+            ) : null}
+            {online ? (
+              <button type="button" className="btn btn-ghost btn-sm" disabled={connecting} onClick={onConnect}>
+                <PhoneOff size={16} aria-hidden />
+                Reconectar
+              </button>
+            ) : null}
+          </div>
+
           {online ? (
-            <button type="button" className="btn" disabled={connecting} onClick={onConnect}>
-              <PhoneOff size={16} aria-hidden />
-              Reconectar
-            </button>
+            <div className="api4com-webphone-test-dial">
+              <p className="api4com-webphone-test-dial-label">Ligação de teste (formato atual da API)</p>
+              <div className="api4com-webphone-test-dial-row">
+                <input
+                  type="tel"
+                  className="input"
+                  placeholder="(51) 99999-9999"
+                  value={testNumber}
+                  onChange={(e) => setTestNumber(e.target.value)}
+                  disabled={testDialing}
+                  autoComplete="tel"
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={testDialing || !testNumber.trim()}
+                  onClick={() => void startTestCall()}
+                >
+                  {testDialing ? "Discando…" : "Ligar"}
+                </button>
+              </div>
+              {testError ? <p className="alert alert-error api4com-webphone-test-msg">{testError}</p> : null}
+              {testOk ? <p className="api4com-webphone-test-ok api4com-webphone-test-msg">{testOk}</p> : null}
+              <p className="muted api4com-webphone-dock-detail">
+                Use este teste isolado antes de ligar pela ficha do cliente ou pelo aquecedor.
+              </p>
+            </div>
           ) : null}
+
+          <div id="api4com-wp-audio" className="api4com-webphone-hidden-host" aria-hidden />
+          <div id="api4com-wp-media" className="api4com-webphone-hidden-host" aria-hidden />
         </div>
-        <div id="api4com-wp-audio" className="api4com-webphone-hidden-host" aria-hidden />
-        <div id="api4com-wp-media" className="api4com-webphone-hidden-host" aria-hidden />
       </div>
-    </div>
+    </>
   );
 }

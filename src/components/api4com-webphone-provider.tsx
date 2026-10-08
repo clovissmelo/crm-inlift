@@ -38,7 +38,7 @@ type EnsureOptions = {
   openPanel?: boolean;
 };
 
-type WebphoneContextValue = {
+export type WebphoneContextValue = {
   status: WebphoneRegistrationState;
   isRegistered: boolean;
   registeredUserId: number | null;
@@ -359,6 +359,8 @@ export function Api4comWebphoneProvider({
         extension={registeredExtension}
         targetUserName={targetUserName}
         connecting={connecting}
+        dialUserId={registeredUserId ?? user.id}
+        onPrepareForDial={(uid) => prepareForApiDial({ userId: uid, openPanel: false })}
         onConnect={() => void connectForUser(registeredUserId ?? user.id)}
       />
     </WebphoneContext.Provider>

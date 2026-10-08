@@ -20,6 +20,7 @@ import {
   Menu,
   PhoneCall,
   Package,
+  PlayCircle,
   Settings,
   Shield,
   Sparkles,
@@ -29,6 +30,7 @@ import {
   X
 } from "lucide-react";
 import { Api4comCallProvider } from "@/components/api4com-call-provider";
+import { Api4comTelephonyTopbarControl } from "@/components/api4com-telephony-topbar-control";
 import { UserMenu } from "@/components/user-menu";
 import { isAdmin } from "@/lib/admin";
 import {
@@ -57,6 +59,7 @@ const MENU_ICONS: Record<MenuKey, typeof LayoutDashboard> = {
   agendamentos: Calendar,
   novos_leads: Sparkles,
   aquecedor_leads: Flame,
+  simulador_script: PlayCircle,
   organizacao_leads: Filter,
   clientes: List,
   abordagens: Target,
@@ -242,23 +245,26 @@ export function AppShell({
         </div>
       </aside>
       <div className="main-column">
-        <header className="topbar">
-          <p className="topbar-crumb" aria-label={`Localização: ${crumbParts.join(", ")}`}>
-            {crumbParts.map((part, i) => (
-              <span key={`${part}-${i}`}>
-                {i > 0 ? <span className="topbar-crumb-sep" aria-hidden> • </span> : null}
-                {part}
-              </span>
-            ))}
-          </p>
-          <UserMenu user={user} />
-        </header>
-        <div className="main-column-body">
-          <main className="page-content">
-            <Api4comCallProvider user={user}>{children}</Api4comCallProvider>
-          </main>
-          <div ref={overlayHostRef} id="app-main-overlay-root" className="app-main-overlay-root" aria-hidden />
-        </div>
+        <Api4comCallProvider user={user}>
+          <header className="topbar">
+            <p className="topbar-crumb" aria-label={`Localização: ${crumbParts.join(", ")}`}>
+              {crumbParts.map((part, i) => (
+                <span key={`${part}-${i}`}>
+                  {i > 0 ? <span className="topbar-crumb-sep" aria-hidden> • </span> : null}
+                  {part}
+                </span>
+              ))}
+            </p>
+            <div className="topbar-user">
+              <Api4comTelephonyTopbarControl />
+              <UserMenu user={user} />
+            </div>
+          </header>
+          <div className="main-column-body">
+            <main className="page-content">{children}</main>
+            <div ref={overlayHostRef} id="app-main-overlay-root" className="app-main-overlay-root" aria-hidden />
+          </div>
+        </Api4comCallProvider>
       </div>
     </div>
     </MainOverlayHostProvider>

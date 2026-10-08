@@ -30,6 +30,8 @@ type PendingCall = {
 type Api4comSession = {
   canDial: boolean;
   hasOwnExtension: boolean;
+  /** Ramal cadastrado — exibe ícone de telefonia na topbar */
+  telephonyConfigured: boolean;
   isAdmin: boolean;
   userId: number;
   userName: string;
@@ -48,6 +50,7 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
   const isAdmin = user.roles.includes("admin");
   const canDial = user.roles.includes("bdr") || isAdmin;
   const hasOwnExtension = Boolean(normalizeApi4comExtension(user.api4com_extension ?? ""));
+  const telephonyConfigured = canDial && hasOwnExtension;
   const [products, setProducts] = useState<Product[]>([]);
   const [pending, setPending] = useState<PendingCall[]>([]);
   const autoOpenedRef = useRef<Set<number>>(new Set());
@@ -228,7 +231,14 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
   return (
     <Api4comWebphoneProvider user={user} canDial={canDial}>
     <Api4comContext.Provider
-      value={{ canDial, hasOwnExtension, isAdmin, userId: user.id, userName: user.name }}
+      value={{
+        canDial,
+        hasOwnExtension,
+        telephonyConfigured,
+        isAdmin,
+        userId: user.id,
+        userName: user.name
+      }}
     >
       {showPendingHint ? (
         <div

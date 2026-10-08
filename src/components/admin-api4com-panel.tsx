@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { Route } from "next";
 import Link from "next/link";
 import { API4COM_TOKEN_POLICY_LABELS, type Api4comTokenPolicy } from "@/lib/api4com/token-policy-shared";
 import { validateApi4comSipDomainInput } from "@/lib/api4com/sip-domain-shared";
@@ -464,11 +465,11 @@ export function AdminApi4comPanel() {
               <li>
                 {globalDialMode ? (
                   <>
-                    BDRs: apenas <strong>ramal</strong> em <Link href="/perfil">Meu perfil</Link> ou Admin → Usuários.
+                    BDRs: apenas <strong>ramal</strong> em <Link href={"/meu-telefone" as Route}>Meu telefone</Link> ou Admin → Usuários.
                   </>
                 ) : (
                   <>
-                    BDRs: <strong>ramal e token</strong> em <Link href="/perfil">Meu perfil</Link> (obrigatório para ligar).
+                    BDRs: <strong>ramal e token</strong> em <Link href={"/meu-telefone" as Route}>Meu telefone</Link> (obrigatório para ligar).
                   </>
                 )}
               </li>

@@ -275,6 +275,7 @@ a.app-text-link:hover {
 .topbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.75rem 1rem;
   padding: 0.75rem 1.5rem;
   border-bottom: 1px solid var(--border);
@@ -308,6 +309,9 @@ a.app-text-link:hover {
 }
 
 .topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   flex-shrink: 0;
   margin-left: auto;
 }
@@ -1694,12 +1698,119 @@ table.data-table td.prospeccao-col-phone-count__value {
   pointer-events: auto;
 }
 
+.api4com-webphone-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 54;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: rgba(15, 23, 42, 0.55);
+  cursor: default;
+}
+
 .api4com-webphone-dock {
   position: fixed;
   right: 1rem;
   bottom: 1rem;
   z-index: 55;
   width: min(22rem, calc(100vw - 2rem));
+}
+
+.api4com-webphone-dock--center {
+  left: 50%;
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  width: min(24rem, calc(100vw - 2rem));
+}
+
+.api4com-telephony-topbar-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: #141414;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.api4com-telephony-topbar-btn:hover {
+  background: #1f1f1f;
+  color: #f5f5f5;
+}
+
+.api4com-telephony-topbar-btn--online {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.35);
+}
+
+.api4com-telephony-topbar-btn--busy {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+.api4com-telephony-topbar-btn--offline {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.api4com-telephony-topbar-strike {
+  position: absolute;
+  left: 0.45rem;
+  right: 0.45rem;
+  top: 50%;
+  height: 2px;
+  background: currentColor;
+  transform: rotate(-42deg);
+  pointer-events: none;
+  border-radius: 1px;
+}
+
+.api4com-webphone-test-dial {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+.api4com-webphone-test-dial-label {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.api4com-webphone-test-dial-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.api4com-webphone-test-dial-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.api4com-webphone-test-msg {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  padding: 0.5rem 0.65rem;
+}
+
+.api4com-webphone-test-ok {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  border-radius: 0.35rem;
+}
+
+.btn-block {
+  width: 100%;
+  justify-content: center;
 }
 
 .api4com-webphone-dock-inner {
@@ -2626,26 +2737,33 @@ table.data-table td.prospeccao-col-phone-count__value {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.35rem 0.15rem;
+  padding: 0.25rem 0.35rem;
   border: none;
   background: transparent;
   color: var(--text);
   cursor: pointer;
   font-size: 0.875rem;
   font-family: inherit;
-  border-radius: 0.35rem;
+  border-radius: 0.5rem;
 }
 
 .user-menu-trigger:hover {
   color: #f5f5f5;
+  background: #1a1a1a;
 }
 
-.user-brand-dot {
-  width: 0.625rem;
-  height: 0.625rem;
-  border-radius: 999px;
-  background: #00adee;
-  flex-shrink: 0;
+.user-menu-avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 0.75rem;
+}
+
+.user-menu-name {
+  font-weight: 500;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .profile-password-block {

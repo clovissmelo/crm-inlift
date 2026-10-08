@@ -182,7 +182,7 @@ export function Api4comBdrFields({
             autoComplete="off"
           />
           <p className="muted" style={{ marginTop: "0.5rem", fontSize: "0.8125rem" }}>
-            Use o ramal do seu usuário no painel API4COM (menu Usuários). Salve o perfil para aplicar.
+            Use o ramal do seu usuário no painel API4COM (menu Usuários). Salve para aplicar.
           </p>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.75rem" }}>
@@ -212,7 +212,7 @@ export function Api4comBdrFields({
               </button>
             ) : null}
             <p className="muted" style={{ marginTop: "0.5rem", fontSize: "0.8125rem" }}>
-              Copie do painel API4COM ao instalar o Webphone do usuário. Salve o perfil para aplicar.
+              Copie do painel API4COM ao instalar o Webphone do usuário. Salve para aplicar.
             </p>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.75rem" }}>
@@ -244,7 +244,7 @@ export function Api4comBdrFields({
               </button>
             ) : null}
             <p className="muted" style={{ marginTop: "0.5rem", fontSize: "0.8125rem" }}>
-              Cole o token completo e salve o perfil. O valor fica apenas no servidor.
+              Cole o token completo e salve. O valor fica apenas no servidor.
             </p>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.75rem" }}>

@@ -110,6 +110,19 @@
   border-left: 3px solid rgba(129, 140, 248, 0.65);
 }
 
+.simulador-script-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: calc(100dvh - 7rem);
+  margin: -0.25rem 0 0;
+}
+
+.simulador-script-page .resultado-simulator-embedded-root {
+  flex: 1;
+  min-height: 0;
+}
+
 .resultado-simulator-embedded-root {
   position: relative;
   flex: 1;

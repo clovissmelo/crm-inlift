@@ -16,6 +16,7 @@ export type MenuKey =
   | "agendamentos"
   | "novos_leads"
   | "aquecedor_leads"
+  | "simulador_script"
   | "organizacao_leads"
   | "clientes"
   | "abordagens"
@@ -42,6 +43,7 @@ export const MENU_DEFINITIONS: MenuDefinition[] = [
   { key: "agendamentos", href: "/agendamentos", label: "Agendamentos", section: "top" },
   { key: "novos_leads", href: "/admin/novos-leads", label: "Novos leads", section: "clientes_leads" },
   { key: "aquecedor_leads", href: "/aquecedor-leads", label: "Aquecedor leads", section: "clientes_leads" },
+  { key: "simulador_script", href: "/simulador-script", label: "Simulador de script", section: "clientes_leads" },
   { key: "organizacao_leads", href: "/organizacao-leads", label: "Organizar leads", section: "clientes_leads" },
   { key: "clientes", href: "/clientes", label: "Clientes", section: "clientes_leads" },
   { key: "abordagens", href: "/abordagens", label: "Abordagem", section: "configuracao" },
@@ -71,6 +73,7 @@ export const LEGACY_DEFAULT_MENU_KEYS: MenuKey[] = [
   "agendamentos",
   "organizacao_leads",
   "clientes",
+  "simulador_script",
   "abordagens",
   "resultado_comercial",
   "negocios_convertidos",
