@@ -21,8 +21,9 @@ export function Api4comTelephonyTopbarControl() {
 
   if (!session?.telephonyConfigured || !webphone) return null;
 
-  const online = webphone.isRegistered;
-  const busy = webphone.status === "connecting" || webphone.status === "loading";
+  const wp = webphone;
+  const online = wp.isRegistered;
+  const busy = wp.status === "connecting" || wp.status === "loading";
   const offline = !online;
 
   function onTriggerClick() {
@@ -31,7 +32,7 @@ export function Api4comTelephonyTopbarControl() {
       return;
     }
     setMenuOpen(false);
-    webphone.openPanel();
+    wp.openPanel();
   }
 
   return (
@@ -66,7 +67,7 @@ export function Api4comTelephonyTopbarControl() {
             role="menuitem"
             onClick={() => {
               setMenuOpen(false);
-              webphone.openPanel();
+              wp.openPanel();
             }}
           >
             Abrir discador
@@ -77,7 +78,7 @@ export function Api4comTelephonyTopbarControl() {
             className="api4com-telephony-topbar-panel-danger"
             onClick={() => {
               setMenuOpen(false);
-              void webphone.disconnectRamal();
+              void wp.disconnectRamal();
             }}
           >
             <PhoneOff size={16} aria-hidden />
