@@ -4,7 +4,6 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { UserAvatar } from "@/components/user-avatar";
 import type { User } from "@/lib/types";
 
 function displayFirstName(name: string): string {
@@ -39,7 +38,7 @@ export function UserMenu({ user }: { user: User }) {
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        <UserAvatar user={user} className="user-menu-avatar" />
+        <span className="user-menu-dot" aria-hidden />
         <span className="user-menu-name">{displayFirstName(user.name)}</span>
       </button>
       {open ? (

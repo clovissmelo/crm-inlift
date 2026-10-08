@@ -11,6 +11,12 @@ import {
 } from "react";
 import { Api4comWebphoneDock } from "@/components/api4com-webphone-dock";
 import { getLibwebphoneInstanceId, loadLibwebphoneScript } from "@/lib/api4com/load-libwebphone";
+import {
+  clearLibwebphoneAutoAnswerTimers,
+  libwebphoneHasActiveSession,
+  scheduleLibwebphoneAutoAnswer,
+  terminateAllLibwebphoneCalls
+} from "@/lib/api4com/sip-call-control";
 import type { User } from "@/lib/types";
 
 export type WebphoneRegistrationState =
@@ -49,6 +55,9 @@ export type WebphoneContextValue = {
   ensureRegistered: (opts?: EnsureOptions) => Promise<boolean>;
   /** Registro SIP + refresh antes de POST /calls (API4COM exige ramal “online” no servidor). */
   prepareForApiDial: (opts?: EnsureOptions) => Promise<boolean>;
+  hasActiveSipCall: boolean;
+  hangUpSipAndApiCall: (callRecordId?: number | null) => Promise<void>;
+  recoverFromDialFailure: () => Promise<void>;
 };
 
 const WebphoneContext = createContext<WebphoneContextValue | null>(null);
@@ -66,7 +75,7 @@ function autoAnswerIncomingApiLeg(currentCall: LibWebphoneInstance) {
   const direction = currentCall.getDirection?.();
   if (direction !== "terminating") return;
 
-  const attemptAnswer = () => {
+  scheduleLibwebphoneAutoAnswer(currentCall, () => {
     if (currentCall.isEnded?.()) return;
     if (currentCall.isEstablished?.()) return;
     try {
@@ -74,12 +83,7 @@ function autoAnswerIncomingApiLeg(currentCall: LibWebphoneInstance) {
     } catch {
       /* streams/mic podem falhar; tentamos de novo nos timeouts */
     }
-  };
-
-  attemptAnswer();
-  for (const ms of [120, 400, 900, 1800]) {
-    window.setTimeout(attemptAnswer, ms);
-  }
+  });
 }
 
 function missingConfigMessage(missing: WebphoneConfigResponse["missing"]): string {
@@ -106,6 +110,7 @@ export function Api4comWebphoneProvider({
   const [registeredUserId, setRegisteredUserId] = useState<number | null>(null);
   const [registeredExtension, setRegisteredExtension] = useState<string | null>(null);
   const [targetUserName, setTargetUserName] = useState<string | null>(null);
+  const [hasActiveSipCall, setHasActiveSipCall] = useState(false);
 
   const webphoneRef = useRef<LibWebphoneInstance | null>(null);
   const registeredRef = useRef(false);
@@ -116,12 +121,18 @@ export function Api4comWebphoneProvider({
     waitersRef.current.splice(0).forEach((fn) => fn(ok));
   }, []);
 
+  const syncActiveSipCall = useCallback(() => {
+    setHasActiveSipCall(libwebphoneHasActiveSession(webphoneRef.current));
+  }, []);
+
   const teardownWebphone = useCallback(() => {
     const wp = webphoneRef.current;
+    terminateAllLibwebphoneCalls(wp);
     webphoneRef.current = null;
     registeredRef.current = false;
     setRegisteredUserId(null);
     setRegisteredExtension(null);
+    setHasActiveSipCall(false);
     if (wp?.getUserAgent?.()?.stop) {
       try {
         wp.getUserAgent().stop();
@@ -161,8 +172,14 @@ export function Api4comWebphoneProvider({
       wp.on("call.created", onIncomingLeg);
       wp.on("call.ringing.started", onIncomingLeg);
       wp.on("call.progress", onIncomingLeg);
+      wp.on("call.created", () => syncActiveSipCall());
+      wp.on("call.terminated", (_lwp: LibWebphoneInstance, call: LibWebphoneInstance) => {
+        clearLibwebphoneAutoAnswerTimers(call);
+        syncActiveSipCall();
+      });
+      wp.on("callList.calls.changed", () => syncActiveSipCall());
     },
-    [notifyRegistered]
+    [notifyRegistered, syncActiveSipCall]
   );
 
   const waitUntilRegistered = useCallback((timeoutMs: number) => {
@@ -222,7 +239,7 @@ export function Api4comWebphoneProvider({
         const domain = data.domain!;
         const wp = new window.libwebphone!({
           dialpad: { enabled: false },
-          callList: { enabled: false },
+          callList: { enabled: true, renderTargets: [] },
           callControl: { enabled: false },
           videoCanvas: { enabled: false },
           mediaDevices: {
@@ -323,6 +340,34 @@ export function Api4comWebphoneProvider({
     [ensureRegistered]
   );
 
+  const disconnectRamal = useCallback(async () => {
+    terminateAllLibwebphoneCalls(webphoneRef.current);
+    teardownWebphone();
+    setStatus("idle");
+    setStatusDetail("Ramal desconectado.");
+    notifyRegistered(false);
+  }, [notifyRegistered, teardownWebphone]);
+
+  const hangUpSipAndApiCall = useCallback(
+    async (callRecordId?: number | null) => {
+      terminateAllLibwebphoneCalls(webphoneRef.current);
+      syncActiveSipCall();
+      if (callRecordId) {
+        try {
+          await fetch(`/api/api4com/calls/${callRecordId}/hangup`, { method: "POST" });
+        } catch {
+          /* best-effort */
+        }
+      }
+    },
+    [syncActiveSipCall]
+  );
+
+  const recoverFromDialFailure = useCallback(async () => {
+    await hangUpSipAndApiCall(null);
+    await disconnectRamal();
+  }, [disconnectRamal, hangUpSipAndApiCall]);
+
   const openPanel = useCallback(() => setPanelOpen(true), []);
   const closePanel = useCallback(() => setPanelOpen(false), []);
 
@@ -341,7 +386,10 @@ export function Api4comWebphoneProvider({
     openPanel,
     closePanel,
     ensureRegistered,
-    prepareForApiDial
+    prepareForApiDial,
+    hasActiveSipCall,
+    hangUpSipAndApiCall,
+    recoverFromDialFailure
   };
 
   if (!canDial) {
@@ -362,6 +410,9 @@ export function Api4comWebphoneProvider({
         dialUserId={registeredUserId ?? user.id}
         onPrepareForDial={(uid) => prepareForApiDial({ userId: uid, openPanel: false })}
         onConnect={() => void connectForUser(registeredUserId ?? user.id)}
+        hasActiveSipCall={hasActiveSipCall}
+        onHangUp={(callRecordId) => hangUpSipAndApiCall(callRecordId)}
+        onRecoverFromDialFailure={() => recoverFromDialFailure()}
       />
     </WebphoneContext.Provider>
   );

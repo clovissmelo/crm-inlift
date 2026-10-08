@@ -402,6 +402,46 @@ export async function getCallById(id: number) {
   return get<Api4comCallRow>("SELECT * FROM api4com_calls WHERE id = @id", { id });
 }
 
+export async function hangUpCallForUser(callId: number, userId: number): Promise<void> {
+  const row = await getCallDetailForUser(callId, userId);
+  if (!row) throw new Error("Chamada não encontrada.");
+  if (row.ended_at) return;
+
+  let meta: Record<string, unknown> = {};
+  try {
+    meta = JSON.parse(row.metadata_json ?? "{}") as Record<string, unknown>;
+  } catch {
+    meta = {};
+  }
+  const dialRaw = meta.dial_identity_user_id ?? meta.user_id ?? row.user_id;
+  const dialUserId = Number(dialRaw);
+  const tokenUserId = Number.isFinite(dialUserId) ? dialUserId : row.user_id;
+
+  if (row.api4com_call_id) {
+    const token = await resolveApi4comApiTokenForUser(tokenUserId);
+    if (token) {
+      try {
+        await api4comHangupCall(String(row.api4com_call_id), token);
+      } catch {
+        /* hangup best-effort */
+      }
+    }
+  }
+
+  const now = nowIso();
+  await run(
+    `
+      UPDATE api4com_calls SET
+        status = 'failed',
+        ended_at = COALESCE(ended_at, @now),
+        error_message = COALESCE(NULLIF(error_message, ''), @msg),
+        updated_at = @now
+      WHERE id = @id AND user_id = @userId
+    `,
+    { id: callId, userId, now, msg: "Encerrada pelo usuário no discador." }
+  );
+}
+
 export async function getCallDetailForUser(id: number, userId: number) {
   return get<
     Api4comCallRow & {

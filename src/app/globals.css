@@ -2752,10 +2752,12 @@ table.data-table td.prospeccao-col-phone-count__value {
   background: #1a1a1a;
 }
 
-.user-menu-avatar {
-  width: 32px;
-  height: 32px;
-  font-size: 0.75rem;
+.user-menu-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 999px;
+  background: var(--brand-blue, #00adee);
+  flex-shrink: 0;
 }
 
 .user-menu-name {
