@@ -95,22 +95,40 @@ export function MeuTelefoneForm({ user }: { user: User }) {
   async function runSetupCheck() {
     setSetupChecking(true);
     setSetupProbe(null);
-    setError(null);
     try {
       const res = await fetch("/api/api4com/setup-check");
       const data = (await res.json()) as Api4comSetupProbe & { error?: string };
       if (!res.ok) {
-        setError(data.error ?? "Não foi possível validar API4COM.");
+        setSetupProbe({
+          ok: false,
+          token_policy: api4comTokenPolicy,
+          extension: api4comExtension.trim() || null,
+          token_present: false,
+          token_valid: false,
+          extension_registered: false,
+          extension_linked_to_token_user: false,
+          account_email: null,
+          extension_owner_email: null,
+          extensions_on_account: [],
+          message: data.error ?? data.message ?? "Não foi possível validar API4COM."
+        });
         return;
       }
       setSetupProbe(data);
-      if (!data.ok) setError(data.message);
-      else {
-        setError(null);
-        setMessage(data.message);
-      }
     } catch {
-      setError("Não foi possível validar API4COM.");
+      setSetupProbe({
+        ok: false,
+        token_policy: api4comTokenPolicy,
+        extension: api4comExtension.trim() || null,
+        token_present: false,
+        token_valid: false,
+        extension_registered: false,
+        extension_linked_to_token_user: false,
+        account_email: null,
+        extension_owner_email: null,
+        extensions_on_account: [],
+        message: "Não foi possível validar API4COM."
+      });
     } finally {
       setSetupChecking(false);
     }
@@ -293,9 +311,18 @@ export function MeuTelefoneForm({ user }: { user: User }) {
           >
             {setupChecking ? "Validando…" : "Validar integração"}
           </button>
-          {setupProbe?.detail ? (
-            <p className="muted meu-telefone-test-detail">{setupProbe.detail}</p>
+          {setupProbe ? (
+            <p
+              className={
+                setupProbe.ok
+                  ? "meu-telefone-test-ok meu-telefone-test-detail"
+                  : "alert alert-error meu-telefone-test-detail"
+              }
+            >
+              {setupProbe.message}
+            </p>
           ) : null}
+          {setupProbe?.detail ? <p className="muted meu-telefone-test-detail">{setupProbe.detail}</p> : null}
         </div>
 
         <div className="meu-telefone-test-block">

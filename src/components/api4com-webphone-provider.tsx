@@ -16,6 +16,7 @@ import {
   clearLibwebphoneAutoAnswerTimers,
   libwebphoneHasActiveSession,
   scheduleLibwebphoneAutoAnswer,
+  setLibwebphoneMicrophoneMuted,
   terminateAllLibwebphoneCalls
 } from "@/lib/api4com/sip-call-control";
 import type { User } from "@/lib/types";
@@ -59,6 +60,7 @@ export type WebphoneContextValue = {
   hasActiveSipCall: boolean;
   hangUpSipAndApiCall: (callRecordId?: number | null) => Promise<void>;
   recoverFromDialFailure: (callRecordId?: number | null) => Promise<void>;
+  disconnectRamal: () => Promise<void>;
 };
 
 const WebphoneContext = createContext<WebphoneContextValue | null>(null);
@@ -112,10 +114,16 @@ export function Api4comWebphoneProvider({
   const [registeredExtension, setRegisteredExtension] = useState<string | null>(null);
   const [targetUserName, setTargetUserName] = useState<string | null>(null);
   const [hasActiveSipCall, setHasActiveSipCall] = useState(false);
+  const [isMicMuted, setIsMicMuted] = useState(false);
 
   const webphoneRef = useRef<LibWebphoneInstance | null>(null);
+  const isMicMutedRef = useRef(false);
   const registeredRef = useRef(false);
   const waitersRef = useRef<Array<(ok: boolean) => void>>([]);
+
+  useEffect(() => {
+    isMicMutedRef.current = isMicMuted;
+  }, [isMicMuted]);
 
   const notifyRegistered = useCallback((ok: boolean) => {
     registeredRef.current = ok;
@@ -134,6 +142,7 @@ export function Api4comWebphoneProvider({
     setRegisteredUserId(null);
     setRegisteredExtension(null);
     setHasActiveSipCall(false);
+    setIsMicMuted(false);
     if (wp?.getUserAgent?.()?.stop) {
       try {
         wp.getUserAgent().stop();
@@ -173,7 +182,10 @@ export function Api4comWebphoneProvider({
       wp.on("call.created", onIncomingLeg);
       wp.on("call.ringing.started", onIncomingLeg);
       wp.on("call.progress", onIncomingLeg);
-      wp.on("call.created", () => syncActiveSipCall());
+      wp.on("call.created", () => {
+        syncActiveSipCall();
+        if (isMicMutedRef.current) setLibwebphoneMicrophoneMuted(wp, true);
+      });
       wp.on("call.terminated", (_lwp: LibWebphoneInstance, call: LibWebphoneInstance) => {
         clearLibwebphoneAutoAnswerTimers(call);
         syncActiveSipCall();
@@ -351,6 +363,7 @@ export function Api4comWebphoneProvider({
   const disconnectRamal = useCallback(async () => {
     terminateAllLibwebphoneCalls(webphoneRef.current);
     teardownWebphone();
+    setPanelOpen(false);
     setStatus("idle");
     setStatusDetail("Ramal desconectado.");
     notifyRegistered(false);
@@ -379,6 +392,14 @@ export function Api4comWebphoneProvider({
     [disconnectRamal, hangUpSipAndApiCall]
   );
 
+  const toggleMicrophoneMuted = useCallback(() => {
+    setIsMicMuted((prev) => {
+      const next = !prev;
+      setLibwebphoneMicrophoneMuted(webphoneRef.current, next);
+      return next;
+    });
+  }, []);
+
   const openPanel = useCallback(() => setPanelOpen(true), []);
   const closePanel = useCallback(() => setPanelOpen(false), []);
 
@@ -400,7 +421,8 @@ export function Api4comWebphoneProvider({
     prepareForApiDial,
     hasActiveSipCall,
     hangUpSipAndApiCall,
-    recoverFromDialFailure
+    recoverFromDialFailure,
+    disconnectRamal
   };
 
   if (!canDial) {
@@ -424,6 +446,8 @@ export function Api4comWebphoneProvider({
         hasActiveSipCall={hasActiveSipCall}
         onHangUp={(callRecordId) => hangUpSipAndApiCall(callRecordId)}
         onRecoverFromDialFailure={() => recoverFromDialFailure()}
+        isMicMuted={isMicMuted}
+        onToggleMicMuted={toggleMicrophoneMuted}
       />
     </WebphoneContext.Provider>
   );

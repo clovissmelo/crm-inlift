@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { Phone, PhoneOff, X } from "lucide-react";
 import { useState } from "react";
+import { Api4comDialPad } from "@/components/api4com-dial-pad";
 import type { WebphoneRegistrationState } from "@/components/api4com-webphone-provider";
 import { apiErrorText } from "@/lib/api-error-text";
 
@@ -28,7 +29,9 @@ export function Api4comWebphoneDock({
   onPrepareForDial,
   hasActiveSipCall,
   onHangUp,
-  onRecoverFromDialFailure
+  onRecoverFromDialFailure,
+  isMicMuted,
+  onToggleMicMuted
 }: {
   open: boolean;
   onClose: () => void;
@@ -43,6 +46,8 @@ export function Api4comWebphoneDock({
   hasActiveSipCall: boolean;
   onHangUp: (callRecordId?: number | null) => Promise<void>;
   onRecoverFromDialFailure: (callRecordId?: number | null) => Promise<void>;
+  isMicMuted: boolean;
+  onToggleMicMuted: () => void;
 }) {
   const [testNumber, setTestNumber] = useState("");
   const [testDialing, setTestDialing] = useState(false);
@@ -174,44 +179,20 @@ export function Api4comWebphoneDock({
           {online ? (
             <div className="api4com-webphone-test-dial">
               <p className="api4com-webphone-test-dial-heading">Discador de chamadas manual</p>
-              <label className="api4com-webphone-test-dial-label" htmlFor="api4com-manual-dial-input">
-                Digite o número para ligação:
-              </label>
-              <div className="api4com-webphone-test-dial-row">
-                <input
-                  id="api4com-manual-dial-input"
-                  type="tel"
-                  className="input"
-                  placeholder="(51) 99999-9999"
-                  value={testNumber}
-                  onChange={(e) => setTestNumber(e.target.value)}
-                  disabled={testDialing || hangingUp}
-                  autoComplete="tel"
-                />
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={testDialing || hangingUp || !testNumber.trim()}
-                  onClick={() => void startTestCall()}
-                >
-                  {testDialing ? "Discando…" : "Ligar"}
-                </button>
-              </div>
-              {showHangUp ? (
-                <button
-                  type="button"
-                  className="btn btn-danger btn-block api4com-webphone-hangup-btn"
-                  disabled={hangingUp}
-                  onClick={() => void hangUpCall()}
-                >
-                  {hangingUp ? "Desligando…" : "Desligar ligação"}
-                </button>
-              ) : null}
+              <Api4comDialPad
+                value={testNumber}
+                onChange={setTestNumber}
+                onDial={() => void startTestCall()}
+                dialing={testDialing}
+                disabled={hangingUp}
+                isMuted={isMicMuted}
+                onToggleMute={onToggleMicMuted}
+                showHangUp={showHangUp}
+                onHangUp={() => void hangUpCall()}
+                hangingUp={hangingUp}
+              />
               {testError ? <p className="alert alert-error api4com-webphone-test-msg">{testError}</p> : null}
               {testOk ? <p className="api4com-webphone-test-ok api4com-webphone-test-msg">{testOk}</p> : null}
-              <p className="muted api4com-webphone-dock-detail">
-                Em caso de erro, o ramal é desconectado automaticamente para parar o toque.
-              </p>
             </div>
           ) : null}
 

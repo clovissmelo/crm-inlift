@@ -38,6 +38,43 @@ export function libwebphoneHasActiveSession(wp: LibWebphoneInstance | null): boo
   return calls.some((call: LibWebphoneInstance) => call.hasSession?.() && !call.isEnded?.());
 }
 
+function muteCallLocalAudio(call: LibWebphoneInstance, muted: boolean): void {
+  try {
+    if (muted) call.mute?.();
+    else call.unmute?.();
+  } catch {
+    /* ignore */
+  }
+  try {
+    call.setMute?.(muted);
+  } catch {
+    /* ignore */
+  }
+  const session = call.session ?? call._session;
+  const pc: RTCPeerConnection | undefined =
+    call.getPeerConnection?.() ?? session?.connection ?? session?._connection;
+  if (pc && typeof pc.getSenders === "function") {
+    for (const sender of pc.getSenders()) {
+      if (sender.track?.kind === "audio") sender.track.enabled = !muted;
+    }
+  }
+}
+
+/** Silencia ou reativa o microfone nas pernas SIP ativas. */
+export function setLibwebphoneMicrophoneMuted(wp: LibWebphoneInstance | null, muted: boolean): void {
+  if (!wp) return;
+  try {
+    wp.setMute?.(muted);
+  } catch {
+    /* ignore */
+  }
+  const calls = wp.getCallList?.()?.getCalls?.() ?? [];
+  for (const call of calls) {
+    if (call.isEnded?.()) continue;
+    muteCallLocalAudio(call, muted);
+  }
+}
+
 export function terminateAllLibwebphoneCalls(wp: LibWebphoneInstance | null): void {
   if (!wp?.getCallList) return;
   const calls = [...(wp.getCallList()?.getCalls?.() ?? [])];

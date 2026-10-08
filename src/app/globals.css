@@ -1723,7 +1723,7 @@ table.data-table td.prospeccao-col-phone-count__value {
   right: auto;
   bottom: auto;
   transform: translate(-50%, -50%);
-  width: min(24rem, calc(100vw - 2rem));
+  width: min(19.5rem, calc(100vw - 2rem));
 }
 
 .api4com-telephony-topbar-btn {
@@ -1772,6 +1772,51 @@ table.data-table td.prospeccao-col-phone-count__value {
   border-radius: 1px;
 }
 
+.api4com-telephony-topbar-menu {
+  position: relative;
+}
+
+.api4com-telephony-topbar-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  min-width: 11.5rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.35rem;
+  z-index: 25;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.api4com-telephony-topbar-panel button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: left;
+  padding: 0.5rem 0.65rem;
+  border: none;
+  background: none;
+  color: var(--text);
+  border-radius: 0.35rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-family: inherit;
+}
+
+.api4com-telephony-topbar-panel button:hover {
+  background: #1f1f1f;
+}
+
+.api4com-telephony-topbar-panel-danger {
+  color: #fca5a5;
+}
+
+.api4com-telephony-topbar-panel-danger:hover {
+  background: rgba(127, 29, 29, 0.25) !important;
+}
+
 .api4com-webphone-test-dial {
   margin-top: 1rem;
   padding-top: 0.85rem;
@@ -1784,27 +1829,8 @@ table.data-table td.prospeccao-col-phone-count__value {
   font-weight: 600;
 }
 
-.api4com-webphone-test-dial-label {
-  display: block;
-  margin: 0 0 0.5rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--muted);
-}
-
 .api4com-webphone-hangup-btn {
   margin-top: 0.65rem;
-}
-
-.api4com-webphone-test-dial-row {
-  display: flex;
-  gap: 0.5rem;
-  align-items: stretch;
-}
-
-.api4com-webphone-test-dial-row .input {
-  flex: 1;
-  min-width: 0;
 }
 
 .api4com-webphone-test-msg {
@@ -1818,6 +1844,149 @@ table.data-table td.prospeccao-col-phone-count__value {
   background: rgba(74, 222, 128, 0.08);
   border: 1px solid rgba(74, 222, 128, 0.25);
   border-radius: 0.35rem;
+}
+
+.api4com-dial-pad-readout {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-align: center;
+  min-height: 1.75rem;
+  line-height: 1.2;
+  word-break: break-all;
+}
+
+.api4com-dial-pad-display-wrap {
+  margin-bottom: 0.35rem;
+}
+
+.api4com-dial-pad-display {
+  width: 100%;
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.api4com-dial-pad-mode {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
+.api4com-dial-pad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
+}
+
+.api4com-dial-pad-key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0.35rem 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: linear-gradient(180deg, #1c1c1c 0%, #141414 100%);
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.api4com-dial-pad-key:hover:not(:disabled) {
+  border-color: rgba(0, 173, 238, 0.45);
+  background: #222;
+}
+
+.api4com-dial-pad-key:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.api4com-dial-pad-key:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.api4com-dial-pad-key-digit {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.api4com-dial-pad-key-sub {
+  margin-top: 0.1rem;
+  font-size: 0.5625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.api4com-dial-pad-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.35fr;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
+.api4com-dial-pad-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  min-height: 3.1rem;
+  padding: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: #161616;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.api4com-dial-pad-action-btn:hover:not(:disabled) {
+  background: #1f1f1f;
+}
+
+.api4com-dial-pad-action-btn--active {
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #fca5a5;
+  background: rgba(127, 29, 29, 0.25);
+}
+
+.api4com-dial-pad-action-label {
+  line-height: 1;
+}
+
+.api4com-dial-pad-call-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 3.1rem;
+  padding: 0 0.75rem;
+  border: none;
+  border-radius: 0.65rem;
+  background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+  color: #052e16;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.api4com-dial-pad-call-btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.api4com-dial-pad-call-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .meu-telefone-tests {
