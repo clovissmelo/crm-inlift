@@ -1778,10 +1778,22 @@ table.data-table td.prospeccao-col-phone-count__value {
   border-top: 1px solid var(--border);
 }
 
+.api4com-webphone-test-dial-heading {
+  margin: 0 0 0.35rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
 .api4com-webphone-test-dial-label {
+  display: block;
   margin: 0 0 0.5rem;
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.api4com-webphone-hangup-btn {
+  margin-top: 0.65rem;
 }
 
 .api4com-webphone-test-dial-row {

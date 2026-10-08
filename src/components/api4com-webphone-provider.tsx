@@ -57,7 +57,7 @@ export type WebphoneContextValue = {
   prepareForApiDial: (opts?: EnsureOptions) => Promise<boolean>;
   hasActiveSipCall: boolean;
   hangUpSipAndApiCall: (callRecordId?: number | null) => Promise<void>;
-  recoverFromDialFailure: () => Promise<void>;
+  recoverFromDialFailure: (callRecordId?: number | null) => Promise<void>;
 };
 
 const WebphoneContext = createContext<WebphoneContextValue | null>(null);
@@ -363,10 +363,13 @@ export function Api4comWebphoneProvider({
     [syncActiveSipCall]
   );
 
-  const recoverFromDialFailure = useCallback(async () => {
-    await hangUpSipAndApiCall(null);
-    await disconnectRamal();
-  }, [disconnectRamal, hangUpSipAndApiCall]);
+  const recoverFromDialFailure = useCallback(
+    async (callRecordId?: number | null) => {
+      await hangUpSipAndApiCall(callRecordId);
+      await disconnectRamal();
+    },
+    [disconnectRamal, hangUpSipAndApiCall]
+  );
 
   const openPanel = useCallback(() => setPanelOpen(true), []);
   const closePanel = useCallback(() => setPanelOpen(false), []);

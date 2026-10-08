@@ -25,7 +25,10 @@ export function Api4comWebphoneDock({
   onConnect,
   connecting,
   dialUserId,
-  onPrepareForDial
+  onPrepareForDial,
+  hasActiveSipCall,
+  onHangUp,
+  onRecoverFromDialFailure
 }: {
   open: boolean;
   onClose: () => void;
@@ -37,25 +40,32 @@ export function Api4comWebphoneDock({
   connecting: boolean;
   dialUserId: number;
   onPrepareForDial: (userId: number) => Promise<boolean>;
+  hasActiveSipCall: boolean;
+  onHangUp: (callRecordId?: number | null) => Promise<void>;
+  onRecoverFromDialFailure: (callRecordId?: number | null) => Promise<void>;
 }) {
   const [testNumber, setTestNumber] = useState("");
   const [testDialing, setTestDialing] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
   const [testOk, setTestOk] = useState<string | null>(null);
+  const [activeCallRecordId, setActiveCallRecordId] = useState<number | null>(null);
+  const [hangingUp, setHangingUp] = useState(false);
 
   if (!open) return null;
 
   const online = status === "registered";
+  const showHangUp = hasActiveSipCall || activeCallRecordId != null || testDialing;
 
   async function startTestCall() {
     const phone = testNumber.trim();
     if (!phone) {
-      setTestError("Informe o número para teste.");
+      setTestError("Informe o número para ligação.");
       return;
     }
     setTestDialing(true);
     setTestError(null);
     setTestOk(null);
+    setActiveCallRecordId(null);
     const ready = await onPrepareForDial(dialUserId);
     if (!ready) {
       setTestDialing(false);
@@ -75,10 +85,28 @@ export function Api4comWebphoneDock({
     }
     setTestDialing(false);
     if (!res.ok) {
-      setTestError(apiErrorText(data, "Não foi possível iniciar a ligação de teste."));
+      const failBody = data as { call_record_id?: number };
+      await onRecoverFromDialFailure(failBody.call_record_id ?? activeCallRecordId);
+      setActiveCallRecordId(null);
+      setTestError(apiErrorText(data, "Não foi possível iniciar a ligação."));
       return;
     }
-    setTestOk("Ligação iniciada — atenda a perna SIP neste painel.");
+    const body = data as { call_record_id?: number };
+    if (body.call_record_id) setActiveCallRecordId(body.call_record_id);
+    setTestOk("Ligação iniciada — use Desligar quando terminar.");
+  }
+
+  async function hangUpCall() {
+    setHangingUp(true);
+    setTestError(null);
+    try {
+      await onHangUp(activeCallRecordId);
+      setActiveCallRecordId(null);
+      setTestOk(null);
+    } finally {
+      setHangingUp(false);
+      setTestDialing(false);
+    }
   }
 
   return (
@@ -122,7 +150,7 @@ export function Api4comWebphoneDock({
           ) : null}
           {status === "needs_config" ? (
             <p className="muted api4com-webphone-dock-detail">
-              Admin: domínio SIP em Integrações → API4COM. BDR: senha SIP em Meu perfil ou Usuários.
+              Admin: domínio SIP em Integrações → API4COM. BDR: senha SIP em Meu telefone ou Usuários.
             </p>
           ) : null}
 
@@ -142,30 +170,44 @@ export function Api4comWebphoneDock({
 
           {online ? (
             <div className="api4com-webphone-test-dial">
-              <p className="api4com-webphone-test-dial-label">Ligação de teste (formato atual da API)</p>
+              <p className="api4com-webphone-test-dial-heading">Discador de chamadas manual</p>
+              <label className="api4com-webphone-test-dial-label" htmlFor="api4com-manual-dial-input">
+                Digite o número para ligação:
+              </label>
               <div className="api4com-webphone-test-dial-row">
                 <input
+                  id="api4com-manual-dial-input"
                   type="tel"
                   className="input"
                   placeholder="(51) 99999-9999"
                   value={testNumber}
                   onChange={(e) => setTestNumber(e.target.value)}
-                  disabled={testDialing}
+                  disabled={testDialing || hangingUp}
                   autoComplete="tel"
                 />
                 <button
                   type="button"
                   className="btn btn-primary"
-                  disabled={testDialing || !testNumber.trim()}
+                  disabled={testDialing || hangingUp || !testNumber.trim()}
                   onClick={() => void startTestCall()}
                 >
                   {testDialing ? "Discando…" : "Ligar"}
                 </button>
               </div>
+              {showHangUp ? (
+                <button
+                  type="button"
+                  className="btn btn-danger btn-block api4com-webphone-hangup-btn"
+                  disabled={hangingUp}
+                  onClick={() => void hangUpCall()}
+                >
+                  {hangingUp ? "Desligando…" : "Desligar ligação"}
+                </button>
+              ) : null}
               {testError ? <p className="alert alert-error api4com-webphone-test-msg">{testError}</p> : null}
               {testOk ? <p className="api4com-webphone-test-ok api4com-webphone-test-msg">{testOk}</p> : null}
               <p className="muted api4com-webphone-dock-detail">
-                Use este teste isolado antes de ligar pela ficha do cliente ou pelo aquecedor.
+                Em caso de erro, o ramal é desconectado automaticamente para parar o toque.
               </p>
             </div>
           ) : null}

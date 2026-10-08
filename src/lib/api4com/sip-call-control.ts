@@ -35,7 +35,7 @@ export function scheduleLibwebphoneAutoAnswer(
 export function libwebphoneHasActiveSession(wp: LibWebphoneInstance | null): boolean {
   if (!wp?.getCallList) return false;
   const calls = wp.getCallList()?.getCalls?.() ?? [];
-  return calls.some((call) => call.hasSession?.() && !call.isEnded?.());
+  return calls.some((call: LibWebphoneInstance) => call.hasSession?.() && !call.isEnded?.());
 }
 
 export function terminateAllLibwebphoneCalls(wp: LibWebphoneInstance | null): void {
