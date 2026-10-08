@@ -39,9 +39,11 @@ export function humanizeApi4comDialError(message: string): string {
   }
   if (m.includes("has been failed") || (m.includes("call from") && m.includes("failed"))) {
     return (
-      "A telefonia não completou a ligação. Isso costuma ocorrer quando o discador/Webphone API4COM está fechado ou o ramal não está conectado. " +
-      "Abra o app ou extensão API4COM, confirme que o ramal aparece online e tente de novo. " +
-      "Se persistir, verifique rede/microfone no navegador ou contate o suporte API4COM."
+      "A API4COM encerrou a ligação antes de completar. Com o discador do CRM, confira se o painel Telefonia mostra ramal online, " +
+      "permissão de microfone no navegador e se o número discado está correto no cadastro do lead. " +
+      "Feche a extensão Chrome da API4COM se ainda estiver aberta (só uma sessão SIP por ramal). " +
+      "Detalhe API4COM: " +
+      message
     );
   }
   if (m.includes("invalid extension") || (m.includes("extension") && !m.includes("call from"))) {

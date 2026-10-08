@@ -87,7 +87,7 @@ export function Api4comWebphoneDock({
           ) : (
             <span className="api4com-webphone-dock-ok">
               <Phone size={16} aria-hidden />
-              Pronto para ligações da API
+              Pronto — ligações da API são atendidas automaticamente aqui
             </span>
           )}
           {online ? (

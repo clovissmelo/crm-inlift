@@ -55,6 +55,31 @@ export function useApi4comWebphone() {
   return useContext(WebphoneContext);
 }
 
+/** API4COM toca o ramal ao discar; o CRM precisa atender a perna SIP (libwebphone não expõe getCustomHeaders). */
+function autoAnswerIncomingApiLeg(currentCall: LibWebphoneInstance) {
+  if (!currentCall?.isPrimary?.()) {
+    currentCall?.reject?.();
+    return;
+  }
+  const direction = currentCall.getDirection?.();
+  if (direction !== "terminating") return;
+
+  const attemptAnswer = () => {
+    if (currentCall.isEnded?.()) return;
+    if (currentCall.isEstablished?.()) return;
+    try {
+      currentCall.answer?.();
+    } catch {
+      /* streams/mic podem falhar; tentamos de novo nos timeouts */
+    }
+  };
+
+  attemptAnswer();
+  for (const ms of [120, 400, 900, 1800]) {
+    window.setTimeout(attemptAnswer, ms);
+  }
+}
+
 function missingConfigMessage(missing: WebphoneConfigResponse["missing"]): string {
   const parts: string[] = [];
   if (missing.includes("domain")) parts.push("domínio SIP no Admin → API4COM");
@@ -128,21 +153,12 @@ export function Api4comWebphoneProvider({
         setStatusDetail("Conexão WebSocket com a API4COM caiu.");
         notifyRegistered(false);
       });
-      wp.on("call.created", (lwp: LibWebphoneInstance, currentCall: LibWebphoneInstance) => {
-        if (!currentCall?.isPrimary?.()) {
-          currentCall?.reject?.();
-          return;
-        }
-        if (currentCall.isInProgress?.()) {
-          const customHeaders = currentCall.getCustomHeaders?.() as Record<string, string> | undefined;
-          const integrated =
-            customHeaders?.["X-Api4comintegratedcall"] === "true" ||
-            customHeaders?.["x-api4comintegratedcall"] === "true";
-          if (integrated) {
-            void currentCall.answer?.();
-          }
-        }
-      });
+      const onIncomingLeg = (_lwp: LibWebphoneInstance, currentCall: LibWebphoneInstance) => {
+        autoAnswerIncomingApiLeg(currentCall);
+      };
+      wp.on("call.created", onIncomingLeg);
+      wp.on("call.ringing.started", onIncomingLeg);
+      wp.on("call.progress", onIncomingLeg);
     },
     [notifyRegistered]
   );
