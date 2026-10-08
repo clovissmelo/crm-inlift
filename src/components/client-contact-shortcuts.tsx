@@ -224,16 +224,22 @@ export function ClientContactShortcuts({
       phone: option.phone
     };
     if (dialAs !== api4com.userId) payload.dial_as_user_id = dialAs;
-    const res = await fetch("/api/api4com/calls", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+    webphone?.beginDialAssist();
     let data: unknown = null;
+    let res: Response;
     try {
-      data = await res.json();
-    } catch {
-      data = null;
+      res = await fetch("/api/api4com/calls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+    } finally {
+      webphone?.endDialAssist();
     }
     setDialing(false);
     if (!res.ok) {

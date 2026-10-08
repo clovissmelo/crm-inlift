@@ -39,9 +39,9 @@ export function humanizeApi4comDialError(message: string): string {
   }
   if (m.includes("has been failed") || (m.includes("call from") && m.includes("failed"))) {
     return (
-      "A API4COM encerrou a ligação antes de completar. Com o discador do CRM, confira se o painel Telefonia mostra ramal online, " +
-      "permissão de microfone no navegador e se o número discado está correto no cadastro do lead. " +
-      "Feche a extensão Chrome da API4COM se ainda estiver aberta (só uma sessão SIP por ramal)."
+      "A API4COM não completou a ligação: em geral o ramal SIP no navegador não atendeu a tempo a perna interna (click-to-call). " +
+      "Deixe o ícone de telefone verde (ramal online), autorize o microfone, feche a extensão Chrome da API4COM se estiver aberta " +
+      "e tente de novo. Confira também se o número está correto (DDD + celular/fixo, sem repetir 55)."
     );
   }
   if (m.includes("invalid extension") || (m.includes("extension") && !m.includes("call from"))) {

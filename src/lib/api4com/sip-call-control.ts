@@ -32,6 +32,46 @@ export function scheduleLibwebphoneAutoAnswer(
   autoAnswerTimerIds.set(currentCall, timers);
 }
 
+/** Atende a perna SIP que a API4COM toca no ramal (click-to-call). */
+export function answerApi4comIncomingLeg(currentCall: LibWebphoneInstance): void {
+  if (currentCall.isEnded?.()) return;
+  if (currentCall.isEstablished?.()) return;
+  const direction = currentCall.getDirection?.();
+  if (direction === "originating") return;
+
+  scheduleLibwebphoneAutoAnswer(currentCall, () => {
+    if (currentCall.isEnded?.()) return;
+    if (currentCall.isEstablished?.()) return;
+    try {
+      currentCall.answer?.();
+    } catch {
+      /* microfone / mídia; retentamos nos timeouts */
+    }
+  });
+}
+
+export function answerAllPendingApiLegs(wp: LibWebphoneInstance | null): void {
+  if (!wp?.getCallList) return;
+  const calls = wp.getCallList()?.getCalls?.() ?? [];
+  for (const call of calls) {
+    answerApi4comIncomingLeg(call);
+  }
+}
+
+export async function waitForEstablishedSipLeg(
+  wp: LibWebphoneInstance | null,
+  timeoutMs: number
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    answerAllPendingApiLegs(wp);
+    const calls = wp?.getCallList?.()?.getCalls?.() ?? [];
+    if (calls.some((c: LibWebphoneInstance) => c.isEstablished?.() && !c.isEnded?.())) return true;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  return false;
+}
+
 export function libwebphoneHasActiveSession(wp: LibWebphoneInstance | null): boolean {
   if (!wp?.getCallList) return false;
   const calls = wp.getCallList()?.getCalls?.() ?? [];

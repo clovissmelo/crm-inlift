@@ -13,9 +13,10 @@ import { Api4comWebphoneDock } from "@/components/api4com-webphone-dock";
 import { getLibwebphoneInstanceId, loadLibwebphoneScript } from "@/lib/api4com/load-libwebphone";
 import { requestMicrophoneAccess } from "@/lib/api4com/request-microphone-access";
 import {
+  answerAllPendingApiLegs,
+  answerApi4comIncomingLeg,
   clearLibwebphoneAutoAnswerTimers,
   libwebphoneHasActiveSession,
-  scheduleLibwebphoneAutoAnswer,
   setLibwebphoneMicrophoneMuted,
   terminateAllLibwebphoneCalls
 } from "@/lib/api4com/sip-call-control";
@@ -61,32 +62,15 @@ export type WebphoneContextValue = {
   hangUpSipAndApiCall: (callRecordId?: number | null) => Promise<void>;
   recoverFromDialFailure: (callRecordId?: number | null) => Promise<void>;
   disconnectRamal: () => Promise<void>;
+  /** Enquanto POST /calls roda, tenta atender a perna SIP com polling. */
+  beginDialAssist: () => void;
+  endDialAssist: () => void;
 };
 
 const WebphoneContext = createContext<WebphoneContextValue | null>(null);
 
 export function useApi4comWebphone() {
   return useContext(WebphoneContext);
-}
-
-/** API4COM toca o ramal ao discar; o CRM precisa atender a perna SIP (libwebphone não expõe getCustomHeaders). */
-function autoAnswerIncomingApiLeg(currentCall: LibWebphoneInstance) {
-  if (!currentCall?.isPrimary?.()) {
-    currentCall?.reject?.();
-    return;
-  }
-  const direction = currentCall.getDirection?.();
-  if (direction !== "terminating") return;
-
-  scheduleLibwebphoneAutoAnswer(currentCall, () => {
-    if (currentCall.isEnded?.()) return;
-    if (currentCall.isEstablished?.()) return;
-    try {
-      currentCall.answer?.();
-    } catch {
-      /* streams/mic podem falhar; tentamos de novo nos timeouts */
-    }
-  });
 }
 
 function missingConfigMessage(missing: WebphoneConfigResponse["missing"]): string {
@@ -120,6 +104,7 @@ export function Api4comWebphoneProvider({
   const isMicMutedRef = useRef(false);
   const registeredRef = useRef(false);
   const waitersRef = useRef<Array<(ok: boolean) => void>>([]);
+  const dialAssistTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     isMicMutedRef.current = isMicMuted;
@@ -177,7 +162,7 @@ export function Api4comWebphoneProvider({
         notifyRegistered(false);
       });
       const onIncomingLeg = (_lwp: LibWebphoneInstance, currentCall: LibWebphoneInstance) => {
-        autoAnswerIncomingApiLeg(currentCall);
+        answerApi4comIncomingLeg(currentCall);
       };
       wp.on("call.created", onIncomingLeg);
       wp.on("call.ringing.started", onIncomingLeg);
@@ -400,11 +385,30 @@ export function Api4comWebphoneProvider({
     });
   }, []);
 
+  const beginDialAssist = useCallback(() => {
+    if (dialAssistTimerRef.current != null) return;
+    answerAllPendingApiLegs(webphoneRef.current);
+    dialAssistTimerRef.current = window.setInterval(() => {
+      answerAllPendingApiLegs(webphoneRef.current);
+    }, 120);
+  }, []);
+
+  const endDialAssist = useCallback(() => {
+    if (dialAssistTimerRef.current != null) {
+      window.clearInterval(dialAssistTimerRef.current);
+      dialAssistTimerRef.current = null;
+    }
+    answerAllPendingApiLegs(webphoneRef.current);
+  }, []);
+
   const openPanel = useCallback(() => setPanelOpen(true), []);
   const closePanel = useCallback(() => setPanelOpen(false), []);
 
   useEffect(() => {
     return () => {
+      if (dialAssistTimerRef.current != null) {
+        window.clearInterval(dialAssistTimerRef.current);
+      }
       teardownWebphone();
     };
   }, [teardownWebphone]);
@@ -422,7 +426,9 @@ export function Api4comWebphoneProvider({
     hasActiveSipCall,
     hangUpSipAndApiCall,
     recoverFromDialFailure,
-    disconnectRamal
+    disconnectRamal,
+    beginDialAssist,
+    endDialAssist
   };
 
   if (!canDial) {
@@ -445,7 +451,9 @@ export function Api4comWebphoneProvider({
         onConnect={() => void connectForUser(registeredUserId ?? user.id)}
         hasActiveSipCall={hasActiveSipCall}
         onHangUp={(callRecordId) => hangUpSipAndApiCall(callRecordId)}
-        onRecoverFromDialFailure={() => recoverFromDialFailure()}
+        onRecoverFromDialFailure={(callRecordId) => hangUpSipAndApiCall(callRecordId)}
+        beginDialAssist={beginDialAssist}
+        endDialAssist={endDialAssist}
         isMicMuted={isMicMuted}
         onToggleMicMuted={toggleMicrophoneMuted}
       />

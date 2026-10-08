@@ -2,11 +2,14 @@ import { phoneDigits } from "@/lib/format";
 
 /** Formato esperado pela API4COM (apenas dígitos; inclui 55 quando aplicável). */
 export function normalizeApi4comCalledNumber(raw: string): string | null {
-  const d = phoneDigits(raw);
+  let d = phoneDigits(raw);
   if (!d) return null;
-  if (d.startsWith("55") && d.length >= 12) return d;
+  while (d.startsWith("55") && d.length > 13) {
+    d = d.slice(2);
+  }
+  if (d.startsWith("55") && d.length >= 12 && d.length <= 13) return d;
   if (d.length === 10 || d.length === 11) return `55${d}`;
-  if (d.length >= 12) return d;
+  if (d.length >= 12 && d.length <= 13) return d.startsWith("55") ? d : null;
   return null;
 }
 

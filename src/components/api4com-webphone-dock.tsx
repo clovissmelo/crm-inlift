@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Api4comDialPad } from "@/components/api4com-dial-pad";
 import type { WebphoneRegistrationState } from "@/components/api4com-webphone-provider";
 import { apiErrorText } from "@/lib/api-error-text";
+import { normalizeApi4comCalledNumber } from "@/lib/api4com/phone";
 
 const STATUS_LABEL: Record<WebphoneRegistrationState, string> = {
   idle: "Desconectado",
@@ -30,6 +31,8 @@ export function Api4comWebphoneDock({
   hasActiveSipCall,
   onHangUp,
   onRecoverFromDialFailure,
+  beginDialAssist,
+  endDialAssist,
   isMicMuted,
   onToggleMicMuted
 }: {
@@ -46,6 +49,8 @@ export function Api4comWebphoneDock({
   hasActiveSipCall: boolean;
   onHangUp: (callRecordId?: number | null) => Promise<void>;
   onRecoverFromDialFailure: (callRecordId?: number | null) => Promise<void>;
+  beginDialAssist: () => void;
+  endDialAssist: () => void;
   isMicMuted: boolean;
   onToggleMicMuted: () => void;
 }) {
@@ -62,9 +67,9 @@ export function Api4comWebphoneDock({
   const showHangUp = hasActiveSipCall || activeCallRecordId != null || testDialing;
 
   async function startTestCall() {
-    const phone = testNumber.trim();
-    if (!phone) {
-      setTestError("Informe o número para ligação.");
+    const normalized = normalizeApi4comCalledNumber(testNumber.trim());
+    if (!normalized) {
+      setTestError("Número inválido. Use DDD + número (10 ou 11 dígitos), sem repetir o 55.");
       return;
     }
     setTestDialing(true);
@@ -77,16 +82,22 @@ export function Api4comWebphoneDock({
       setTestError("Conecte o ramal antes de ligar.");
       return;
     }
-    const res = await fetch("/api/api4com/calls", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone })
-    });
+    beginDialAssist();
     let data: unknown = null;
+    let res: Response;
     try {
-      data = await res.json();
-    } catch {
-      data = null;
+      res = await fetch("/api/api4com/calls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: normalized })
+      });
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+    } finally {
+      endDialAssist();
     }
     setTestDialing(false);
     if (!res.ok) {

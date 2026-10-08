@@ -23,15 +23,27 @@ const DIAL_ROWS: { digit: string; sub?: string }[][] = [
   [{ digit: "*" }, { digit: "0", sub: "+" }, { digit: "#" }]
 ];
 
+/** Dígitos para exibição — ligações nacionais (sem prefixo 55 no visor). */
+function nationalDigitsForDisplay(raw: string): string {
+  let digits = raw.replace(/[^\d+#*]/g, "");
+  if (digits.startsWith("55") && digits.length > 11) {
+    digits = digits.slice(2);
+  }
+  return digits;
+}
+
 function formatDialDisplay(raw: string): string {
-  const digits = raw.replace(/[^\d+#*]/g, "");
+  const digits = nationalDigitsForDisplay(raw);
   if (!digits) return "";
   if (digits.length <= 2) return digits;
   if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
   if (digits.length <= 10) {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
   }
-  return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9, 13)}`;
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}${digits.slice(11)}`;
 }
 
 export function Api4comDialPad({
