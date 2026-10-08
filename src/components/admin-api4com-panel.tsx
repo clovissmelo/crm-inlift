@@ -47,7 +47,9 @@ const API4COM_KEYS = [
   "api4com_sip_domain"
 ] as const;
 
-export function AdminApi4comPanel() {
+export type AdminApi4comSection = "checklist" | "credentials" | "extensions" | "webhook";
+
+export function AdminApi4comPanel({ section }: { section: AdminApi4comSection }) {
   const [status, setStatus] = useState<Status | null>(null);
   const [tokenPolicy, setTokenPolicy] = useState<Api4comTokenPolicy>("global");
   const [gateway, setGateway] = useState("inlift-crm");
@@ -114,8 +116,8 @@ export function AdminApi4comPanel() {
     void load();
   }, [load]);
 
-  async function saveCredentials(e: React.FormEvent) {
-    e.preventDefault();
+  async function saveCredentials(e?: React.FormEvent) {
+    e?.preventDefault();
     setSaving(true);
     setError(null);
     setMessage(null);
@@ -215,12 +217,12 @@ export function AdminApi4comPanel() {
   }
 
   return (
-    <div>
+    <div role="tabpanel">
       {loading ? <p className="muted">Carregando…</p> : null}
       {error ? <div className="alert alert-error">{error}</div> : null}
       {message ? <div className="alert alert-info">{message}</div> : null}
 
-      {readiness ? (
+      {section === "checklist" && readiness ? (
         <section className="panel" style={{ marginBottom: "1rem" }}>
           <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Checklist telefonia (CRM + discador)</h2>
           <ol className="muted" style={{ fontSize: "0.875rem", paddingLeft: "1.25rem", marginBottom: 0 }}>
@@ -234,25 +236,34 @@ export function AdminApi4comPanel() {
               readiness.sip_domain_configured,
               `Domínio SIP correto (VoIP *.api4com.com)${readiness.sip_domain_current ? ` — hoje: ${readiness.sip_domain_current}` : ""}`
             )}
-            {checklistItem(false, "Cada BDR: ramal + senha SIP em Meu perfil (use a tabela abaixo se a API devolver senha)")}
-            {checklistItem(false, "No CRM: painel Telefonia → Conectar ramal antes de ligar ou aquecer")}
+            {checklistItem(false, "Cada BDR: ramal + senha SIP em Meu telefone (aba Ramais e SIP se a API devolver senha)")}
+            {checklistItem(false, "No CRM: ícone de telefone ao lado do nome → Conectar ramal antes de ligar")}
           </ol>
           {!readiness.can_query_api ? (
             <p className="alert alert-error" style={{ marginTop: "0.75rem", marginBottom: 0, fontSize: "0.8125rem" }}>
               {globalDialMode
-                ? "Cadastre o token global acima e salve."
-                : "Cadastre o token master em Webhook e telefonia (seção abaixo) ou peça a uma BDR para salvar o token em Meu perfil."}
+                ? "Cadastre o token global na aba Credenciais e salve."
+                : "Cadastre o token master na aba Webhook ou peça a uma BDR para salvar o token em Meu telefone."}
             </p>
           ) : null}
           {readiness.can_query_api && !readiness.sip_domain_configured ? (
             <p className="alert alert-error" style={{ marginTop: "0.75rem", marginBottom: 0, fontSize: "0.8125rem" }}>
-              O campo Domínio SIP não pode ser a URL do webhook do CRM. Apague, consulte os ramais (botão abaixo) para
-              sugerir o domínio, ou copie do painel API4COM.
+              O campo Domínio SIP não pode ser a URL do webhook do CRM. Apague, consulte os ramais na aba Ramais e SIP
+              para sugerir o domínio, ou copie do painel API4COM.
             </p>
           ) : null}
+          <p className="muted" style={{ marginTop: "1rem", marginBottom: 0, fontSize: "0.8125rem" }}>
+            Use as abas <strong>Credenciais</strong>, <strong>Ramais e SIP</strong> e <strong>Webhook</strong> para
+            concluir cada etapa.
+          </p>
         </section>
       ) : null}
 
+      {section === "checklist" && !readiness && !loading ? (
+        <p className="muted">Não foi possível carregar o checklist. Recarregue a página.</p>
+      ) : null}
+
+      {section === "credentials" ? (
       <section className="panel" style={{ marginBottom: "1rem" }}>
         <h2 style={{ marginTop: 0 }}>Credenciais</h2>
         <p className="muted" style={{ fontSize: "0.875rem" }}>
@@ -280,13 +291,13 @@ export function AdminApi4comPanel() {
               {globalDialMode ? (
                 <>
                   O administrador informa um <strong>token único</strong> abaixo. BDRs configuram só o <strong>ramal</strong>{" "}
-                  em Meu perfil.
+                  em Meu telefone.
                 </>
               ) : (
                 <>
-                  Cada BDR cadastra o <strong>próprio token</strong> em Meu perfil (e o ramal). O token de integração fica na
-                  seção <strong>Webhook e telefonia</strong> (conta master). Ao alternar o modo, o que já foi salvo no servidor
-                  permanece — nada é apagado.
+                  Cada BDR cadastra o <strong>próprio token</strong> em Meu telefone (e o ramal). O token de integração fica na
+                  aba <strong>Webhook</strong> (conta master). Ao alternar o modo, o que já foi salvo no servidor permanece —
+                  nada é apagado.
                 </>
               )}
             </p>
@@ -340,18 +351,29 @@ export function AdminApi4comPanel() {
             {saving ? "Salvando…" : "Salvar configuração"}
           </button>
         </form>
-        <div style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px solid var(--border, #e2e8f0)" }}>
-          <h3 style={{ marginTop: 0, fontSize: "1rem" }}>Ramais e senha SIP (API4COM)</h3>
+      </section>
+      ) : null}
+
+      {section === "extensions" ? (
+        <section className="panel" style={{ marginBottom: "1rem" }}>
+          <h2 style={{ marginTop: 0 }}>Ramais e senha SIP (API4COM)</h2>
           <p className="muted" style={{ fontSize: "0.8125rem" }}>
             Consulta <code>GET /extensions</code> usando o token de integração, o seu (se for BDR) ou o de alguma BDR
-            cadastrada. Se a API devolver <code>senha</code>, copie para Meu perfil → Senha SIP (discador).
+            cadastrada. Se a API devolver <code>senha</code>, copie para Meu telefone → Senha SIP (discador). O domínio
+            SIP é configurado na aba <strong>Credenciais</strong>.
           </p>
           {sipDomain.trim() && !validateApi4comSipDomainInput(sipDomain).ok ? (
             <p className="alert alert-error" style={{ fontSize: "0.8125rem" }}>
-              {(validateApi4comSipDomainInput(sipDomain) as { ok: false; message: string }).message}
+              {(validateApi4comSipDomainInput(sipDomain) as { ok: false; message: string }).message} Corrija na aba
+              Credenciais.
             </p>
           ) : null}
-          <button type="button" className="btn" disabled={extensionsLoading} onClick={() => void loadExtensionsFromApi()}>
+          {sipDomain.trim() && validateApi4comSipDomainInput(sipDomain).ok ? (
+            <p className="muted" style={{ fontSize: "0.8125rem" }}>
+              Domínio SIP atual (Credenciais): <code>{sipDomain.trim()}</code>
+            </p>
+          ) : null}
+          <button type="button" className="btn btn-primary" disabled={extensionsLoading} onClick={() => void loadExtensionsFromApi()}>
             {extensionsLoading ? "Consultando…" : "Consultar ramais na API4COM"}
           </button>
           {extensionsResult?.extensions?.length ? (
@@ -388,11 +410,12 @@ export function AdminApi4comPanel() {
               Nenhum ramal na resposta.
             </p>
           ) : null}
-        </div>
-      </section>
+        </section>
+      ) : null}
 
+      {section === "webhook" ? (
       <section className="panel">
-        <h2 style={{ marginTop: 0 }}>Webhook e telefonia</h2>
+        <h2 style={{ marginTop: 0 }}>Webhook</h2>
         {status ? (
           <>
             <p>
@@ -403,34 +426,44 @@ export function AdminApi4comPanel() {
                     ? "Token global configurado"
                     : "Token de integração configurado"
                   : globalDialMode
-                    ? "Cadastre o token global acima"
-                    : "Cadastre o token de integração abaixo (webhook)"}
+                    ? "Cadastre o token global na aba Credenciais"
+                    : "Cadastre o token de integração abaixo"}
               </strong>
             </p>
             {!globalDialMode ? (
               <p className="muted" style={{ fontSize: "0.8125rem", marginTop: 0 }}>
-                As <strong>ligações</strong> usam o token de cada BDR em Meu perfil. O token abaixo é só para{" "}
+                As <strong>ligações</strong> usam o token de cada BDR em Meu telefone. O token abaixo é só para{" "}
                 <strong>webhook</strong> (status da chamada no CRM) — não é obrigatório para discar.
               </p>
             ) : null}
             {!globalDialMode ? (
-              <div className="field">
-                <label className="label" htmlFor="api4com-integration-token">
-                  Token API (integração / webhook)
-                </label>
-                <input
-                  id="api4com-integration-token"
-                  className="input"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder={hasToken ? "•••••••• (informe para substituir)" : "Token da conta master na API4COM"}
-                  value={tokenInput}
-                  onChange={(e) => setTokenInput(e.target.value)}
-                />
-                <p className="muted" style={{ fontSize: "0.8125rem", marginBottom: 0, marginTop: "0.35rem" }}>
-                  Usado só para registrar o webhook. Ligações usam o token de cada BDR em Meu perfil.
-                </p>
-              </div>
+              <>
+                <div className="field">
+                  <label className="label" htmlFor="api4com-integration-token">
+                    Token API (integração / webhook)
+                  </label>
+                  <input
+                    id="api4com-integration-token"
+                    className="input"
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={hasToken ? "•••••••• (informe para substituir)" : "Token da conta master na API4COM"}
+                    value={tokenInput}
+                    onChange={(e) => setTokenInput(e.target.value)}
+                  />
+                  <p className="muted" style={{ fontSize: "0.8125rem", marginBottom: 0, marginTop: "0.35rem" }}>
+                    Usado para registrar o webhook e consultar ramais. Ligações usam o token de cada BDR em Meu telefone.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={saving || (!tokenInput.trim() && !hasToken)}
+                  onClick={() => void saveCredentials()}
+                >
+                  {saving ? "Salvando…" : "Salvar token de integração"}
+                </button>
+              </>
             ) : null}
             <div className="field">
               <label className="label">URL do webhook (CRM)</label>
@@ -477,6 +510,7 @@ export function AdminApi4comPanel() {
           </>
         ) : null}
       </section>
+      ) : null}
     </div>
   );
 }

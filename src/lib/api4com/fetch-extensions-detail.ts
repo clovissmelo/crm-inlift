@@ -48,33 +48,21 @@ function parseExtensionList(payload: unknown): Api4comExtensionDetail[] {
 const TOKEN_MISSING_MSG =
   "Token API4COM não configurado. No modo «Cada BDR no perfil»: cadastre o token master em Webhook e telefonia, ou o token de alguma BDR em Meu perfil, e tente de novo.";
 
-/** Lista ramais na conta (inclui senha SIP se a API4COM devolver). */
-export async function fetchApi4comExtensionDetails(adminUserId: number): Promise<{
+export type Api4comExtensionsFetchResult = {
   ok: boolean;
   http_status: number;
   sip_domain: string | null;
   extensions: Api4comExtensionDetail[];
   error?: string;
-}> {
+};
+
+/** Lista ramais na conta (inclui senha SIP se a API4COM devolver). */
+export async function fetchApi4comExtensionsWithToken(apiToken: string): Promise<Api4comExtensionsFetchResult> {
   const cfg = await getApi4comConfig();
   const sip_domain = await getApi4comSipDomain();
-  const token = await resolveApi4comTokenForAdminApiOperations(adminUserId);
-  if (!token) {
-    const policy = await getApi4comTokenPolicy();
-    return {
-      ok: false,
-      http_status: 0,
-      sip_domain,
-      extensions: [],
-      error:
-        policy === "per_bdr"
-          ? TOKEN_MISSING_MSG
-          : "Token API4COM não configurado. Cadastre o token global em Credenciais e salve."
-    };
-  }
 
   const res = await fetch(`${cfg.baseUrl}/api/v1/extensions`, {
-    headers: { Authorization: token, Accept: "application/json" },
+    headers: { Authorization: apiToken, Accept: "application/json" },
     signal: AbortSignal.timeout(25_000)
   });
 
@@ -106,4 +94,25 @@ export async function fetchApi4comExtensionDetails(adminUserId: number): Promise
   }));
 
   return { ok: true, http_status: res.status, sip_domain, extensions };
+}
+
+/** Lista ramais na conta (inclui senha SIP se a API4COM devolver). */
+export async function fetchApi4comExtensionDetails(adminUserId: number): Promise<Api4comExtensionsFetchResult> {
+  const sip_domain = await getApi4comSipDomain();
+  const token = await resolveApi4comTokenForAdminApiOperations(adminUserId);
+  if (!token) {
+    const policy = await getApi4comTokenPolicy();
+    return {
+      ok: false,
+      http_status: 0,
+      sip_domain,
+      extensions: [],
+      error:
+        policy === "per_bdr"
+          ? TOKEN_MISSING_MSG
+          : "Token API4COM não configurado. Cadastre o token global em Credenciais e salve."
+    };
+  }
+
+  return fetchApi4comExtensionsWithToken(token);
 }

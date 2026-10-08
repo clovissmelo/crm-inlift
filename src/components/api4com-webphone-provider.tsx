@@ -11,6 +11,7 @@ import {
 } from "react";
 import { Api4comWebphoneDock } from "@/components/api4com-webphone-dock";
 import { getLibwebphoneInstanceId, loadLibwebphoneScript } from "@/lib/api4com/load-libwebphone";
+import { requestMicrophoneAccess } from "@/lib/api4com/request-microphone-access";
 import {
   clearLibwebphoneAutoAnswerTimers,
   libwebphoneHasActiveSession,
@@ -203,6 +204,13 @@ export function Api4comWebphoneProvider({
       setStatusDetail(null);
 
       try {
+        const mic = await requestMicrophoneAccess();
+        if (!mic.ok) {
+          setStatus("error");
+          setStatusDetail(mic.message);
+          return false;
+        }
+
         const res = await fetch(
           `/api/api4com/webphone-config${targetUserId !== user.id ? `?user_id=${targetUserId}` : ""}`
         );

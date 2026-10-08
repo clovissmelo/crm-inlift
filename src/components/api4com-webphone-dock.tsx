@@ -144,9 +144,12 @@ export function Api4comWebphoneDock({
           </p>
           {statusDetail ? <p className="muted api4com-webphone-dock-detail">{statusDetail}</p> : null}
           {!online && status !== "needs_config" ? (
-            <p className="muted api4com-webphone-dock-detail">
-              Feche a extensão Webphone da API4COM no Chrome — só uma conexão SIP por ramal.
-            </p>
+            <div className="api4com-webphone-dock-intro">
+              <p className="api4com-webphone-dock-detail">Conecte o seu ramal para realização de chamadas.</p>
+              <p className="api4com-webphone-dock-note muted">
+                Feche a extensão Webphone da API4COM no Chrome se estiver aberta.
+              </p>
+            </div>
           ) : null}
           {status === "needs_config" ? (
             <p className="muted api4com-webphone-dock-detail">

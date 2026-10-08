@@ -1820,6 +1820,36 @@ table.data-table td.prospeccao-col-phone-count__value {
   border-radius: 0.35rem;
 }
 
+.meu-telefone-tests {
+  margin: 1.25rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.meu-telefone-tests-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.9375rem;
+}
+
+.meu-telefone-test-block {
+  margin-bottom: 1rem;
+}
+
+.meu-telefone-test-label {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.meu-telefone-test-detail {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+}
+
+.meu-telefone-test-ok {
+  color: #4ade80;
+}
+
 .btn-block {
   width: 100%;
   justify-content: center;
@@ -1866,6 +1896,22 @@ table.data-table td.prospeccao-col-phone-count__value {
 .api4com-webphone-dock-status {
   margin: 0 0 0.35rem;
   font-size: 0.875rem;
+}
+
+.api4com-webphone-dock-intro {
+  margin: 0 0 0.75rem;
+}
+
+.api4com-webphone-dock-intro .api4com-webphone-dock-detail {
+  margin: 0 0 0.35rem;
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
+.api4com-webphone-dock-note {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 .api4com-webphone-dock-detail {
