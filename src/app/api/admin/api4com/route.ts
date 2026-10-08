@@ -1,11 +1,13 @@
 import { requireAdminApi } from "@/lib/admin";
 import { api4comRegisterWebhookIntegration } from "@/lib/api4com/client";
 import { getApi4comConfig, getApi4comWebhookUrl, isApi4comIntegrationTokenConfigured } from "@/lib/api4com/config";
+import { getApi4comIntegrationReadiness } from "@/lib/api4com/integration-readiness";
 import { getApi4comTokenPolicy } from "@/lib/api4com/token-policy";
 import { requireApiUser } from "@/lib/auth";
 
 export async function GET() {
   const user = await requireApiUser();
+  if (!user) return Response.json({ error: "Não autenticado" }, { status: 401 });
   const denied = await requireAdminApi(user);
   if (denied) return denied;
 
@@ -13,10 +15,12 @@ export async function GET() {
   const integrationTokenConfigured = await isApi4comIntegrationTokenConfigured();
   const webhookUrl = getApi4comWebhookUrl();
   const cfg = await getApi4comConfig();
+  const readiness = await getApi4comIntegrationReadiness(user.id);
 
   return Response.json({
     configured: integrationTokenConfigured,
     token_policy: tokenPolicy,
+    readiness,
     webhook_url: webhookUrl,
     gateway: cfg.gateway,
     base_url: cfg.baseUrl,

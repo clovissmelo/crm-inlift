@@ -3,10 +3,22 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { API4COM_TOKEN_POLICY_LABELS, type Api4comTokenPolicy } from "@/lib/api4com/token-policy-shared";
+import { validateApi4comSipDomainInput } from "@/lib/api4com/sip-domain-shared";
+
+type Readiness = {
+  token_policy: Api4comTokenPolicy;
+  integration_token_configured: boolean;
+  any_bdr_token_configured: boolean;
+  can_query_api: boolean;
+  sip_domain_configured: boolean;
+  sip_domain_current: string | null;
+  base_url: string;
+};
 
 type Status = {
   configured: boolean;
   token_policy: Api4comTokenPolicy;
+  readiness?: Readiness;
   webhook_url: string;
   gateway: string;
   base_url: string;
@@ -106,10 +118,21 @@ export function AdminApi4comPanel() {
     setSaving(true);
     setError(null);
     setMessage(null);
+    let sipToSave: string | null = null;
+    if (sipDomain.trim()) {
+      const sipCheck = validateApi4comSipDomainInput(sipDomain);
+      if (!sipCheck.ok) {
+        setError(sipCheck.message);
+        setSaving(false);
+        return;
+      }
+      sipToSave = sipCheck.normalized;
+      if (sipCheck.normalized !== sipDomain.trim()) setSipDomain(sipCheck.normalized);
+    }
     const payload: Array<{ key: string; value: string | null }> = [
       { key: "api4com_gateway", value: gateway.trim() || "inlift-crm" },
       { key: "api4com_token_policy", value: tokenPolicy },
-      { key: "api4com_sip_domain", value: sipDomain.trim() || null }
+      { key: "api4com_sip_domain", value: sipToSave }
     ];
     if (tokenInput.trim()) payload.push({ key: "api4com_api_token", value: tokenInput.trim() });
     if (webhookSecretInput.trim()) payload.push({ key: "api4com_webhook_secret", value: webhookSecretInput.trim() });
@@ -163,7 +186,15 @@ export function AdminApi4comPanel() {
         return;
       }
       setExtensionsResult(data);
-      setMessage(`Consulta API4COM: ${data.extensions?.length ?? 0} ramal(is).`);
+      const inferredDomain = data.extensions?.find((e) => e.domain?.includes(".api4com.com"))?.domain;
+      if (inferredDomain && !validateApi4comSipDomainInput(sipDomain).ok) {
+        setSipDomain(inferredDomain);
+        setMessage(
+          `Consulta: ${data.extensions?.length ?? 0} ramal(is). Domínio SIP sugerido (${inferredDomain}) — revise e clique Salvar.`
+        );
+      } else {
+        setMessage(`Consulta API4COM: ${data.extensions?.length ?? 0} ramal(is).`);
+      }
     } catch {
       setError("Falha ao consultar ramais na API4COM.");
     } finally {
@@ -172,12 +203,54 @@ export function AdminApi4comPanel() {
   }
 
   const globalDialMode = tokenPolicy === "global";
+  const readiness = status?.readiness;
+
+  function checklistItem(ok: boolean, label: string) {
+    return (
+      <li style={{ marginBottom: "0.35rem" }}>
+        <span aria-hidden>{ok ? "✓" : "○"}</span> {label}
+      </li>
+    );
+  }
 
   return (
     <div>
       {loading ? <p className="muted">Carregando…</p> : null}
       {error ? <div className="alert alert-error">{error}</div> : null}
       {message ? <div className="alert alert-info">{message}</div> : null}
+
+      {readiness ? (
+        <section className="panel" style={{ marginBottom: "1rem" }}>
+          <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Checklist telefonia (CRM + discador)</h2>
+          <ol className="muted" style={{ fontSize: "0.875rem", paddingLeft: "1.25rem", marginBottom: 0 }}>
+            {checklistItem(
+              readiness.can_query_api,
+              globalDialMode
+                ? "Token global em Credenciais (ligações + consulta API)"
+                : "Token disponível (integração webhook ou token de alguma BDR em Meu perfil)"
+            )}
+            {checklistItem(
+              readiness.sip_domain_configured,
+              `Domínio SIP correto (VoIP *.api4com.com)${readiness.sip_domain_current ? ` — hoje: ${readiness.sip_domain_current}` : ""}`
+            )}
+            {checklistItem(false, "Cada BDR: ramal + senha SIP em Meu perfil (use a tabela abaixo se a API devolver senha)")}
+            {checklistItem(false, "No CRM: painel Telefonia → Conectar ramal antes de ligar ou aquecer")}
+          </ol>
+          {!readiness.can_query_api ? (
+            <p className="alert alert-error" style={{ marginTop: "0.75rem", marginBottom: 0, fontSize: "0.8125rem" }}>
+              {globalDialMode
+                ? "Cadastre o token global acima e salve."
+                : "Cadastre o token master em Webhook e telefonia (seção abaixo) ou peça a uma BDR para salvar o token em Meu perfil."}
+            </p>
+          ) : null}
+          {readiness.can_query_api && !readiness.sip_domain_configured ? (
+            <p className="alert alert-error" style={{ marginTop: "0.75rem", marginBottom: 0, fontSize: "0.8125rem" }}>
+              O campo Domínio SIP não pode ser a URL do webhook do CRM. Apague, consulte os ramais (botão abaixo) para
+              sugerir o domínio, ou copie do painel API4COM.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="panel" style={{ marginBottom: "1rem" }}>
         <h2 style={{ marginTop: 0 }}>Credenciais</h2>
@@ -247,7 +320,8 @@ export function AdminApi4comPanel() {
               autoComplete="off"
             />
             <p className="muted" style={{ fontSize: "0.8125rem", marginBottom: 0, marginTop: "0.35rem" }}>
-              Realm/WSS do Webphone (porta 6443). Também pode usar <code>API4COM_SIP_DOMAIN</code> na Vercel.
+              Somente o host VoIP, ex.: <code>inlift.api4com.com</code> — <strong>não</strong> use{" "}
+              <code>{status?.webhook_url ?? "/api/webhooks/api4com"}</code>. Porta WSS: 6443.
             </p>
           </div>
           <div className="field">
@@ -271,10 +345,9 @@ export function AdminApi4comPanel() {
             Consulta <code>GET /extensions</code> usando o token de integração, o seu (se for BDR) ou o de alguma BDR
             cadastrada. Se a API devolver <code>senha</code>, copie para Meu perfil → Senha SIP (discador).
           </p>
-          {sipDomain.trim().toLowerCase().includes("suaempresa") ? (
+          {sipDomain.trim() && !validateApi4comSipDomainInput(sipDomain).ok ? (
             <p className="alert alert-error" style={{ fontSize: "0.8125rem" }}>
-              Troque o domínio SIP acima pelo domínio real da sua conta (ex.: <code>inlift.api4com.com</code>) — o
-              placeholder não funciona no discador.
+              {(validateApi4comSipDomainInput(sipDomain) as { ok: false; message: string }).message}
             </p>
           ) : null}
           <button type="button" className="btn" disabled={extensionsLoading} onClick={() => void loadExtensionsFromApi()}>

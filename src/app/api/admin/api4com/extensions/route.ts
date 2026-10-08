@@ -5,6 +5,7 @@ import { requireApiUser } from "@/lib/auth";
 /** Admin: consulta GET /extensions na API4COM (senha SIP se a API expuser). */
 export async function GET() {
   const user = await requireApiUser();
+  if (!user) return Response.json({ error: "Não autenticado" }, { status: 401 });
   const denied = await requireAdminApi(user);
   if (denied) return denied;
 

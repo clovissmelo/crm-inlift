@@ -1,12 +1,7 @@
 import { getSystemSetting } from "@/lib/system-settings";
+import { normalizeSipDomain, isPlausibleApi4comSipDomain } from "@/lib/api4com/sip-domain-shared";
 
-function normalizeSipDomain(raw: string): string {
-  let d = raw.trim();
-  d = d.replace(/^wss:\/\//i, "");
-  d = d.replace(/:\d+$/, "");
-  d = d.replace(/\/$/, "");
-  return d;
-}
+export { normalizeSipDomain, validateApi4comSipDomainInput, isPlausibleApi4comSipDomain } from "@/lib/api4com/sip-domain-shared";
 
 /** Domínio SIP da conta (realm / WSS). Env tem prioridade sobre Admin. */
 export async function getApi4comSipDomain(): Promise<string | null> {
@@ -15,4 +10,9 @@ export async function getApi4comSipDomain(): Promise<string | null> {
   const row = await getSystemSetting("api4com_sip_domain");
   const fromDb = row?.value?.trim();
   return fromDb ? normalizeSipDomain(fromDb) : null;
+}
+
+export async function getApi4comSipDomainValidated(): Promise<string | null> {
+  const d = await getApi4comSipDomain();
+  return isPlausibleApi4comSipDomain(d) ? d : null;
 }
