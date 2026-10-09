@@ -10,6 +10,7 @@ import { advanceWarmScreenExecution } from "@/lib/warm-screen/advance";
 
 const startSchema = z.object({
   dial_as_user_id: z.number().int().positive().optional(),
+  dial_mode: z.enum(["silent", "assisted"]).optional(),
   filters: z
     .object({
       prioridade: z.string().optional(),
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
     const execution = await startWarmScreenExecution({
       runnerUserId: user!.id,
       dialUserId,
+      dialMode: parsed.data.dial_mode ?? "silent",
       filters: {
         ...filters,
         exclude_warm_screen_confirmed: true,

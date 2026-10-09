@@ -183,12 +183,17 @@ export async function advanceWarmScreenExecution(executionId: number): Promise<{
   );
 
   try {
+    const productIds = Array.isArray(item.product_ids)
+      ? (item.product_ids as number[])
+      : typeof item.product_ids === "string"
+        ? (JSON.parse(item.product_ids) as number[])
+        : [];
     const result = await initiateApi4comCall({
       userId: exec.dial_user_id,
       dialIdentityUserId: exec.dial_user_id,
       clientId: item.client_id,
       contactId: phone.primary_contact_id ?? undefined,
-      productId: null,
+      productId: productIds[0] ?? null,
       phone: phone.phone,
       warmScreen: {
         executionId,

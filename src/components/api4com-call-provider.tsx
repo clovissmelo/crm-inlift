@@ -75,8 +75,23 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
       return;
     }
     if (isWarmScreenPath(pathname)) {
-      setActiveCall(null);
-      setCallScriptBody(null);
+      const res = await fetch("/api/warm-screen/assisted-call");
+      if (!res.ok) {
+        setActiveCall(null);
+        setCallScriptBody(null);
+        return;
+      }
+      const data = (await res.json()) as {
+        activeCall?: ActiveCallForScript | null;
+        resultCallId?: number | null;
+      };
+      const next = data.activeCall ?? null;
+      setActiveCall(next);
+      if (data.resultCallId != null) {
+        setResultCallId(data.resultCallId);
+        setPanelCollapsed(false);
+      }
+      if (!next) setCallScriptBody(null);
       return;
     }
     const res = await fetch("/api/api4com/calls/active");
@@ -164,14 +179,15 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
   }, [pending, canDial, onProspeccaoPage, activeCall, refreshPending]);
 
   useEffect(() => {
-    if (onProspeccaoPage && !onWarmScreenPage) return;
-    setResultCallId(null);
-    if (onWarmScreenPage) {
-      setActiveCall(null);
-      setCallScriptBody(null);
-      setPanelCollapsed(true);
+    if (onProspeccaoPage && !onWarmScreenPage) {
+      setResultCallId(null);
+      return;
     }
-  }, [onProspeccaoPage, onWarmScreenPage]);
+    if (onWarmScreenPage) {
+      setPanelCollapsed(false);
+      void refreshActiveCall();
+    }
+  }, [onProspeccaoPage, onWarmScreenPage, refreshActiveCall]);
 
   useEffect(() => {
     if (resultCallId == null) return;
@@ -215,8 +231,7 @@ export function Api4comCallProvider({ user, children }: { user: User; children: 
   const showSidePanel =
     canDial &&
     panelMode != null &&
-    !onWarmScreenPage &&
-    (panelMode === "script" || onProspeccaoPage);
+    (onWarmScreenPage || panelMode === "script" || onProspeccaoPage);
 
   function closeResultPanel() {
     if (resultCallId != null) autoOpenedRef.current.add(resultCallId);

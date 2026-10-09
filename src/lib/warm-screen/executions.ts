@@ -3,6 +3,7 @@ import { all, get, nowIso, run } from "@/lib/db";
 import { queryWarmScreenLeadQueue } from "@/lib/warm-screen/queue";
 import { listActiveProductIdsInQueue } from "@/lib/client-product-prospeccao";
 import { buildWarmScreenPrompt, type WarmScreenPromptPayload } from "@/lib/warm-screen/prompt-lines";
+import { parseWarmScreenDialMode, type WarmScreenDialMode } from "@/lib/warm-screen/dial-mode";
 
 export type WarmScreenExecutionStatus = "running" | "paused" | "stopped" | "completed" | "failed";
 
@@ -25,6 +26,7 @@ export type WarmScreenExecutionRow = {
   items_error: number;
   current_item_id: number | null;
   last_error: string | null;
+  dial_mode: WarmScreenDialMode;
 };
 
 export type WarmScreenItemRow = {
@@ -53,10 +55,30 @@ export async function getRunningExecutionForRunner(runnerUserId: number) {
   );
 }
 
+export async function pauseExecutionForAssistedHandoff(executionId: number) {
+  const now = nowIso();
+  await run(
+    `
+      UPDATE warm_screen_executions SET
+        status = 'paused',
+        paused_at = COALESCE(paused_at, @now),
+        last_error = @msg,
+        updated_at = @now
+      WHERE id = @id AND status IN ('running', 'paused')
+    `,
+    {
+      id: executionId,
+      now,
+      msg: "Modo assistido: ligação atendida — conduza no painel lateral (roteiro e telefone). Retome o motor quando encerrar."
+    }
+  );
+}
+
 export async function startWarmScreenExecution(input: {
   runnerUserId: number;
   dialUserId: number;
   filters: ClientFilters;
+  dialMode?: WarmScreenDialMode;
 }) {
   const existing = await getRunningExecutionForRunner(input.runnerUserId);
   if (existing) {
@@ -73,15 +95,16 @@ export async function startWarmScreenExecution(input: {
   const insert = await run(
     `
       INSERT INTO warm_screen_executions (
-        runner_user_id, dial_user_id, filters_json, status, started_at, items_total, created_at, updated_at
+        runner_user_id, dial_user_id, filters_json, status, dial_mode, started_at, items_total, created_at, updated_at
       ) VALUES (
-        @runner, @dial, @filters::jsonb, 'running', @now, @total, @now, @now
+        @runner, @dial, @filters::jsonb, 'running', @dialMode, @now, @total, @now, @now
       )
     `,
     {
       runner: input.runnerUserId,
       dial: input.dialUserId,
       filters: JSON.stringify(input.filters),
+      dialMode: input.dialMode ?? "silent",
       now,
       total: snapshot.items.length
     }
@@ -152,7 +175,7 @@ export type WarmScreenExecutionItemView = {
 
 export async function listExecutionItemsForRealtime(
   executionId: number,
-  execution: Pick<WarmScreenExecutionRow, "status" | "current_item_id">
+  execution: Pick<WarmScreenExecutionRow, "status" | "current_item_id" | "dial_mode">
 ): Promise<WarmScreenExecutionItemView[]> {
   const rows = await all<
     WarmScreenItemRow & {
@@ -207,7 +230,8 @@ export async function listExecutionItemsForRealtime(
         queueBlocked: queueBlocked && item.status === "pending",
         isCurrent:
           execution.current_item_id === item.id ||
-          (!activeDialing && firstPending?.id === item.id && item.status === "pending")
+          (!activeDialing && firstPending?.id === item.id && item.status === "pending"),
+        dialMode: parseWarmScreenDialMode(execution.dial_mode)
       }
     )
   }));

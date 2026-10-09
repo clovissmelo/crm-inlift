@@ -73,6 +73,7 @@ export function WarmScreenLeadsView({
   const [activeItems, setActiveItems] = useState<ExecutionItem[]>([]);
   const [executions, setExecutions] = useState<Execution[]>([]);
   const [dialAsUserId, setDialAsUserId] = useState("");
+  const [dialMode, setDialMode] = useState<"silent" | "assisted">("silent");
   const [ramalModalOpen, setRamalModalOpen] = useState(false);
   const [detailExecutionId, setDetailExecutionId] = useState<number | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -218,6 +219,7 @@ export function WarmScreenLeadsView({
     setMessage(null);
     setRamalModalOpen(false);
     const body: Record<string, unknown> = {
+      dial_mode: dialMode,
       filters: {
         prioridade: filters.prioridade || undefined,
         product_id: filters.product_id ? Number(filters.product_id) : undefined,
@@ -312,7 +314,21 @@ export function WarmScreenLeadsView({
             Execuções
           </button>
         </div>
-        <div className="motor-screen-toolbar__actions">
+        <div className="motor-screen-toolbar__actions" style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          {!isAdmin ? (
+            <label className="muted" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8125rem" }}>
+              Modo:
+              <select
+                className="input input-sm"
+                value={dialMode}
+                onChange={(e) => setDialMode(e.target.value as "silent" | "assisted")}
+                disabled={starting || activeExecution?.status === "running" || activeExecution?.status === "paused"}
+              >
+                <option value="silent">Silencioso</option>
+                <option value="assisted">Assistido</option>
+              </select>
+            </label>
+          ) : null}
           <button
             type="button"
             className="btn btn-brand motor-screen-primary-btn"
@@ -358,6 +374,41 @@ export function WarmScreenLeadsView({
           se o navegador pedir. Sem ramal online a execução pausa com erro de telefonia. Com execução ativa, o motor
           segue nas abas Lista e Execuções.
         </p>
+        <fieldset style={{ border: "none", padding: 0, margin: "0 0 1rem" }}>
+          <legend className="label" style={{ marginBottom: 8 }}>
+            Modo de aquecimento
+          </legend>
+          <label style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-start", cursor: "pointer" }}>
+            <input
+              type="radio"
+              name="warm-dial-mode"
+              checked={dialMode === "silent"}
+              onChange={() => setDialMode("silent")}
+              disabled={starting}
+            />
+            <span>
+              <strong>Silencioso</strong>
+              <span className="muted" style={{ display: "block", fontSize: "0.8125rem" }}>
+                Discagem automática; ao atender, encerra e registra triagem (sem roteiro).
+              </span>
+            </span>
+          </label>
+          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
+            <input
+              type="radio"
+              name="warm-dial-mode"
+              checked={dialMode === "assisted"}
+              onChange={() => setDialMode("assisted")}
+              disabled={starting}
+            />
+            <span>
+              <strong>Assistido</strong>
+              <span className="muted" style={{ display: "block", fontSize: "0.8125rem" }}>
+                Ao atender, pausa o motor e abre roteiro + telefone ao lado (como na prospecção).
+              </span>
+            </span>
+          </label>
+        </fieldset>
         <label className="filter-chip" style={{ display: "block", marginBottom: "1rem" }}>
           <span className="filter-chip-label">Rodar como</span>
           <select

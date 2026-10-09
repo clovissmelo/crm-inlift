@@ -31,7 +31,12 @@ function formatPhone(phone: string | null) {
 export function buildWarmScreenPrompt(
   item: ItemSlice,
   call: CallSlice | null,
-  ctx: { executionStatus: string; queueBlocked: boolean; isCurrent: boolean }
+  ctx: {
+    executionStatus: string;
+    queueBlocked: boolean;
+    isCurrent: boolean;
+    dialMode?: "silent" | "assisted";
+  }
 ): WarmScreenPromptPayload {
   /** Animação (⋯ / cursor) só enquanto a execução está em andamento. */
   const executionRunning = ctx.executionStatus === "running";
@@ -74,7 +79,11 @@ export function buildWarmScreenPrompt(
         break;
       case "in_progress":
         lines.push({ text: "[!] ATENDIMENTO detectado", variant: "warn" });
-        lines.push({ text: "[*] hangup automático (aquecimento)", variant: "ok" });
+        if (ctx.dialMode === "assisted") {
+          lines.push({ text: "[>>] modo assistido — roteiro no painel lateral", variant: "ok" });
+        } else {
+          lines.push({ text: "[*] hangup automático (aquecimento)", variant: "ok" });
+        }
         break;
       case "completed":
         if (call.result_pending) {

@@ -17,7 +17,12 @@ export async function POST(request: Request, { params }: Params) {
     return Response.json({ error: "Dados inválidos" }, { status: 400 });
   }
   try {
-    await linkCallToApproach(Number(id), user.id, parsed.data.approach_id);
+    const callId = Number(id);
+    await linkCallToApproach(callId, user.id, parsed.data.approach_id);
+    const { syncWarmScreenItemAfterApproachLinked } = await import("@/lib/warm-screen/call-outcome");
+    const { resumeWarmScreenAfterAssistedRegistration } = await import("@/lib/warm-screen/assisted-call");
+    await syncWarmScreenItemAfterApproachLinked(callId);
+    await resumeWarmScreenAfterAssistedRegistration(callId);
     return Response.json({ ok: true });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Erro" }, { status: 400 });

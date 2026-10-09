@@ -1,5 +1,11 @@
 import { all, get, nowIso, run } from "@/lib/db";
-import { WARM_SCREEN_PURPOSE, WARM_SCREEN_STALE_CALL_MS, WARM_SCREEN_STALE_MESSAGE } from "@/lib/warm-screen/constants";
+import {
+  WARM_SCREEN_ASSISTED_STALE_CALL_MS,
+  WARM_SCREEN_PURPOSE,
+  WARM_SCREEN_STALE_CALL_MS,
+  WARM_SCREEN_STALE_MESSAGE
+} from "@/lib/warm-screen/constants";
+import { getWarmScreenDialModeForCall } from "@/lib/warm-screen/dial-mode";
 import { completeWarmScreenItem } from "@/lib/warm-screen/executions";
 import {
   dismissWarmScreenConnectionFailureCall,
@@ -57,6 +63,23 @@ export async function expireWarmScreenStaleCalls(scope?: {
   );
 
   for (const row of rows) {
+    const callRow = await get<{ status: string; answered_at: string | null }>(
+      "SELECT status, answered_at FROM api4com_calls WHERE id = @id",
+      { id: row.id }
+    );
+    if (callRow?.status === "in_progress" && callRow.answered_at) {
+      const mode = await getWarmScreenDialModeForCall(row.id);
+      if (mode === "assisted") {
+        const assistedCutoff = new Date(Date.now() - WARM_SCREEN_ASSISTED_STALE_CALL_MS).toISOString();
+        const started = await get<{ started_at: string | null; created_at: string }>(
+          "SELECT started_at, created_at FROM api4com_calls WHERE id = @id",
+          { id: row.id }
+        );
+        const since = started?.started_at ?? started?.created_at;
+        if (since && since >= assistedCutoff) continue;
+      }
+    }
+
     await run(
       `
         UPDATE api4com_calls SET

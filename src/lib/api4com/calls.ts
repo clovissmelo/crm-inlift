@@ -949,18 +949,31 @@ export async function processApi4comWebhook(payload: Api4comWebhookPayload, webh
     }
   );
 
-  if (isAnswer && isWarmScreen && payload.id) {
-    try {
-      const dialUserRaw = rowMeta.dial_identity_user_id ?? rowMeta.user_id ?? callRow.user_id;
-      const dialUserId = Number(dialUserRaw);
-      const token = await resolveApi4comApiTokenForUser(
-        Number.isFinite(dialUserId) ? dialUserId : callRow.user_id
-      );
-      if (token) {
-        await api4comHangupCall(String(payload.id), token);
+  if (isAnswer && isWarmScreen) {
+    const execIdRaw = rowMeta.warm_screen_execution_id ?? (rowMeta.metadata as Record<string, unknown> | undefined)?.warm_screen_execution_id;
+    const execId = execIdRaw != null ? Number(execIdRaw) : NaN;
+    const { getWarmScreenDialModeForExecution } = await import("@/lib/warm-screen/dial-mode");
+    const { pauseExecutionForAssistedHandoff } = await import("@/lib/warm-screen/executions");
+    const dialMode =
+      Number.isFinite(execId) ? await getWarmScreenDialModeForExecution(execId) : ("silent" as const);
+
+    if (dialMode === "assisted") {
+      if (Number.isFinite(execId)) {
+        await pauseExecutionForAssistedHandoff(execId);
       }
-    } catch {
-      /* hangup best-effort */
+    } else if (payload.id) {
+      try {
+        const dialUserRaw = rowMeta.dial_identity_user_id ?? rowMeta.user_id ?? callRow.user_id;
+        const dialUserId = Number(dialUserRaw);
+        const token = await resolveApi4comApiTokenForUser(
+          Number.isFinite(dialUserId) ? dialUserId : callRow.user_id
+        );
+        if (token) {
+          await api4comHangupCall(String(payload.id), token);
+        }
+      } catch {
+        /* hangup best-effort */
+      }
     }
   }
 
@@ -968,8 +981,27 @@ export async function processApi4comWebhook(payload: Api4comWebhookPayload, webh
     const { persistCallTechnicalResult } = await import("@/lib/api4com/persist-technical-result");
     await persistCallTechnicalResult(callRow.id);
     if (isWarmScreen) {
-      const { finalizeWarmScreenCall } = await import("@/lib/warm-screen/call-outcome");
-      await finalizeWarmScreenCall(callRow.id);
+      const { getWarmScreenDialModeForCall } = await import("@/lib/warm-screen/dial-mode");
+      const dialMode = await getWarmScreenDialModeForCall(callRow.id);
+      const wasAnswered = Boolean(answered ?? callRow.answered_at);
+      if (dialMode === "assisted" && wasAnswered && !callRow.approach_id) {
+        await run(
+          `
+            UPDATE api4com_calls SET result_pending = true, updated_at = @now
+            WHERE id = @id
+          `,
+          { id: callRow.id, now: nowIso() }
+        );
+        const execIdRaw = rowMeta.warm_screen_execution_id;
+        const execId = execIdRaw != null ? Number(execIdRaw) : NaN;
+        if (Number.isFinite(execId)) {
+          const { pauseExecutionForAssistedHandoff } = await import("@/lib/warm-screen/executions");
+          await pauseExecutionForAssistedHandoff(execId);
+        }
+      } else {
+        const { finalizeWarmScreenCall } = await import("@/lib/warm-screen/call-outcome");
+        await finalizeWarmScreenCall(callRow.id);
+      }
     }
   }
 

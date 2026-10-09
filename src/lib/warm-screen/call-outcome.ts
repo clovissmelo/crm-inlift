@@ -173,6 +173,20 @@ export async function finalizeWarmScreenCall(callId: number): Promise<boolean> {
   return true;
 }
 
+export async function syncWarmScreenItemAfterApproachLinked(callId: number) {
+  const call = await get<CallRow>(
+    `
+      SELECT id, user_id, client_id, contact_id, approach_id, status, ended_at, started_at,
+        api4com_call_id, error_message, answered_at, duration_seconds, hangup_cause_code,
+        technical_result_type_id, metadata_json
+      FROM api4com_calls WHERE id = @id
+    `,
+    { id: callId }
+  );
+  if (!call?.approach_id || !isWarmScreenCallRow(call)) return;
+  await syncExecutionFromCall(call);
+}
+
 async function syncExecutionFromCall(call: CallRow) {
   const meta = parseMeta(call.metadata_json);
   const itemId = meta.warm_screen_item_id ? Number(meta.warm_screen_item_id) : null;
