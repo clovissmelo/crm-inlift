@@ -6,8 +6,6 @@ import {
   listExecutionsForViewer,
   startWarmScreenExecution
 } from "@/lib/warm-screen/executions";
-import { advanceWarmScreenExecution } from "@/lib/warm-screen/advance";
-
 const startSchema = z.object({
   dial_as_user_id: z.number().int().positive().optional(),
   dial_mode: z.enum(["silent", "assisted"]).optional(),
@@ -80,10 +78,8 @@ export async function POST(request: Request) {
     if (!execution) {
       return Response.json({ error: "Falha ao criar execução." }, { status: 500 });
     }
-    await advanceWarmScreenExecution(execution.id);
-    const { getExecutionById } = await import("@/lib/warm-screen/executions");
-    const updated = await getExecutionById(execution.id);
-    return Response.json({ execution: updated }, { status: 201 });
+    // Primeira discagem via poll do cliente (tick=1) — após prepareForApiDial + beginDialAssist no navegador.
+    return Response.json({ execution }, { status: 201 });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Erro ao iniciar" }, { status: 400 });
   }

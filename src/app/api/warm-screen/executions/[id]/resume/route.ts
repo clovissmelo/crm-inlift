@@ -1,7 +1,5 @@
 import { requireWarmScreenApiUser } from "@/lib/warm-screen/api-auth";
 import { getExecutionById, resumeExecution } from "@/lib/warm-screen/executions";
-import { advanceWarmScreenExecution } from "@/lib/warm-screen/advance";
-
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { user, denied } = await requireWarmScreenApiUser();
   if (denied) return denied;
@@ -16,7 +14,6 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
 
   try {
     await resumeExecution(id, user!.id);
-    await advanceWarmScreenExecution(id);
     return Response.json({ ok: true, execution: await getExecutionById(id) });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Erro" }, { status: 400 });

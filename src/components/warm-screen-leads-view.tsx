@@ -18,6 +18,8 @@ type Tab = "lista" | "tempo_real" | "execucoes";
 
 type Execution = {
   id: number;
+  dial_user_id?: number;
+  dial_mode?: string;
   status: string;
   items_total: number;
   items_done: number;
@@ -122,16 +124,42 @@ export function WarmScreenLeadsView({
   }, []);
 
   const pollActive = useCallback(async () => {
+    if (webphone) {
+      const peekRes = await fetch("/api/warm-screen/executions/active");
+      if (peekRes.ok) {
+        const peek = (await peekRes.json()) as { execution: Execution | null };
+        const ex = peek.execution;
+        if (ex?.status === "running") {
+          const dialUserId = ex.dial_user_id ?? operatorUserId;
+          const ready = await webphone.prepareForApiDial({ userId: dialUserId, openPanel: false });
+          if (!ready) {
+            webphone.openPanel();
+            setMessage("Conecte o ramal (ícone verde) para o aquecedor discar.");
+            return;
+          }
+          webphone.beginDialAssist();
+        }
+      }
+    }
+
     const res = await fetch("/api/warm-screen/executions/active?tick=1");
     if (!res.ok) return;
     const data = (await res.json()) as { execution: Execution | null; items: ExecutionItem[] };
     setActiveExecution(data.execution);
     setActiveItems(data.items ?? []);
+    const dialing = (data.items ?? []).some((i) => i.status === "dialing");
+    if (webphone) {
+      if (data.execution?.status === "running" && dialing) {
+        webphone.beginDialAssist();
+      } else if (data.execution?.status !== "running" || !dialing) {
+        webphone.endDialAssist();
+      }
+    }
     if (data.execution?.status === "completed") {
       void loadList();
       void loadExecutions();
     }
-  }, [loadExecutions, loadList]);
+  }, [loadExecutions, loadList, operatorUserId, webphone]);
 
   useEffect(() => {
     void loadList();
@@ -252,6 +280,7 @@ export function WarmScreenLeadsView({
     setMessage("Motor iniciado.");
     setTab("tempo_real");
     void loadExecutions();
+    void pollActive();
   }
 
   async function deleteExecution(ex: Execution) {
