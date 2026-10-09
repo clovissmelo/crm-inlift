@@ -35,7 +35,12 @@ import {
 } from "@/lib/call-script-log";
 import { isoToSpDateAndTime } from "@/lib/datetime";
 import { ApproachMinimalScheduleField } from "@/components/approach-minimal-schedule-field";
-import { type ApproachNextActionKey } from "@/lib/approach-next-actions";
+import { ApproachNextStepField } from "@/components/approach-next-step-field";
+import {
+  shouldShowNextStepField,
+  validateNextActionChoice,
+  type ApproachNextActionKey
+} from "@/lib/approach-next-actions";
 import {
   contactSlugForLayerChoice,
   contactLayerRequiresPersonName,
@@ -682,7 +687,8 @@ export function Api4comCallResultForm({
       ask_decision_maker: effective.ask_decision_maker,
       mark_phone_verified: effective.mark_phone_verified,
       requires_meeting: effective.requires_meeting,
-      allowed_next_actions: effective.allowed_next_actions
+      allowed_next_actions: effective.allowed_next_actions,
+      suggest_follow_up: selectedResultBase.suggest_follow_up
     };
   }, [selectedResultBase, attendanceRules]);
 
@@ -836,16 +842,12 @@ export function Api4comCallResultForm({
 
   const showNotesField = selectedResult?.collect_notes === true;
   const showRegistrationSteps = selectedResult?.require_final_registration !== false;
-  const showReturnSchedule = selectedResult?.require_schedule_return === true;
-  const showMeetingSchedule = selectedResult?.requires_meeting === true;
+  const showNextStepField = Boolean(selectedResult && shouldShowNextStepField(selectedResult));
+  const showReturnSchedule =
+    !showNextStepField && selectedResult?.require_schedule_return === true;
+  const showMeetingSchedule = !showNextStepField && selectedResult?.requires_meeting === true;
   const spokeWithDecisionMaker = spokeWithDecisionMakerForChoice(contactLayerChoice);
 
-  useEffect(() => {
-    if (!selectedResult) return;
-    if (selectedResult.requires_meeting) setNextType("schedule_meeting");
-    else if (selectedResult.require_schedule_return) setNextType("schedule_return");
-    else setNextType("none");
-  }, [selectedResult?.id, selectedResult?.requires_meeting, selectedResult?.require_schedule_return]);
   const nextDial = useMemo(() => {
     const s = ctx?.call_strategy?.suggested;
     if (s) {
@@ -1096,10 +1098,14 @@ export function Api4comCallResultForm({
       mark("Informe as observações exigidas para este resultado.");
     }
     if (selectedResult && showRegistrationSteps) {
-      if (
-        (showReturnSchedule || showMeetingSchedule) &&
-        (!nextDate.trim() || !nextTime.trim())
-      ) {
+      const nextErr = validateNextActionChoice(selectedResult, nextType);
+      if (nextErr) mark(nextErr);
+      const needsSchedule =
+        nextType === "schedule_return" ||
+        nextType === "schedule_meeting" ||
+        showReturnSchedule ||
+        showMeetingSchedule;
+      if (needsSchedule && (!nextDate.trim() || !nextTime.trim())) {
         err.nextSchedule = true;
         mark("Informe data e hora.");
       }
@@ -1594,6 +1600,30 @@ export function Api4comCallResultForm({
               />
               {fieldErrors.notes ? <p className="call-reg-invalid-hint">Preencha as observações.</p> : null}
             </div>
+          ) : null}
+          {showRegistrationSteps && showNextStepField ? (
+            <ApproachNextStepField
+              result={selectedResult}
+              nextType={nextType}
+              onNextTypeChange={(v) => {
+                setNextType(v);
+                setFieldErrors((f) => ({ ...f, nextSchedule: false }));
+              }}
+              nextDate={nextDate}
+              nextTime={nextTime}
+              onNextDateChange={(v) => {
+                setNextDate(v);
+                setFieldErrors((f) => ({ ...f, nextSchedule: false }));
+              }}
+              onNextTimeChange={(v) => {
+                setNextTime(v);
+                setFieldErrors((f) => ({ ...f, nextSchedule: false }));
+              }}
+              closureReasons={closureReasons}
+              reasonId={reasonId}
+              onReasonIdChange={setReasonId}
+              invalidSchedule={fieldErrors.nextSchedule}
+            />
           ) : null}
           {showRegistrationSteps && showMeetingSchedule ? (
             <ApproachMinimalScheduleField
