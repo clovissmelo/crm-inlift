@@ -551,6 +551,80 @@ export async function listPendingCallsForUser(userId: number) {
   );
 }
 
+async function resolveContactIdForDialedPhone(clientId: number, phoneDialed: string): Promise<number | null> {
+  const digits = normalizeApi4comCalledNumber(phoneDialed);
+  if (!digits) return null;
+  const contacts = await all<{ id: number; phone: string | null; whatsapp: string | null }>(
+    "SELECT id, phone, whatsapp FROM contacts WHERE client_id = @clientId",
+    { clientId }
+  );
+  for (const c of contacts) {
+    for (const raw of [c.phone, c.whatsapp]) {
+      if (!raw) continue;
+      if (normalizeApi4comCalledNumber(raw) === digits) return c.id;
+    }
+  }
+  return null;
+}
+
+/** Vincula ligação discada sem cliente (ex.: discador manual) a um lead no CRM. */
+export async function linkManualCallToClient(input: {
+  callId: number;
+  userId: number;
+  clientId: number;
+  productId?: number | null;
+  contactId?: number | null;
+}) {
+  const row = await getCallById(input.callId);
+  if (!row || row.user_id !== input.userId) throw new Error("Chamada não encontrada");
+  if (row.client_id != null) throw new Error("Esta ligação já está vinculada a um cliente.");
+  if (row.approach_id != null) throw new Error("Registro comercial já concluído para esta ligação.");
+  if (row.status !== "completed") throw new Error("Aguarde o encerramento da ligação antes de vincular o cliente.");
+
+  const clientExists = await get<{ id: number }>("SELECT id FROM clients WHERE id = @id", { id: input.clientId });
+  if (!clientExists) throw new Error("Cliente não encontrado.");
+
+  let contactId = input.contactId ?? null;
+  if (contactId) {
+    const contactRow = await get<{ id: number }>(
+      "SELECT id FROM contacts WHERE id = @id AND client_id = @clientId",
+      { id: contactId, clientId: input.clientId }
+    );
+    if (!contactRow) throw new Error("Contato inválido para este cliente.");
+  } else {
+    contactId = await resolveContactIdForDialedPhone(input.clientId, row.phone_dialed);
+  }
+
+  const productId = input.productId ?? null;
+  if (productId) {
+    const productLink = await get<{ ok: number }>(
+      "SELECT 1 AS ok FROM client_products WHERE client_id = @clientId AND product_id = @productId",
+      { clientId: input.clientId, productId }
+    );
+    if (!productLink) throw new Error("Produto não vinculado ao cadastro deste cliente.");
+  }
+
+  const now = nowIso();
+  await run(
+    `
+      UPDATE api4com_calls SET
+        client_id = @clientId,
+        product_id = @productId,
+        contact_id = @contactId,
+        updated_at = @now
+      WHERE id = @id AND user_id = @userId
+    `,
+    {
+      id: input.callId,
+      userId: input.userId,
+      clientId: input.clientId,
+      productId,
+      contactId,
+      now
+    }
+  );
+}
+
 export async function dismissPendingCallResult(callId: number, userId: number) {
   const row = await getCallById(callId);
   if (!row || row.user_id !== userId) throw new Error("Chamada não encontrada");

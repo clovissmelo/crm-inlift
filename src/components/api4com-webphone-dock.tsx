@@ -20,6 +20,7 @@ const STATUS_LABEL: Record<WebphoneRegistrationState, string> = {
 export function Api4comWebphoneDock({
   open,
   onClose,
+  onDisconnect,
   status,
   statusDetail,
   extension,
@@ -38,6 +39,7 @@ export function Api4comWebphoneDock({
 }: {
   open: boolean;
   onClose: () => void;
+  onDisconnect: () => void;
   status: WebphoneRegistrationState;
   statusDetail: string | null;
   extension: string | null;
@@ -57,14 +59,14 @@ export function Api4comWebphoneDock({
   const [testNumber, setTestNumber] = useState("");
   const [testDialing, setTestDialing] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
-  const [testOk, setTestOk] = useState<string | null>(null);
   const [activeCallRecordId, setActiveCallRecordId] = useState<number | null>(null);
   const [hangingUp, setHangingUp] = useState(false);
 
   if (!open) return null;
 
   const online = status === "registered";
-  const showHangUp = hasActiveSipCall || activeCallRecordId != null || testDialing;
+  const callActive = hasActiveSipCall || activeCallRecordId != null;
+  const showHangUp = callActive || testDialing;
 
   async function startTestCall() {
     const normalized = normalizeApi4comCalledNumber(testNumber.trim());
@@ -74,7 +76,6 @@ export function Api4comWebphoneDock({
     }
     setTestDialing(true);
     setTestError(null);
-    setTestOk(null);
     setActiveCallRecordId(null);
     const ready = await onPrepareForDial(dialUserId);
     if (!ready) {
@@ -109,7 +110,6 @@ export function Api4comWebphoneDock({
     }
     const body = data as { call_record_id?: number };
     if (body.call_record_id) setActiveCallRecordId(body.call_record_id);
-    setTestOk("Ligação iniciada — use Desligar quando terminar.");
   }
 
   async function hangUpCall() {
@@ -118,7 +118,6 @@ export function Api4comWebphoneDock({
     try {
       await onHangUp(activeCallRecordId);
       setActiveCallRecordId(null);
-      setTestOk(null);
     } finally {
       setHangingUp(false);
       setTestDialing(false);
@@ -148,16 +147,26 @@ export function Api4comWebphoneDock({
               <X size={18} />
             </button>
           </div>
-          <p className="api4com-webphone-dock-status">
-            <strong>{STATUS_LABEL[status]}</strong>
-            {extension ? (
-              <>
-                {" "}
-                · ramal <code>{extension}</code>
-              </>
-            ) : null}
-            {targetUserName ? <> ({targetUserName})</> : null}
-          </p>
+
+          <div className="api4com-webphone-dock-status-block">
+            <p className="api4com-webphone-dock-status">
+              <strong>{STATUS_LABEL[status]}</strong>
+              {extension ? (
+                <>
+                  {" "}
+                  · ramal <code>{extension}</code>
+                </>
+              ) : null}
+            </p>
+            {targetUserName ? <p className="api4com-webphone-dock-user-name">{targetUserName}</p> : null}
+          </div>
+
+          {callActive ? (
+            <div className="api4com-webphone-active-call" role="status">
+              Ligação Ativa
+            </div>
+          ) : null}
+
           {statusDetail ? <p className="muted api4com-webphone-dock-detail">{statusDetail}</p> : null}
           {!online && status !== "needs_config" ? (
             <div className="api4com-webphone-dock-intro">
@@ -173,19 +182,29 @@ export function Api4comWebphoneDock({
             </p>
           ) : null}
 
-          <div className="api4com-webphone-dock-actions">
-            {!online ? (
+          {online ? (
+            <div className="api4com-webphone-dock-session-actions">
+              <button type="button" className="btn btn-ghost btn-sm" disabled={connecting} onClick={onConnect}>
+                <Phone size={16} aria-hidden />
+                Reconectar
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm api4com-webphone-disconnect-btn"
+                disabled={connecting}
+                onClick={onDisconnect}
+              >
+                <PhoneOff size={16} aria-hidden />
+                Desconectar
+              </button>
+            </div>
+          ) : (
+            <div className="api4com-webphone-dock-actions">
               <button type="button" className="btn btn-primary btn-block" disabled={connecting} onClick={onConnect}>
                 {connecting ? "Conectando…" : "Conectar ramal"}
               </button>
-            ) : null}
-            {online ? (
-              <button type="button" className="btn btn-ghost btn-sm" disabled={connecting} onClick={onConnect}>
-                <PhoneOff size={16} aria-hidden />
-                Reconectar
-              </button>
-            ) : null}
-          </div>
+            </div>
+          )}
 
           {online ? (
             <div className="api4com-webphone-test-dial">
@@ -203,12 +222,8 @@ export function Api4comWebphoneDock({
                 hangingUp={hangingUp}
               />
               {testError ? <p className="alert alert-error api4com-webphone-test-msg">{testError}</p> : null}
-              {testOk ? <p className="api4com-webphone-test-ok api4com-webphone-test-msg">{testOk}</p> : null}
             </div>
           ) : null}
-
-          <div id="api4com-wp-audio" className="api4com-webphone-hidden-host" aria-hidden />
-          <div id="api4com-wp-media" className="api4com-webphone-hidden-host" aria-hidden />
         </div>
       </div>
     </>

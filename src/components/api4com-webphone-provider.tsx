@@ -17,6 +17,7 @@ import {
   answerApi4comIncomingLeg,
   clearLibwebphoneAutoAnswerTimers,
   libwebphoneHasActiveSession,
+  sendDtmfOnEstablishedCall,
   setLibwebphoneMicrophoneMuted,
   terminateAllLibwebphoneCalls
 } from "@/lib/api4com/sip-call-control";
@@ -65,6 +66,9 @@ export type WebphoneContextValue = {
   /** Enquanto POST /calls roda, tenta atender a perna SIP com polling. */
   beginDialAssist: () => void;
   endDialAssist: () => void;
+  isMicMuted: boolean;
+  toggleMicrophoneMuted: () => void;
+  sendDtmfDigit: (digit: string) => void;
 };
 
 const WebphoneContext = createContext<WebphoneContextValue | null>(null);
@@ -401,6 +405,10 @@ export function Api4comWebphoneProvider({
     answerAllPendingApiLegs(webphoneRef.current);
   }, []);
 
+  const sendDtmfDigit = useCallback((digit: string) => {
+    sendDtmfOnEstablishedCall(webphoneRef.current, digit);
+  }, []);
+
   const openPanel = useCallback(() => setPanelOpen(true), []);
   const closePanel = useCallback(() => setPanelOpen(false), []);
 
@@ -428,7 +436,10 @@ export function Api4comWebphoneProvider({
     recoverFromDialFailure,
     disconnectRamal,
     beginDialAssist,
-    endDialAssist
+    endDialAssist,
+    isMicMuted,
+    toggleMicrophoneMuted,
+    sendDtmfDigit
   };
 
   if (!canDial) {
@@ -438,9 +449,12 @@ export function Api4comWebphoneProvider({
   return (
     <WebphoneContext.Provider value={value}>
       {children}
+      <div id="api4com-wp-audio" className="api4com-webphone-hidden-host" aria-hidden />
+      <div id="api4com-wp-media" className="api4com-webphone-hidden-host" aria-hidden />
       <Api4comWebphoneDock
         open={panelOpen}
         onClose={closePanel}
+        onDisconnect={() => void disconnectRamal()}
         status={status}
         statusDetail={statusDetail}
         extension={registeredExtension}

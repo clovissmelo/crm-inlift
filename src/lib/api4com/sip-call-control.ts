@@ -115,6 +115,27 @@ export function setLibwebphoneMicrophoneMuted(wp: LibWebphoneInstance | null, mu
   }
 }
 
+/** Envia tom DTMF na primeira perna SIP estabelecida (URA, ramal, etc.). */
+export function sendDtmfOnEstablishedCall(wp: LibWebphoneInstance | null, digit: string): void {
+  if (!wp || !digit) return;
+  const calls = wp.getCallList?.()?.getCalls?.() ?? [];
+  for (const call of calls) {
+    if (!call.isEstablished?.() || call.isEnded?.()) continue;
+    try {
+      if (typeof call.sendDTMF === "function") {
+        call.sendDTMF(digit);
+        return;
+      }
+      if (typeof call.dtmf === "function") {
+        call.dtmf(digit);
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 export function terminateAllLibwebphoneCalls(wp: LibWebphoneInstance | null): void {
   if (!wp?.getCallList) return;
   const calls = [...(wp.getCallList()?.getCalls?.() ?? [])];

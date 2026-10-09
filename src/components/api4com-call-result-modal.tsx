@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CadastroModal } from "@/components/cadastro-ui";
+import {
+  ClientEngagementContextModal,
+  type ClientOpportunityOption
+} from "@/components/client-engagement-context-modal";
+import type { ClientEngagementContext } from "@/lib/engagement-context";
 import type { LeadQualification } from "@/lib/lead-qualification";
 import type { Product } from "@/lib/types";
 import { formatPhoneDisplay } from "@/lib/format";
@@ -239,6 +244,22 @@ export function Api4comCallResultForm({
     personName?: boolean;
     nextSchedule?: boolean;
   }>({});
+
+  type UnlinkedManualPhase = "ask" | "pick_client" | "pick_context";
+  const [unlinkedPhase, setUnlinkedPhase] = useState<UnlinkedManualPhase>("ask");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientHits, setClientHits] = useState<
+    Array<{ id: number; trade_name: string | null; legal_name: string | null; city: string | null; uf: string | null }>
+  >([]);
+  const [clientSearchLoading, setClientSearchLoading] = useState(false);
+  const [pendingLinkClientId, setPendingLinkClientId] = useState<number | null>(null);
+  const [pendingOpportunities, setPendingOpportunities] = useState<ClientOpportunityOption[]>([]);
+  const [linkClientProducts, setLinkClientProducts] = useState<Array<{ product_id: number; name: string }>>([]);
+  const [pendingClientBdrId, setPendingClientBdrId] = useState<number | null>(null);
+  const [newOppModalOpen, setNewOppModalOpen] = useState(false);
+  const [newOppProductId, setNewOppProductId] = useState("");
+  const [newOppTitle, setNewOppTitle] = useState("");
+  const [linkLoading, setLinkLoading] = useState(false);
 
   const call = ctx?.call ?? null;
 
@@ -547,6 +568,13 @@ export function Api4comCallResultForm({
     setPersonFieldsFromScript(false);
     setPersonFieldsEditing(false);
     setStep("result");
+    setUnlinkedPhase("ask");
+    setClientSearch("");
+    setClientHits([]);
+    setPendingLinkClientId(null);
+    setPendingOpportunities([]);
+    setLinkClientProducts([]);
+    setNewOppModalOpen(false);
     void loadContext();
   }, [active, callId, simulation, loadContext]);
 
@@ -557,8 +585,48 @@ export function Api4comCallResultForm({
     scriptMeetingPrefillRef.current = "";
   }, [callId, simulation?.scriptFlowLog]);
 
+  const callWasAnswered = useMemo(
+    () =>
+      call
+        ? callRequiresComplementRegistration({
+            answered_at: call.answered_at,
+            technical_slug: technicalSlug ?? call.technical_slug,
+            duration_seconds: call.duration_seconds
+          })
+        : false,
+    [call, technicalSlug]
+  );
+
+  const isUnlinkedManualCall = Boolean(callWasAnswered && call && !call.client_id && !isSimulation);
+
+  useEffect(() => {
+    if (unlinkedPhase !== "pick_client") return;
+    const q = clientSearch.trim();
+    if (q.length < 2) {
+      setClientHits([]);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setClientSearchLoading(true);
+      void fetch(`/api/clients?search=${encodeURIComponent(q)}&limit=15`)
+        .then((r) => r.json())
+        .then((d: { items?: typeof clientHits }) => setClientHits(d.items ?? []))
+        .catch(() => setClientHits([]))
+        .finally(() => setClientSearchLoading(false));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [clientSearch, unlinkedPhase]);
+
   const modalTitle =
-    step === "next_dial" ? "Ligar para outro contato?" : "COMPLEMENTO DE REGISTRO";
+    step === "next_dial"
+      ? "Ligar para outro contato?"
+      : isUnlinkedManualCall && unlinkedPhase === "ask"
+        ? "Atendimento da ligação"
+        : isUnlinkedManualCall && unlinkedPhase === "pick_client"
+          ? "Vincular ao cliente"
+          : isUnlinkedManualCall && unlinkedPhase === "pick_context"
+            ? "Contexto do contato"
+            : "COMPLEMENTO DE REGISTRO";
 
   useEffect(() => {
     if (layout === "modal") onModalTitleChange?.(modalTitle);
@@ -574,18 +642,6 @@ export function Api4comCallResultForm({
         compatMap
       ),
     [attendanceRules, resultTypes, compatMap]
-  );
-
-  const callWasAnswered = useMemo(
-    () =>
-      call
-        ? callRequiresComplementRegistration({
-            answered_at: call.answered_at,
-            technical_slug: technicalSlug ?? call.technical_slug,
-            duration_seconds: call.duration_seconds
-          })
-        : false,
-    [call, technicalSlug]
   );
 
   useEffect(() => {
@@ -807,9 +863,10 @@ export function Api4comCallResultForm({
 
   const currentPhone = ctx?.current_phone ?? null;
 
-  async function dismissPending() {
+  async function dismissPending(skipConfirm = false) {
     if (!callId) return;
     if (
+      !skipConfirm &&
       !window.confirm(
         "Dispensar este registro pendente? A ligação permanece no histórico, mas deixa de exigir resultado comercial."
       )
@@ -826,6 +883,120 @@ export function Api4comCallResultForm({
     }
     onClose();
     onCompleted();
+  }
+
+  async function linkCallToClient(body: { client_id: number; product_id?: number | null }) {
+    if (!callId) return false;
+    setLinkLoading(true);
+    setError(null);
+    const res = await fetch(`/api/api4com/calls/${callId}/link-client`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    setLinkLoading(false);
+    if (!res.ok) {
+      const data = (await res.json()) as { error?: string };
+      setError(data.error ?? "Não foi possível vincular a ligação ao cliente.");
+      return false;
+    }
+    setPendingLinkClientId(null);
+    setPendingOpportunities([]);
+    setUnlinkedPhase("ask");
+    await loadContext();
+    return true;
+  }
+
+  async function onManualClientPicked(clientId: number) {
+    setLinkLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/opportunities`);
+      if (!res.ok) {
+        setError("Não foi possível carregar os dados do cliente.");
+        return;
+      }
+      const data = (await res.json()) as {
+        opportunities?: ClientOpportunityOption[];
+        products?: Array<{ product_id: number; name: string }>;
+        client?: { bdr_user_id: number | null };
+      };
+      const opps = data.opportunities ?? [];
+      const openOpps = opps.filter(
+        (o) => o.outcome === "open" && (o.engagement_status ?? "active") === "active"
+      );
+      if (openOpps.length === 1) {
+        await linkCallToClient({ client_id: clientId, product_id: openOpps[0]!.product_id });
+        return;
+      }
+      setPendingLinkClientId(clientId);
+      setPendingOpportunities(opps);
+      setLinkClientProducts(data.products ?? []);
+      setPendingClientBdrId(data.client?.bdr_user_id ?? null);
+      setUnlinkedPhase("pick_context");
+    } finally {
+      setLinkLoading(false);
+    }
+  }
+
+  async function onManualEngagementChosen(ctx: ClientEngagementContext) {
+    if (!pendingLinkClientId) return;
+    const productId = ctx.kind === "opportunity" ? ctx.productId : null;
+    await linkCallToClient({ client_id: pendingLinkClientId, product_id: productId });
+  }
+
+  function openNewOpportunityFromManualLink() {
+    setError(null);
+    if (linkClientProducts.length === 0) {
+      setError("Vincule ao menos um produto ao cadastro da empresa antes de criar a oportunidade.");
+      return;
+    }
+    setNewOppProductId(String(linkClientProducts[0]!.product_id));
+    setNewOppTitle("");
+    setNewOppModalOpen(true);
+  }
+
+  async function createOpportunityFromManualLink() {
+    if (!pendingLinkClientId) return;
+    setError(null);
+    const productId = Number(newOppProductId) || linkClientProducts[0]?.product_id;
+    if (!productId) {
+      setError("Selecione o produto da oportunidade.");
+      return;
+    }
+    let bdrId = pendingClientBdrId;
+    if (!bdrId) {
+      const meRes = await fetch("/api/users/me");
+      if (meRes.ok) {
+        const me = (await meRes.json()) as { user?: { id: number } };
+        bdrId = me.user?.id ?? null;
+      }
+    }
+    if (!bdrId) {
+      setError("Não foi possível definir a BDR responsável.");
+      return;
+    }
+    setLinkLoading(true);
+    const res = await fetch("/api/opportunities", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: pendingLinkClientId,
+        product_id: productId,
+        title: newOppTitle.trim() || undefined,
+        origin_bdr_user_id: bdrId,
+        owner_user_id: bdrId,
+        return_to_prospection: false
+      })
+    });
+    const data = (await res.json()) as { error?: string };
+    setLinkLoading(false);
+    if (!res.ok) {
+      setError(data.error ?? "Erro ao criar oportunidade");
+      return;
+    }
+    setNewOppModalOpen(false);
+    await linkCallToClient({ client_id: pendingLinkClientId, product_id: productId });
   }
 
   async function skipNextDial() {
@@ -1236,14 +1407,130 @@ export function Api4comCallResultForm({
         </div>
       ) : null}
 
-      {step === "result" && !contextLoading && callWasAnswered ? (
-        <form className="call-reg-complement-form" onSubmit={submit}>
-          {!call?.client_id ? (
-            <div className="alert alert-error" style={{ marginBottom: 12 }}>
-              Esta ligação não está vinculada a um cliente no CRM. Você pode dispensar o registro pendente ou fechar e
-              ligar novamente pela ficha do lead.
-            </div>
+      {step === "result" && !contextLoading && callWasAnswered && isUnlinkedManualCall && unlinkedPhase === "ask" ? (
+        <div>
+          <p style={{ marginTop: 0 }}>
+            Esta ligação foi feita pelo discador <strong>sem vínculo com um lead</strong>. Deseja registrar o atendimento
+            comercial no CRM?
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ width: "100%" }}
+              disabled={loading || linkLoading}
+              onClick={() => setUnlinkedPhase("pick_client")}
+            >
+              Sim, registrar chamada
+            </button>
+            <button
+              type="button"
+              className="btn"
+              style={{ width: "100%" }}
+              disabled={loading || linkLoading}
+              onClick={() => void dismissPending(true)}
+            >
+              {loading ? "Encerrando…" : "Não — finalizar atendimento"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {step === "result" && !contextLoading && callWasAnswered && isUnlinkedManualCall && unlinkedPhase === "pick_client" ? (
+        <div>
+          <p className="muted" style={{ marginTop: 0, fontSize: "0.875rem" }}>
+            Busque e selecione o cliente para vincular esta ligação antes do complemento de registro.
+          </p>
+          <div className="field">
+            <label className="label">Cliente</label>
+            <input
+              className="input"
+              value={clientSearch}
+              onChange={(e) => setClientSearch(e.target.value)}
+              placeholder="Nome, razão social ou CNPJ…"
+              autoFocus
+            />
+          </div>
+          {clientSearchLoading ? <p className="muted">Buscando…</p> : null}
+          {clientSearch.trim().length >= 2 && !clientSearchLoading && clientHits.length === 0 ? (
+            <p className="muted">Nenhum cliente encontrado.</p>
           ) : null}
+          <ul className="manual-call-client-hits" style={{ listStyle: "none", padding: 0, margin: "12px 0 0" }}>
+            {clientHits.map((c) => {
+              const label = c.trade_name?.trim() || c.legal_name?.trim() || `Cliente #${c.id}`;
+              const place = [c.city, c.uf].filter(Boolean).join("/");
+              return (
+                <li key={c.id} style={{ marginBottom: 6 }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{ width: "100%", textAlign: "left" }}
+                    disabled={linkLoading}
+                    onClick={() => void onManualClientPicked(c.id)}
+                  >
+                    <strong>{label}</strong>
+                    {place ? <span className="muted"> · {place}</span> : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div style={{ marginTop: 16 }}>
+            <button type="button" className="btn" disabled={linkLoading} onClick={() => setUnlinkedPhase("ask")}>
+              Voltar
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <ClientEngagementContextModal
+        open={isUnlinkedManualCall && unlinkedPhase === "pick_context" && pendingLinkClientId != null}
+        actionLabel="registrar esta ligação"
+        opportunities={pendingOpportunities}
+        onClose={() => {
+          setUnlinkedPhase("pick_client");
+          setPendingLinkClientId(null);
+        }}
+        onChoose={(ctx) => void onManualEngagementChosen(ctx)}
+        onCreateOpportunity={openNewOpportunityFromManualLink}
+      />
+
+      <CadastroModal open={newOppModalOpen} title="Nova oportunidade" onClose={() => setNewOppModalOpen(false)}>
+        <div className="field">
+          <label className="label">Produto</label>
+          {linkClientProducts.length === 1 ? (
+            <p style={{ margin: "0.35rem 0 0", fontWeight: 600 }}>{linkClientProducts[0]!.name}</p>
+          ) : (
+            <select className="select" value={newOppProductId} onChange={(e) => setNewOppProductId(e.target.value)}>
+              {linkClientProducts.map((p) => (
+                <option key={p.product_id} value={p.product_id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        <div className="field">
+          <label className="label">Título (opcional)</label>
+          <input className="input" value={newOppTitle} onChange={(e) => setNewOppTitle(e.target.value)} />
+        </div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+          <button type="button" className="btn" onClick={() => setNewOppModalOpen(false)}>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={linkLoading}
+            onClick={() => void createOpportunityFromManualLink()}
+          >
+            {linkLoading ? "Salvando…" : "Criar e continuar"}
+          </button>
+        </div>
+      </CadastroModal>
+
+      {step === "result" && !contextLoading && callWasAnswered && call?.client_id ? (
+        <form className="call-reg-complement-form" onSubmit={submit}>
           <CallThreeLayerRegistrationFields
             callAnswered={callWasAnswered}
             technicalSlug={technicalSlug ?? call?.technical_slug}

@@ -432,8 +432,7 @@ export function ResultadoComercialSimulatorPanel({
       }
     >
       <p className="muted" style={{ marginTop: 0, fontSize: "0.8125rem" }}>
-        Escolha o produto (roteiro de abordagem) e o resultado técnico da ligação. Se atender, o fluxo segue como na
-        prospecção: roteiro no painel e depois complemento de registro.
+        Escolha o produto e o resultado técnico da ligação para simular o registro.
       </p>
 
       <div className="field">

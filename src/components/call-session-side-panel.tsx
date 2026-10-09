@@ -1,6 +1,7 @@
 "use client";
 
 import { Api4comCallResultForm } from "@/components/api4com-call-result-modal";
+import { Api4comWebphoneCompanionPanel } from "@/components/api4com-webphone-companion-panel";
 import { CallScriptGuidePanel, type ActiveCallForScript } from "@/components/call-script-guide-panel";
 import { CallSidePanelShell } from "@/components/call-side-panel-shell";
 import type { Product } from "@/lib/types";
@@ -39,17 +40,23 @@ export function CallSessionSidePanel({
   onScriptFlowComplete
 }: Props) {
   if (mode === "script" && activeCall) {
+    const showCompanion = !collapsed && activeCall.status !== "completed" && activeCall.status !== "failed";
     return (
-      <CallScriptGuidePanel
-        call={activeCall}
-        scriptBody={scriptBody}
-        scriptReady={scriptReady}
-        collapsed={collapsed}
-        onCollapse={onCollapse}
-        onExpand={onExpand}
-        onLogUpdated={onLogUpdated}
-        onScriptFlowComplete={onScriptFlowComplete}
-      />
+      <>
+        {showCompanion ? (
+          <Api4comWebphoneCompanionPanel callRecordId={activeCall.id} callStatus={activeCall.status} />
+        ) : null}
+        <CallScriptGuidePanel
+          call={activeCall}
+          scriptBody={scriptBody}
+          scriptReady={scriptReady}
+          collapsed={collapsed}
+          onCollapse={onCollapse}
+          onExpand={onExpand}
+          onLogUpdated={onLogUpdated}
+          onScriptFlowComplete={onScriptFlowComplete}
+        />
+      </>
     );
   }
 

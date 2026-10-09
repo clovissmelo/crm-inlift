@@ -104,6 +104,12 @@ export const api4comStartCallSchema = z.object({
   dial_as_user_id: z.number().int().positive().optional().nullable()
 });
 
+export const api4comLinkCallClientSchema = z.object({
+  client_id: z.number().int().positive(),
+  product_id: z.number().int().positive().optional().nullable(),
+  contact_id: z.number().int().positive().optional().nullable()
+});
+
 export const companySchema = z.object({
   name: z.string().trim().min(1, "Nome obrigatório"),
   legal_name: z.string().trim().optional().nullable(),

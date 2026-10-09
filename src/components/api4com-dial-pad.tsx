@@ -56,7 +56,9 @@ export function Api4comDialPad({
   onToggleMute,
   showHangUp,
   onHangUp,
-  hangingUp
+  hangingUp,
+  onPadDigit,
+  hideDialButton
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -68,6 +70,9 @@ export function Api4comDialPad({
   showHangUp: boolean;
   onHangUp: () => void;
   hangingUp: boolean;
+  /** Durante ligação ativa: envia DTMF ao pressionar tecla. */
+  onPadDigit?: (digit: string) => void;
+  hideDialButton?: boolean;
 }) {
   const [showPad, setShowPad] = useState(true);
   const busy = disabled || dialing || hangingUp;
@@ -75,6 +80,7 @@ export function Api4comDialPad({
 
   function append(digit: string) {
     if (busy) return;
+    onPadDigit?.(digit);
     onChange(value + digit);
   }
 
@@ -143,15 +149,17 @@ export function Api4comDialPad({
         <button type="button" className="api4com-dial-pad-action-btn" disabled={busy || !value.trim()} onClick={backspace} aria-label="Apagar dígito">
           <Delete size={20} aria-hidden />
         </button>
-        <button
-          type="button"
-          className="api4com-dial-pad-call-btn"
-          disabled={busy || !value.trim()}
-          onClick={onDial}
-        >
-          <Phone size={22} aria-hidden />
-          {dialing ? "Discando…" : "Ligar"}
-        </button>
+        {hideDialButton ? null : (
+          <button
+            type="button"
+            className="api4com-dial-pad-call-btn"
+            disabled={busy || !value.trim()}
+            onClick={onDial}
+          >
+            <Phone size={22} aria-hidden />
+            {dialing ? "Discando…" : "Ligar"}
+          </button>
+        )}
       </div>
 
       {showHangUp ? (
