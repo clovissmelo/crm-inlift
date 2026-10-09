@@ -33,9 +33,9 @@ export function Api4comWebphoneCompanionPanel({
   const [hangingUp, setHangingUp] = useState(false);
 
   if (!webphone) return null;
+  const wp = webphone;
 
-  const { status, registeredExtension, hasActiveSipCall, isMicMuted, toggleMicrophoneMuted, sendDtmfDigit } =
-    webphone;
+  const { status, registeredExtension, hasActiveSipCall, isMicMuted, toggleMicrophoneMuted, sendDtmfDigit } = wp;
   const online = status === "registered";
   const liveCall = crmCallIsLive(callStatus) || hasActiveSipCall;
   const showHangUp = liveCall;
@@ -43,7 +43,7 @@ export function Api4comWebphoneCompanionPanel({
   async function hangUp() {
     setHangingUp(true);
     try {
-      await webphone.hangUpSipAndApiCall(callRecordId);
+      await wp.hangUpSipAndApiCall(callRecordId);
       setPadValue("");
     } finally {
       setHangingUp(false);
@@ -110,7 +110,7 @@ export function Api4comWebphoneCompanionPanel({
             />
           </div>
         )}
-        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 12 }} onClick={webphone.openPanel}>
+        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 12 }} onClick={wp.openPanel}>
           Abrir discador completo
         </button>
       </div>
